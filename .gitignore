@@ -1,0 +1,5 @@
+node_modules
+target
+.env
+data/**
+!data/beatmap_ids*

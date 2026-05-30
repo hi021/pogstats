@@ -1,0 +1,11 @@
+{
+  "include": ["src/**/*"],
+  "compilerOptions": {
+    "target": "es2025",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rootDir": "src",
+    "outDir": "target",
+    "esModuleInterop": true
+  }
+}
