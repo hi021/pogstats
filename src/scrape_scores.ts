@@ -1,3 +1,7 @@
+// Sequentially "scrapes" all top 100 scores for each beatmap ID listed under BEATMAP_ID_PATH and stores them in DB_SCORES_COLLECTION MongoDB collection.
+// Re-authenticates w/ OAuth2 for every script run
+// Includes peppy-pleasing rate limiting (SCRAPE_SCORE_DELAY_MS) and saves logs to SCORE_SCRAPE_LOG_PATH and SCORE_SCRAPE_ERROR_LOG_PATH
+
 import fs from "fs";
 import { Collection, Double, Int32, Long, MongoClient } from "mongodb";
 import path from "path";
@@ -12,14 +16,8 @@ import {
 	SCRAPE_SCORE_DELAY_MS,
 	VERBOSE
 } from "./env.js";
-import {
-	ApiBeatmapScore,
-	ApiScore,
-	BeatmapScore,
-	buildBeatmapScoresUrl,
-	buildHeadersWithAuth,
-	readFileByLine
-} from "./shared.js";
+import { ApiBeatmapScore, ApiScore, BeatmapScore } from "./types.js";
+import { buildBeatmapScoresUrl, buildHeadersWithAuth, readFileByLine } from "./shared.js";
 
 let collection: Collection<BeatmapScore>;
 let infoLogStream: fs.WriteStream;
