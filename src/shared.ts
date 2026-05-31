@@ -1,10 +1,9 @@
 import fs from "fs";
+import path from "path";
 import readline from "readline";
-import { OSU_API_VERSION } from "./env.js";
-import { BeatmapScoreParams } from "./types.js";
+import { OSU_API_VERSION, VERBOSE } from "./env.js";
 
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
-// export const RULESET_MAP = new Map(["osu", "taiko", "fruits", "mania"].map(mode => [mode, mode]));
 
 export const DEFAULT_HEADERS = {
 	Accept: "application/json",
@@ -43,4 +42,27 @@ export async function readFileByLine(filePath: string, lineCallback: (line: stri
 	for await (const line of rl) {
 		await lineCallback(line, ++rowNo);
 	}
+}
+
+export function createLogStream(filePath: string) {
+	fs.mkdirSync(path.dirname(filePath), { recursive: true });
+	return fs.createWriteStream(filePath, { flags: "a", encoding: "utf-8" });
+}
+
+export function logInfo(stream: fs.WriteStream, message: string, timestamp = new Date().toISOString()) {
+	const logMessage = `${timestamp} ${message}`;
+	if (VERBOSE) console.log(logMessage);
+	stream.write(`${logMessage}\n`);
+}
+
+export function logError(
+	stream: fs.WriteStream,
+	message: string,
+	error?: unknown,
+	timestamp = new Date().toISOString()
+) {
+	const logMessage = `${timestamp} ${message}\n${error}`;
+	if (VERBOSE) console.error(logMessage);
+	stream.write(`${logMessage}\n`);
+	// stream.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
 }

@@ -1,11 +1,11 @@
-import { Ruleset, RulesetId, ScoreRank } from "./types.js";
+// Probably useless, made this before passing in the x-api-version header
 
-export interface ApiBeatmapScoreLegacy {
+interface ApiBeatmapScoreLegacy {
 	score_count: number;
 	scores: ApiScoreLegacy[];
 }
 
-export interface ApiScoreHitStatsLegacy {
+interface ApiScoreHitStatsLegacy {
 	count_100: number;
 	count_300: number;
 	count_50: number;
@@ -14,8 +14,8 @@ export interface ApiScoreHitStatsLegacy {
 	count_miss: number;
 }
 
-export interface ApiScoreLegacy {
-	accuracy: number; //0-1
+interface ApiScoreLegacy {
+	accuracy: number; // 0-1
 	best_id: number;
 	created_at: string; // ISO 8601 format, e.g. "2026-05-30T07:32:56Z"
 	id: number;
@@ -36,9 +36,9 @@ export interface ApiScoreLegacy {
 	user: ApiScorePlayerLegacy;
 }
 
-export interface ApiScorePlayerLegacy {
+interface ApiScorePlayerLegacy {
 	avatar_url: string;
-	country_code: string; // TODO?: country code list
+	country_code: string;
 	default_group: string;
 	id: number;
 	is_active: boolean;
@@ -50,7 +50,7 @@ export interface ApiScorePlayerLegacy {
 	pm_friends_only: boolean;
 	profile_colour: string | null;
 	username: string;
-	country: { code: string; name: string }; // TODO?: country code list
+	country: { code: string; name: string };
 	cover: {
 		custom_url: string;
 		url: string;
