@@ -4,7 +4,7 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { getOAuthToken } from "./auth.js";
+import { getOAuthToken } from "./osu_auth.js";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
@@ -72,7 +72,7 @@ function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditionalData
 }
 
 async function createScoresTable() {
-	logInfo(infoLogStream, `Attempting to create ${DB_SCORES_TABLE} table and add indexes and comments`);
+	logInfo(infoLogStream, `Attempting to create ${DB_SCORES_TABLE} table with indexes and comments`);
 
 	await client.query(`
 		CREATE TABLE IF NOT EXISTS ${DB_SCORES_TABLE} (
@@ -101,7 +101,7 @@ async function createScoresTable() {
 			CONSTRAINT beatmap_fk FOREIGN KEY (beatmap_id)
     	REFERENCES ${DB_BEATMAPS_TABLE}(id)
 		)`);
-	// TODO: after adding scores table
+	// TODO: after adding players table
 	// 			CONSTRAINT user_fk FOREIGN KEY (user_id)
 	// REFERENCES ${DB_PLAYERS_TABLE}(id)
 

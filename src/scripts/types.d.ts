@@ -11,71 +11,6 @@ interface BeatmapScoreParams {
 
 // ------------------------------------------
 
-interface ApiBeatmapScore {
-	score_count: number;
-	scores: ApiScore[];
-}
-
-interface ApiScore {
-	accuracy: number; // 0-1
-	beatmap_id: number;
-	best_id?: number;
-	build_id?: number;
-	classic_total_score: number;
-	ended_at: string; // ISO 8601 format, e.g. "2020-01-01T00:00:00+00:00"
-	has_replay: boolean;
-	id: number;
-	is_perfect_combo: boolean;
-	legacy_perfect: boolean;
-	legacy_score_id?: number;
-	legacy_total_score: number;
-	max_combo: number;
-	maximum_statistics: ApiScoreHitStats;
-	total_score_without_mods: number; // undocumented
-	mods: ApiMod[];
-	passed: true;
-	playlist_item_id: number;
-	pp?: number;
-	preserve: boolean;
-	processed: boolean;
-	rank: ScoreRank;
-	ranked: boolean;
-	room_id: number;
-	ruleset_id: RulesetId;
-	started_at?: string; // ISO 8601 format, e.g. "2020-01-01T00:00:00+00:00"
-	statistics: ApiScoreHitStats;
-	total_score: number;
-	type: string;
-	user_id: number;
-}
-
-interface ApiMod {
-	acronym: string;
-	settings?: Record<string, unknown>;
-}
-
-type ApiScoreHitStats = Partial<Record<ApiScoreHitType, number>>;
-type ApiScoreHitType =
-	| "miss"
-	| "meh"
-	| "ok"
-	| "good"
-	| "great"
-	| "perfect"
-	| "smallTickMiss"
-	| "smallTickHit"
-	| "largeTickMiss"
-	| "largeTickHit"
-	| "smallBonus"
-	| "largeBonus"
-	| "ignoreMiss"
-	| "ignoreHit"
-	| "comboBreak"
-	| "sliderTailHit"
-	| "legacyComboIncrease";
-
-// ------------------------------------------
-
 ////// Was supposed to be used for pog!stats, but saving BeatmapScoreFull instead in case someone finds it useful
 // interface BeatmapScore {
 // 	id: number;
@@ -154,4 +89,18 @@ interface BeatmapScoreAdditionalData {
 	maximumStatistics: ApiScoreHitStats;
 	statistics: ApiScoreHitStats;
 	// could also include undocumented user object ({ pin?: unknown }) from the API, but seems useless
+}
+
+interface Player {
+	id: number;
+	username: string;
+	countryCode: string;
+	joinDate: Date;
+	playstyle: string[];
+	profileHue?: number;
+	title?: string;
+	titleUrl?: string; // TODO verify
+	cover?: unknown; // TODO verify
+	previousUsernames?: string[];
+	pogBadges?: number[]; // meta
 }

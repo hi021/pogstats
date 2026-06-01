@@ -15,10 +15,11 @@ export const DB_PORT = Number.isFinite(parsedDbPort) ? parsedDbPort : 5432;
 export const DB_USER = process.env.DB_USER;
 export const DB_PASSWORD = process.env.DB_PASSWORD;
 export const DB_NAME = process.env.DB_NAME || "pogstats";
+export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";
 export const DB_SCORES_TABLE = process.env.DB_SCORES_TABLE || "SCORES";
 export const DB_PLAYERS_TABLE = process.env.DB_PLAYERS_TABLE || "PLAYERS";
 export const DB_BEATMAPS_TABLE = process.env.DB_BEATMAPS_TABLE || "BEATMAPS";
-export const DB_BEATMAP_SETS_TABLE = process.env.DB_BEATMAP_SETS_TABLE || "BEATMAP_SETS";
+export const DB_BEATMAPSETS_TABLE = process.env.DB_BEATMAPSETS_TABLE || "BEATMAPSETS";
 
 export const BEATMAP_ID_PATH = process.env.BEATMAP_ID_PATH || "../data/beatmap_ids.txt";
 export const SCORE_SCRAPE_LOG_PATH = process.env.SCORE_SCRAPE_LOG_PATH || "../data/logs/scrape_scores.log";
