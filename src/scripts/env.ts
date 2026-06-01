@@ -1,11 +1,9 @@
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../.env", quiet: true });
+dotenv.config({ path: "../../.env", quiet: true });
 
 export const OSU_CLIENT_ID = process.env.OSU_CLIENT_ID;
 export const OSU_CLIENT_SECRET = process.env.OSU_CLIENT_SECRET;
-if (!OSU_CLIENT_ID || !OSU_CLIENT_SECRET)
-	throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET must be set in the environment variables.");
 
 export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260530";
 

@@ -4,7 +4,6 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { getOAuthToken } from "./osu_auth.js";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
@@ -17,6 +16,7 @@ import {
 	SCORE_SCRAPE_LOG_PATH,
 	SCRAPE_SCORE_DELAY_MS
 } from "./env.js";
+import { getOAuthToken } from "./osu_auth.js";
 import { buildBeatmapScoresUrl, buildHeadersWithAuth, createLogStream, logError, logInfo } from "./shared.js";
 
 //////// Set this, can be null
@@ -116,6 +116,8 @@ async function createScoresTable() {
 	await client.query(
 		`COMMENT ON COLUMN ${DB_SCORES_TABLE}.data IS 'mods, maximum_statistics, statistics columns from the API as JSONB'`
 	);
+
+	logInfo(infoLogStream, `Created ${DB_SCORES_TABLE} table if didn't exist`);
 }
 
 async function addBeatmapColumns() {
