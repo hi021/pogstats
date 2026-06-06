@@ -91,6 +91,8 @@ interface BeatmapScoreAdditionalData {
 	// could also include undocumented user object ({ pin?: unknown }) from the API, but seems useless
 }
 
+// ------------------------------------------
+
 interface Player {
 	id: number;
 	username: string;
@@ -103,4 +105,13 @@ interface Player {
 	cover?: unknown; // TODO verify
 	previousUsernames?: string[];
 	pogBadges?: number[]; // meta
+}
+
+// ------------------------------------------
+
+interface ConfigEntry {
+	key: string;
+	valueInt?: number;
+	valueText?: string;
+	valueJson?: Record<string, unknown>;
 }
