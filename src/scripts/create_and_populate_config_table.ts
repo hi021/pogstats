@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { Pool } from "pg";
 import { DB_CONFIG_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
 
 // TODO: come up with real values
@@ -29,12 +29,12 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "mania_min_top1", valueInt: 5 }
 ]);
 
-let client: Client;
+let clients: Pool;
 
 async function createConfigTable() {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);
 
-	await client.query(`
+	await clients.query(`
     CREATE TABLE IF NOT EXISTS ${DB_CONFIG_TABLE} (
       key TEXT PRIMARY KEY,
 			value_int INTEGER,
@@ -53,7 +53,7 @@ async function populateConfigTable() {
 	for (const config of INITIAL_CONFIG) {
 		promises.push(
 			(async () => {
-				await client.query(
+				await clients.query(
 					`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
 					[config.key, config.valueInt, config.valueText, config.valueJson ? JSON.stringify(config.valueJson) : null]
 				);
@@ -66,7 +66,7 @@ async function populateConfigTable() {
 }
 
 async function main() {
-	client = new Client({
+	clients = new Pool({
 		host: DB_HOST,
 		port: DB_PORT,
 		user: DB_USER,
@@ -75,13 +75,12 @@ async function main() {
 	});
 
 	try {
-		await client.connect();
 		await createConfigTable();
 		await populateConfigTable();
 	} catch (error) {
 		console.error("Error creating config table:", error);
 	} finally {
-		await client.end();
+		await clients.end();
 	}
 }
 

@@ -31,6 +31,12 @@ export const buildBeatmapScoresUrl = (
 	return url;
 };
 
+export const buildUsersUrl = (userIds: Array<number | string>) => {
+	const url = new URL(`${API_BASE_URL}/users`);
+	url.searchParams.append("ids[]", userIds.join(","));
+	return url;
+};
+
 export async function readFileByLine(filePath: string, lineCallback: (line: string, rowNo: number) => Promise<void>) {
 	const fileStream = fs.createReadStream(filePath);
 	const rl = readline.createInterface({

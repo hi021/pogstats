@@ -41,7 +41,7 @@ function convertApiScore(apiScore: ApiScore, position: number): BeatmapScoreFull
 	return {
 		position,
 		isScraped: true,
-		retrievedAt: new Date(),
+		retrievedAt: new Date(), // TODO: could be an ON UPDATE column definition in the DB?
 		stable: !apiScore.build_id,
 		id: apiScore.id,
 		userId: apiScore.user_id,
@@ -109,6 +109,7 @@ async function createScoresTable() {
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_idx ON ${DB_SCORES_TABLE}(position)`);
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_ended_at_idx ON ${DB_SCORES_TABLE}(ended_at)`);
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_idx ON ${DB_SCORES_TABLE}(user_id)`);
+	// TODO: verify performance, maybe add JSONB GIN, score, pp, rank, ruleset_id (after adding other modes)
 
 	await client.query(
 		`COMMENT ON COLUMN ${DB_SCORES_TABLE}.position IS 'Meta (not from the API): 1-based position of the score on the beatmap'`
@@ -196,8 +197,8 @@ async function insertScoresFromScrape(scores: BeatmapScoreFull[]) {
 		return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
-	// TODO: this probably should update the entire record, scores can be recalculated, etc.
-	const query = `INSERT INTO ${DB_SCORES_TABLE} (${columns.join(", ")}) VALUES ${paramGroups.join(", ")} ON CONFLICT (id) DO NOTHING`;
+	const updateSetClause = columns.map(col => `${col} = EXCLUDED.${col}`).join(", ");
+	const query = `INSERT INTO ${DB_SCORES_TABLE} (${columns.join(", ")}) VALUES ${paramGroups.join(", ")} ON CONFLICT (id) DO UPDATE SET ${updateSetClause}`;
 	await client.query(query, values);
 	await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_scrape = NOW() WHERE id = $1`, [scores[0].beatmapId]);
 }
