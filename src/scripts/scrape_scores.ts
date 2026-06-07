@@ -19,9 +19,66 @@ import {
 import { getOAuthToken } from "./osu_auth.js";
 import { buildBeatmapScoresUrl, buildHeadersWithAuth, createLogStream, logError, logInfo } from "./shared.js";
 
-//////// Set this, can be null
-const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = new Date("2026-05-31T19:13:50.471Z");
-////////
+const FLAG_DEFINITIONS = {
+	minDate: {
+		cli: "--minDate <date>",
+		description: "Only scrape beatmaps last scraped before this date (ISO 8601 or YYYY-MM-DD)."
+	}
+} as const;
+
+type FlagName = keyof typeof FLAG_DEFINITIONS;
+type ParsedFlags = Partial<Record<FlagName, string>>;
+
+function printHelp() {
+	console.log("Usage: node scrape_scores.js [flags]\n");
+	console.log("Optional flags:");
+	for (const [name, def] of Object.entries(FLAG_DEFINITIONS) as [FlagName, typeof FLAG_DEFINITIONS[FlagName]][]) {
+		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
+	}
+	console.log("  --help                   Show this help message");
+}
+
+function parseArgs(argv: string[]): ParsedFlags {
+	const parsed: ParsedFlags = {};
+
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === "--help") {
+			printHelp();
+			process.exit(0);
+		}
+
+		if (!arg.startsWith("--")) {
+			throw new Error(`Unexpected argument: ${arg}`);
+		}
+
+		const [flagName, maybeValue] = arg.slice(2).split("=", 2) as [string, string | undefined];
+		if (!Object.prototype.hasOwnProperty.call(FLAG_DEFINITIONS, flagName)) {
+			throw new Error(`Unknown flag: --${flagName}`);
+		}
+
+		const value = maybeValue ?? argv[++i];
+		if (!value || value.startsWith("--")) {
+			throw new Error(`Missing value for flag: --${flagName}`);
+		}
+
+		parsed[flagName as FlagName] = value;
+	}
+
+	return parsed;
+}
+
+function getMinDate(value: string | undefined) {
+	if (!value) return undefined;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime()))
+		throw new Error(`Invalid date for --minDate: ${value}`);
+
+	return date;
+}
+
+const parsedFlags = parseArgs(process.argv.slice(2));
+const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = getMinDate(parsedFlags.minDate);
 
 let client: Client;
 let infoLogStream: fs.WriteStream;
@@ -223,10 +280,11 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 }
 
 async function getBeatmapIds(maxRetrievedAt?: Date): Promise<number[]> {
+	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
 		await client.query(
 			`SELECT id FROM ${DB_BEATMAPS_TABLE} WHERE status IN ('ranked','approved','loved') AND mode = 'osu' ${maxRetrievedAt ? `AND (last_scores_scrape < $1 OR last_scores_scrape IS NULL)` : ""} ORDER BY id`,
-			[maxRetrievedAt]
+			params
 		)
 	).rows.map(row => row.id);
 }
