@@ -19,12 +19,11 @@ export const DB_PLAYERS_TABLE = process.env.DB_PLAYERS_TABLE || "PLAYERS";
 export const DB_BEATMAPS_TABLE = process.env.DB_BEATMAPS_TABLE || "BEATMAPS";
 export const DB_BEATMAPSETS_TABLE = process.env.DB_BEATMAPSETS_TABLE || "BEATMAPSETS";
 
-export const BEATMAP_ID_PATH = process.env.BEATMAP_ID_PATH || "../data/beatmap_ids.txt";
-export const SCORE_SCRAPE_LOG_PATH = process.env.SCORE_SCRAPE_LOG_PATH || "../data/logs/scrape_scores.log";
+export const SCORE_SCRAPE_LOG_PATH = process.env.SCORE_SCRAPE_LOG_PATH || "../../data/logs/scrape_scores.log";
 export const SCORE_SCRAPE_ERROR_LOG_PATH =
-	process.env.SCORE_SCRAPE_ERROR_LOG_PATH || "../data/logs/scrape_scores_errors.log";
+	process.env.SCORE_SCRAPE_ERROR_LOG_PATH || "../../data/logs/scrape_scores_errors.log";
 
 const parsedScrapeDelayMs = Number(process.env.SCRAPE_SCORE_DELAY_MS);
-export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 999;
+export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 1001;
 
 export const VERBOSE = process.env.VERBOSE?.toLowerCase() === "true";

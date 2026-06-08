@@ -26,7 +26,7 @@ interface ApiScoreLegacy {
 	passed: true;
 	perfect: boolean;
 	pp: number;
-	rank: ScoreRank;
+	rank: ApiScoreRank;
 	replay: boolean;
 	score: number;
 	statistics: ApiScoreHitStatsLegacy;

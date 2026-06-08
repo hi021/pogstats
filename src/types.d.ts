@@ -1,4 +1,7 @@
-type ScoreRank = "XH" | "X" | "SH" | "S" | "A" | "B" | "C" | "D";
+type ApiScoreRank = "XH" | "X" | "SH" | "S" | "A" | "B" | "C" | "D";
+type ScoreRank = "XH" | "X " | "SH" | "S " | "A " | "B " | "C " | "D "; // postgres char(2) with trailing space for single char ranks
+type PlayerScoreRank = "ss" | "ssh" | "s" | "sh" | "a";
+
 type RulesetId = 0 | 1 | 2 | 3;
 type Ruleset = "osu" | "taiko" | "fruits" | "mania";
 interface BeatmapScoreParams {
@@ -97,14 +100,32 @@ interface Player {
 	id: number;
 	username: string;
 	countryCode: string;
+	isActive: boolean;
 	joinDate: Date;
-	playstyle: string[];
-	profileHue?: number;
-	title?: string;
-	titleUrl?: string; // TODO verify
-	cover?: unknown; // TODO verify
-	previousUsernames?: string[];
+	teamId?: number;
+	coverUrl?: string;
+	stats: { [ruleset in Ruleset]?: PlayerRulesetStats };
 	pogBadges?: number[]; // meta
+	retrievedAt: Date; // meta
+	isScraped: boolean; // meta
+	// TODO: maybe meta fields from poggersltd
+}
+
+interface PlayerRulesetStats {
+	playCount: number;
+	playTime: number;
+	pp: number;
+	rankedScore: number;
+	gradeCounts: {
+		[grade in ApiScoreHitType]?: number;
+	};
+}
+
+interface PlayerTeam {
+	id: number;
+	name: string;
+	shortName: string;
+	flagUrl?: string;
 }
 
 // ------------------------------------------

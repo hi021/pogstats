@@ -25,7 +25,7 @@ interface ApiScore {
 	pp?: number;
 	preserve: boolean;
 	processed: boolean;
-	rank: ScoreRank;
+	rank: ApiScoreRank;
 	ranked: boolean;
 	room_id: number;
 	ruleset_id: RulesetId;
