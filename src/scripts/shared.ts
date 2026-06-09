@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import readline from "readline";
 import { OSU_API_VERSION, VERBOSE } from "./env.js";
+import { Client } from "pg";
 
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
 
@@ -67,8 +68,44 @@ export function logError(
 	error?: unknown,
 	timestamp = new Date().toISOString()
 ) {
-	const logMessage = `${timestamp} ${message}\n${error}`;
+	const logMessage = `${timestamp} ${message}\n$${error instanceof Error ? (error.stack ?? error.message) : String(error)}`;
 	if (VERBOSE) console.error(logMessage);
 	stream.write(`${logMessage}\n`);
-	// stream.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+}
+
+function csvEscape(value: unknown): string {
+	if (value === null || value === undefined) return "";
+	return typeof value === "object" ? `"${JSON.stringify(value).replace(/"/g, '""')}"` : String(value);
+}
+
+export async function dumpTableToCsv(
+	tableName: string,
+	columns: readonly string[],
+	client: Client,
+	infoLogStream?: fs.WriteStream,
+	customQuery?: string,
+	resultPath = "../../data"
+) {
+	const result = await client.query(customQuery || `SELECT * FROM ${tableName}`);
+	const dumpFilePath = path.resolve(
+		process.cwd(),
+		resultPath,
+		`${tableName}_table_dump_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`
+	);
+	fs.mkdirSync(path.dirname(dumpFilePath), { recursive: true });
+
+	const stream = fs.createWriteStream(dumpFilePath, { encoding: "utf8" });
+	stream.write(`${columns.join(",")}\n`);
+	for (const row of result.rows) {
+		const line = columns.map(column => csvEscape(row[column])).join(",");
+		stream.write(`${line}\n`);
+	}
+
+	await new Promise<void>((resolve, reject) => {
+		stream.on("finish", resolve);
+		stream.on("error", reject);
+		stream.end();
+	});
+
+	infoLogStream && logInfo(infoLogStream, `Dumped ${result.rows.length} rows from ${tableName} to ${dumpFilePath}`);
 }

@@ -3,7 +3,6 @@
 // Includes peppy-pleasing rate limiting (SCRAPE_SCORE_DELAY_MS) and saves logs to SCORE_SCRAPE_LOG_PATH and SCORE_SCRAPE_ERROR_LOG_PATH
 
 import fs from "fs";
-import path from "path";
 import { Client } from "pg";
 import {
 	DB_BEATMAPS_TABLE,
@@ -18,7 +17,38 @@ import {
 	SCRAPE_SCORE_DELAY_MS
 } from "./env.js";
 import { getOAuthToken } from "./osu_auth.js";
-import { buildBeatmapScoresUrl, buildHeadersWithAuth, createLogStream, logError, logInfo } from "./shared.js";
+import {
+	buildBeatmapScoresUrl,
+	buildHeadersWithAuth,
+	createLogStream,
+	dumpTableToCsv,
+	logError,
+	logInfo
+} from "./shared.js";
+
+const SCORE_TABLE_COLUMNS = Object.freeze([
+	"position",
+	"is_scraped",
+	"retrieved_at",
+	"stable",
+	"id",
+	"user_id",
+	"ruleset_id",
+	"beatmap_id",
+	"has_replay",
+	"rank",
+	"accuracy",
+	"max_combo",
+	"total_score",
+	"classic_total_score",
+	"total_score_without_mods",
+	"is_perfect_combo",
+	"legacy_perfect",
+	"pp",
+	"legacy_total_score",
+	"ended_at",
+	"data"
+]);
 
 const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {
@@ -33,6 +63,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 	}
 } as const);
 
+// TODO generalize and move to shared
 type FlagName = keyof typeof FLAG_DEFINITIONS;
 type FlagDefinition = (typeof FLAG_DEFINITIONS)[FlagName];
 interface ParsedFlags {
@@ -40,13 +71,11 @@ interface ParsedFlags {
 	skipDump?: boolean;
 }
 
-// TODO move to shared
 function printHelp() {
-	console.log("Usage: node scrape_scores.js [flags]\n");
+	console.log(`Usage: node ${process.argv[1]} [flags]\n`);
 	console.log("Optional flags:");
-	for (const def of Object.values(FLAG_DEFINITIONS) as FlagDefinition[]) {
+	for (const def of Object.values(FLAG_DEFINITIONS) as FlagDefinition[])
 		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
-	}
 	console.log("  --help                   Show this help message");
 }
 
@@ -60,26 +89,19 @@ function parseArgs(argv: string[]): ParsedFlags {
 			process.exit(0);
 		}
 
-		if (!arg.startsWith("--")) {
-			throw new Error(`Unexpected argument: ${arg}`);
-		}
+		if (!arg.startsWith("--")) throw new Error(`Unexpected argument: ${arg}`);
 
 		const [flagName, maybeValue] = arg.slice(2).split("=", 2) as [string, string | undefined];
-		if (!Object.prototype.hasOwnProperty.call(FLAG_DEFINITIONS, flagName)) {
+		if (!Object.prototype.hasOwnProperty.call(FLAG_DEFINITIONS, flagName))
 			throw new Error(`Unknown flag: --${flagName}`);
-		}
 
 		const def = FLAG_DEFINITIONS[flagName as FlagName];
 		if (def.takesValue) {
 			const value = maybeValue ?? argv[++i];
-			if (!value || value.startsWith("--")) {
-				throw new Error(`Missing value for flag: --${flagName}`);
-			}
+			if (!value || value.startsWith("--")) throw new Error(`Missing value for flag: --${flagName}`);
 			parsed[flagName as "minDate"] = value;
 		} else {
-			if (maybeValue) {
-				throw new Error(`Unexpected value for flag: --${flagName}`);
-			}
+			if (maybeValue) throw new Error(`Unexpected value for flag: --${flagName}`);
 			parsed[flagName as "skipDump"] = true;
 		}
 	}
@@ -113,61 +135,6 @@ async function rateLimit() {
 	lastFetchTimestamp = Date.now();
 }
 
-// TODO move to shared
-function csvEscape(value: unknown): string {
-	if (value === null || value === undefined) return "";
-	return typeof value === "object" ? `"${JSON.stringify(value).replace(/"/g, '""')}"` : String(value);
-}
-
-async function dumpScoresTable() {
-	const result = await client.query(`SELECT * FROM ${DB_SCORES_TABLE} ORDER BY position`);
-	const dumpFilePath = path.resolve(
-		process.cwd(),
-		"../../data",
-		`scores_table_dump_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`
-	);
-	fs.mkdirSync(path.dirname(dumpFilePath), { recursive: true });
-	const stream = fs.createWriteStream(dumpFilePath, { encoding: "utf8" });
-
-	const columns = [
-		"position",
-		"is_scraped",
-		"retrieved_at",
-		"stable",
-		"id",
-		"user_id",
-		"ruleset_id",
-		"beatmap_id",
-		"has_replay",
-		"rank",
-		"accuracy",
-		"max_combo",
-		"total_score",
-		"classic_total_score",
-		"total_score_without_mods",
-		"is_perfect_combo",
-		"legacy_perfect",
-		"pp",
-		"legacy_total_score",
-		"ended_at",
-		"data"
-	];
-
-	stream.write(`${columns.join(",")}\n`);
-	for (const row of result.rows) {
-		const line = columns.map(column => csvEscape((row as any)[column])).join(",");
-		stream.write(`${line}\n`);
-	}
-
-	await new Promise<void>((resolve, reject) => {
-		stream.on("finish", resolve);
-		stream.on("error", reject);
-		stream.end();
-	});
-
-	logInfo(infoLogStream, `Dumped ${result.rows.length} rows from ${DB_SCORES_TABLE} to ${dumpFilePath}`);
-}
-
 function convertApiScore(apiScore: ApiScore, position: number): BeatmapScoreFull {
 	return {
 		position,
@@ -196,6 +163,32 @@ function convertApiScore(apiScore: ApiScore, position: number): BeatmapScoreFull
 			statistics: apiScore.statistics
 		}
 	};
+}
+
+function convertDatabaseScore(dbScore: Record<string, unknown>) {
+	return {
+		position: dbScore.position,
+		isScraped: dbScore.is_scraped,
+		retrievedAt: dbScore.retrieved_at,
+		stable: dbScore.stable,
+		id: dbScore.id,
+		userId: dbScore.user_id,
+		rulesetId: dbScore.ruleset_id,
+		beatmapId: dbScore.beatmap_id,
+		hasReplay: dbScore.has_replay,
+		rank: dbScore.rank,
+		accuracy: dbScore.accuracy,
+		maxCombo: dbScore.max_combo,
+		totalScore: dbScore.total_score,
+		classicTotalScore: dbScore.classic_total_score,
+		totalScoreWithoutMods: dbScore.total_score_without_mods,
+		isPerfectCombo: dbScore.is_perfect_combo,
+		legacyPerfect: dbScore.legacy_perfect,
+		pp: dbScore.pp,
+		legacyTotalScore: dbScore.legacy_total_score,
+		endedAt: dbScore.ended_at,
+		data: dbScore.data
+	} as BeatmapScoreFull;
 }
 
 function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditionalData) {
@@ -268,6 +261,11 @@ async function addBeatmapColumns() {
 	await client.query(
 		`COMMENT ON COLUMN ${DB_BEATMAPS_TABLE}.last_scores_update IS 'Meta: time of the last update for the map from scores-ws'`
 	);
+
+	logInfo(
+		infoLogStream,
+		`Finished adding 'last_scores_scrape' and 'last_scores_update' columns to ${DB_BEATMAPS_TABLE}`
+	);
 }
 
 // takes in 100 scores from the same beatmap converted from endpoint
@@ -281,31 +279,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 	const existingByUser = new Map<number, BeatmapScoreFull>();
 
 	for (const row of existingResult.rows) {
-		// TODO move to a function
-		const existingScore: BeatmapScoreFull = {
-			position: row.position,
-			isScraped: row.is_scraped,
-			retrievedAt: row.retrieved_at,
-			stable: row.stable,
-			id: row.id,
-			userId: row.user_id,
-			rulesetId: row.ruleset_id,
-			beatmapId: row.beatmap_id,
-			hasReplay: row.has_replay,
-			rank: row.rank as ScoreRank,
-			accuracy: row.accuracy,
-			maxCombo: row.max_combo,
-			totalScore: row.total_score,
-			classicTotalScore: row.classic_total_score ?? undefined,
-			totalScoreWithoutMods: row.total_score_without_mods ?? undefined,
-			isPerfectCombo: row.is_perfect_combo,
-			legacyPerfect: row.legacy_perfect,
-			pp: row.pp ?? undefined,
-			legacyTotalScore: row.legacy_total_score,
-			endedAt: row.ended_at,
-			data: row.data
-		};
-
+		const existingScore = convertDatabaseScore(row);
 		existingById.set(existingScore.id, existingScore);
 		if (!existingByUser.has(existingScore.userId)) existingByUser.set(existingScore.userId, existingScore);
 	}
@@ -338,33 +312,9 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 		return a.id - b.id;
 	});
 
-	const columns = [
-		"position",
-		"is_scraped",
-		"retrieved_at",
-		"stable",
-		"id",
-		"user_id",
-		"ruleset_id",
-		"beatmap_id",
-		"has_replay",
-		"rank",
-		"accuracy",
-		"max_combo",
-		"total_score",
-		"classic_total_score",
-		"total_score_without_mods",
-		"is_perfect_combo",
-		"legacy_perfect",
-		"pp",
-		"legacy_total_score",
-		"ended_at",
-		"data"
-	];
-
 	const values: unknown[] = [];
 	const paramGroups = finalScores.map((score, index) => {
-		const offset = index * columns.length;
+		const offset = index * SCORE_TABLE_COLUMNS.length;
 		values.push(
 			(score.position = index + 1),
 			score.isScraped,
@@ -389,10 +339,10 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 			convertAdditionalDataToJsonb(score.data)
 		);
 
-		return `(${columns.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
+		return `(${SCORE_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
-	const query = `INSERT INTO ${DB_SCORES_TABLE} (${columns.join(", ")}) VALUES ${paramGroups.join(", ")} ON CONFLICT (id) DO NOTHING`;
+	const query = `INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`;
 
 	await client.query("BEGIN");
 	try {
@@ -404,22 +354,6 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 		throw error;
 	}
 }
-
-// async function getExistingScoresForBeatmap(beatmapId: number): Promise<{[scoreId: number]:Pick<BeatmapScoreFull, 'id' | 'retrievedAt' | 'position' | 'totalScore' | 'endedAt'>}> {
-// 	const result: QueryResult<Pick<BeatmapScoreFull, 'id' | 'retrievedAt' | 'position' | 'totalScore' | 'endedAt'>> = await client.query(`select s.id, s.retrieved_at, s."position", s.total_score, s.ended_at from ${DB_SCORES_TABLE} s where beatmap_id in ($1) order by s.beatmap_id ASC, s."position" ASC`, [beatmapId]);
-// 	return result.rows.reduce((acc, row) => {
-// 		acc[row.id] = row;
-// 		return acc;
-// 	}, {} as {[scoreId: number]:Pick<BeatmapScoreFull, 'id' | 'retrievedAt' | 'position' | 'totalScore' | 'endedAt'>});
-// }
-
-// async function getExistingScoresForBeatmap(beatmapId: number): Promise<{[scoreId: number]: BeatmapScoreFull}> {
-// 	const result: QueryResult<BeatmapScoreFull> = await client.query(`SELECT * from ${DB_SCORES_TABLE} s where s.beatmap_id = $1`, [beatmapId]);
-// 	return result.rows.reduce((acc, row) => {
-// 		acc[row.id] = row;
-// 		return acc;
-// 	}, {} as {[scoreId: number]:BeatmapScoreFull});
-// }
 
 async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<string, string>) {
 	await rateLimit();
@@ -465,7 +399,7 @@ async function scrapeScores() {
 
 		await client.connect();
 		await createScoresTable();
-		if (!SKIP_DUMP_BEFORE_SCRAPE) await dumpScoresTable();
+		if (!SKIP_DUMP_BEFORE_SCRAPE) await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS, client, infoLogStream);
 		await addBeatmapColumns();
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
