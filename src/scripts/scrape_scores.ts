@@ -268,12 +268,12 @@ async function addBeatmapColumns() {
 	);
 }
 
-// takes in 100 scores from the same beatmap converted from endpoint
-async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) {
-	if (!scores?.length) return;
+// takes in 100 scores from the same beatmap, converted from endpoint
+async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreFull[]) {
+	if (!scrapedScores?.length) return;
 
-	const beatmapId = scores[0].beatmapId;
-	const existingResult = await client.query(`SELECT * from ${DB_SCORES_TABLE} s where s.beatmap_id = $1`, [beatmapId]);
+	const beatmapId = scrapedScores[0].beatmapId;
+	const existingResult = await client.query(`SELECT * from ${DB_SCORES_TABLE} where beatmap_id = $1`, [beatmapId]);
 
 	const existingById = new Map<number, BeatmapScoreFull>();
 	const existingByUser = new Map<number, BeatmapScoreFull>();
@@ -282,11 +282,16 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 		const existingScore = convertDatabaseScore(row);
 		existingById.set(existingScore.id, existingScore);
 		if (!existingByUser.has(existingScore.userId)) existingByUser.set(existingScore.userId, existingScore);
+		else
+			logError(
+				errorLogStream,
+				`[${beatmapId}] WARNING: Multiple scores in DB for user ${existingScore.userId} (${existingScore.id}, ${existingByUser.get(existingScore.userId)!.id})`
+			);
 	}
 
 	const mergedById = new Map(existingById);
 
-	for (const score of scores) {
+	for (const score of scrapedScores) {
 		const existingByIdScore = existingById.get(score.id);
 
 		if (existingByIdScore) {
@@ -296,17 +301,26 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 				mergedById.set(existingByIdScore.id, existingByIdScore);
 				continue;
 			}
+			logInfo(
+				infoLogStream,
+				`[${beatmapId}] Overwriting recalculated score #${existingByIdScore.id} (${existingByIdScore.totalScore} -> ${score.totalScore})`
+			);
 			mergedById.delete(existingByIdScore.id);
 		}
 
 		const existingByUserScore = existingByUser.get(score.userId);
-		if (existingByUserScore && existingByUserScore.id != score.id) mergedById.delete(existingByUserScore.id);
+		if (existingByUserScore && existingByUserScore.id != score.id) {
+			logInfo(
+				infoLogStream,
+				`[${beatmapId}] Overwriting improved score #${existingByUserScore.id} (${existingByUserScore.totalScore} -> ${score.totalScore})`
+			);
+			mergedById.delete(existingByUserScore.id);
+		}
 
 		mergedById.set(score.id, score);
 	}
 
-	// TODO bug with position still
-	const finalScores = Array.from(mergedById.values()).sort((a, b) => {
+	const finalScores = [...mergedById.values()].sort((a, b) => {
 		if (a.totalScore != b.totalScore) return b.totalScore - a.totalScore;
 		if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
 		return a.id - b.id;
@@ -342,11 +356,12 @@ async function mergeSingleBeatmapScoresIntoExisting(scores: BeatmapScoreFull[]) 
 		return `(${SCORE_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
-	const query = `INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`;
-
 	await client.query("BEGIN");
 	try {
-		await client.query(query, values);
+		await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1`, [beatmapId]);
+		await client.query(
+			`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`
+		);
 		await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_scrape = NOW() WHERE id = $1`, [beatmapId]);
 		await client.query("COMMIT");
 	} catch (error) {
