@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
+import { Client } from "pg";
 import readline from "readline";
 import { OSU_API_VERSION, VERBOSE } from "./env.js";
-import { Client } from "pg";
 
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
 
@@ -68,7 +68,7 @@ export function logError(
 	error?: unknown,
 	timestamp = new Date().toISOString()
 ) {
-	const logMessage = `${timestamp} ${message}\n$${error instanceof Error ? (error.stack ?? error.message) : String(error)}`;
+	const logMessage = `${timestamp} ${message}\n$${Error.isError(error) ? (error.stack ?? error.message) : String(error)}`;
 	if (VERBOSE) console.error(logMessage);
 	stream.write(`${logMessage}\n`);
 }

@@ -53,12 +53,12 @@ const SCORE_TABLE_COLUMNS = Object.freeze([
 const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {
 		cli: "--minDate <date>",
-		description: "Only scrape beatmaps last scraped before this date (ISO 8601 or YYYY-MM-DD).",
+		description: "Only scrape beatmaps last scraped before this date (ISO 8601 or YYYY-MM-DD)",
 		takesValue: true
 	},
 	skipDump: {
 		cli: "--skipDump",
-		description: "Skip dumping the current scores table before scraping.",
+		description: "Skip dumping the current scores table before scraping",
 		takesValue: false
 	}
 } as const);
@@ -72,7 +72,7 @@ interface ParsedFlags {
 }
 
 function printHelp() {
-	console.log(`Usage: node ${process.argv[1]} [flags]\n`);
+	console.log(`Usage: node ${process.argv[1].split("/").at(-1)} [flags]\n`);
 	console.log("Optional flags:");
 	for (const def of Object.values(FLAG_DEFINITIONS) as FlagDefinition[])
 		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
@@ -171,21 +171,21 @@ function convertDatabaseScore(dbScore: Record<string, unknown>) {
 		isScraped: dbScore.is_scraped,
 		retrievedAt: dbScore.retrieved_at,
 		lazer: dbScore.lazer,
-		id: dbScore.id,
+		id: Number(dbScore.id),
 		userId: dbScore.user_id,
 		rulesetId: dbScore.ruleset_id,
-		beatmapId: dbScore.beatmap_id,
+		beatmapId: Number(dbScore.beatmap_id),
 		hasReplay: dbScore.has_replay,
 		grade: dbScore.grade,
 		accuracy: dbScore.accuracy,
 		maxCombo: dbScore.max_combo,
 		totalScore: dbScore.total_score,
-		classicTotalScore: dbScore.classic_total_score,
+		classicTotalScore: Number(dbScore.classic_total_score),
 		totalScoreWithoutMods: dbScore.total_score_without_mods,
 		isPerfectCombo: dbScore.is_perfect_combo,
 		legacyPerfect: dbScore.legacy_perfect,
 		pp: dbScore.pp,
-		legacyTotalScore: dbScore.legacy_total_score,
+		legacyTotalScore: Number(dbScore.legacy_total_score),
 		endedAt: dbScore.ended_at,
 		data: dbScore.data
 	} as BeatmapScoreFull;
@@ -204,7 +204,7 @@ async function createScoresTable() {
 			is_scraped      					BOOLEAN NOT NULL,
 			retrieved_at     					TIMESTAMPTZ NOT NULL,
 			lazer      								BOOLEAN NOT NULL,
-      id                  			BIGINT PRIMARY KEY,
+      id                  			BIGINT PRIMARY KEY DEFERRABLE INITIALLY DEFERRED,
       user_id             			INTEGER NOT NULL,
       ruleset_id          			SMALLINT NOT NULL,
       beatmap_id          			BIGINT NOT NULL,
@@ -228,6 +228,7 @@ async function createScoresTable() {
 	// TODO: after adding players table
 	// 			CONSTRAINT user_fk FOREIGN KEY (user_id)
 	// REFERENCES ${DB_PLAYERS_TABLE}(id)
+	// could also add unique constraints to user_id + beatmap_id + ruleset_id and position + beatmap_id + ruleset_id
 
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_idx ON ${DB_SCORES_TABLE}(beatmap_id)`);
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_idx ON ${DB_SCORES_TABLE}(position)`);
@@ -248,6 +249,7 @@ async function createScoresTable() {
 async function addBeatmapColumns() {
 	logInfo(infoLogStream, `Adding 'last_scores_scrape' and 'last_scores_update' columns to ${DB_BEATMAPS_TABLE}`);
 
+	// TODO: not the best solution due to converts
 	await client.query(
 		`ALTER TABLE ${DB_BEATMAPS_TABLE} ADD COLUMN IF NOT EXISTS last_scores_scrape TIMESTAMPTZ DEFAULT NULL`
 	);
@@ -273,7 +275,11 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 	if (!scrapedScores?.length) return;
 
 	const beatmapId = scrapedScores[0].beatmapId;
-	const existingResult = await client.query(`SELECT * from ${DB_SCORES_TABLE} where beatmap_id = $1`, [beatmapId]);
+	const rulesetId = scrapedScores[0].rulesetId;
+	const existingResult = await client.query(
+		`SELECT * from ${DB_SCORES_TABLE} where beatmap_id = $1 and ruleset_id = $2`,
+		[beatmapId, rulesetId]
+	);
 
 	const existingById = new Map<number, BeatmapScoreFull>();
 	const existingByUser = new Map<number, BeatmapScoreFull>();
@@ -285,7 +291,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 		else
 			logError(
 				errorLogStream,
-				`[${beatmapId}] WARNING: Multiple scores in DB for user ${existingScore.userId} (${existingScore.id}, ${existingByUser.get(existingScore.userId)!.id})`
+				`[${beatmapId}] WARNING: Multiple scores in DB for user ${existingScore.userId} in ruleset ${existingScore.rulesetId} (${existingScore.id}, ${existingByUser.get(existingScore.userId)!.id})`
 			);
 	}
 
@@ -303,7 +309,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 			}
 			logInfo(
 				infoLogStream,
-				`[${beatmapId}] Overwriting recalculated score #${existingByIdScore.id} (${existingByIdScore.totalScore} -> ${score.totalScore})`
+				`[${beatmapId}] Overwriting recalculated score #${existingByIdScore.id} in ruleset ${existingByIdScore.rulesetId} (${existingByIdScore.totalScore} -> ${score.totalScore})`
 			);
 			mergedById.delete(existingByIdScore.id);
 		}
@@ -312,7 +318,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 		if (existingByUserScore && existingByUserScore.id != score.id) {
 			logInfo(
 				infoLogStream,
-				`[${beatmapId}] Overwriting improved score #${existingByUserScore.id} (${existingByUserScore.totalScore} -> ${score.totalScore})`
+				`[${beatmapId}] Overwriting improved score #${existingByUserScore.id} in ruleset ${existingByUserScore.rulesetId} (${existingByUserScore.totalScore} -> ${score.totalScore})`
 			);
 			mergedById.delete(existingByUserScore.id);
 		}
@@ -358,9 +364,14 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 
 	await client.query("BEGIN");
 	try {
-		await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1`, [beatmapId]);
+		// const updateSetClause = SCORE_TABLE_COLUMNS.map(col => `${col} = EXCLUDED.${col}`).join(", ");
+		await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1 AND ruleset_id = $2`, [
+			beatmapId,
+			rulesetId
+		]);
 		await client.query(
-			`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`
+			`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
+			values
 		);
 		await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_scrape = NOW() WHERE id = $1`, [beatmapId]);
 		await client.query("COMMIT");
