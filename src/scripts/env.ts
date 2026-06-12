@@ -4,8 +4,7 @@ dotenv.config({ path: "../../.env", quiet: true });
 
 export const OSU_CLIENT_ID = process.env.OSU_CLIENT_ID;
 export const OSU_CLIENT_SECRET = process.env.OSU_CLIENT_SECRET;
-
-export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260530";
+export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260615";
 
 export const DB_HOST = process.env.DB_HOST || "localhost";
 const parsedDbPort = Number(process.env.DB_PORT);
@@ -13,11 +12,17 @@ export const DB_PORT = Number.isFinite(parsedDbPort) ? parsedDbPort : 5432;
 export const DB_USER = process.env.DB_USER;
 export const DB_PASSWORD = process.env.DB_PASSWORD;
 export const DB_NAME = process.env.DB_NAME || "pogstats";
+
 export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";
 export const DB_SCORES_TABLE = process.env.DB_SCORES_TABLE || "SCORES";
 export const DB_PLAYERS_TABLE = process.env.DB_PLAYERS_TABLE || "PLAYERS";
 export const DB_BEATMAPS_TABLE = process.env.DB_BEATMAPS_TABLE || "BEATMAPS";
 export const DB_BEATMAPSETS_TABLE = process.env.DB_BEATMAPSETS_TABLE || "BEATMAPSETS";
+
+const parsedServerPort = Number(process.env.SERVER_PORT);
+export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;
+
+export const VERBOSE = process.env.VERBOSE?.toLowerCase() === "true";
 
 export const SCORE_SCRAPE_LOG_PATH = process.env.SCORE_SCRAPE_LOG_PATH || "../../data/logs/scrape_scores.log";
 export const SCORE_SCRAPE_ERROR_LOG_PATH =
@@ -25,5 +30,3 @@ export const SCORE_SCRAPE_ERROR_LOG_PATH =
 
 const parsedScrapeDelayMs = Number(process.env.SCRAPE_SCORE_DELAY_MS);
 export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 1001;
-
-export const VERBOSE = process.env.VERBOSE?.toLowerCase() === "true";

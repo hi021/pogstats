@@ -3,6 +3,47 @@ interface ApiBeatmapScore {
 	scores: ApiScore[];
 }
 
+/// FROM SCORES-WS:
+
+// {
+//   classic_total_score: 758792,
+//   preserve: true,
+//   processed: true,
+//   ranked: true,
+//   maximum_statistics: { perfect: 969, legacy_combo_increase: 807 },
+//   mods: [ { acronym: 'CL' } ],
+//   statistics: { ok: 17, meh: 5, good: 53, miss: 26, great: 263, perfect: 605 },
+//   total_score_without_mods: 790408,
+//   beatmap_id: 701223,
+//   best_id: null,
+//   id: 6867233214,
+//   rank: 'A',
+//   type: 'solo_score',
+//   user_id: 37474187,
+//   accuracy: 0.933783,
+//   build_id: null,
+//   ended_at: '2026-06-12T19:42:38Z',
+//   has_replay: false,
+//   is_perfect_combo: false,
+//   legacy_perfect: false,
+//   legacy_score_id: 661304575,
+//   legacy_total_score: 794499,
+//   max_combo: 983,
+//   passed: true,
+//   pp: 114.001,
+//   ruleset_id: 3,
+//   started_at: null,
+//   total_score: 758792,
+//   replay: false,
+//   current_user_attributes: { pin: null }
+// }
+
+// TODO
+interface WsScore {
+
+}
+
+// TODO recheck against actual response
 interface ApiScore {
 	accuracy: number; // 0-1
 	beatmap_id: number;

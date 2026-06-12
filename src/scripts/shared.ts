@@ -46,9 +46,8 @@ export async function readFileByLine(filePath: string, lineCallback: (line: stri
 	});
 
 	let rowNo = 0;
-	for await (const line of rl) {
+	for await (const line of rl)
 		await lineCallback(line, ++rowNo);
-	}
 }
 
 export function createLogStream(filePath: string) {
