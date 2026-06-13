@@ -1,20 +1,9 @@
-import { Pool } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
-import { getOAuthToken } from "./osu_auth.js";
 import fs from "fs";
+import { Pool } from "pg";
+import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUsersUrl } from "./shared.js";
 
-let clients: Pool;
-
 async function main() {
-	// clients = new Pool({
-	//   host: DB_HOST,
-	//   port: DB_PORT,
-	//   user: DB_USER,
-	//   password: DB_PASSWORD,
-	//   database: DB_NAME
-	// });
-
 	try {
 		const headers = buildHeadersWithAuth(await getOAuthToken());
 		const playerIds = [39828, 23574301];

@@ -9,6 +9,7 @@ import {
 	DB_HOST,
 	DB_NAME,
 	DB_PASSWORD,
+	DB_PLAYERS_TABLE,
 	DB_PORT,
 	DB_SCORES_TABLE,
 	DB_USER,
@@ -222,12 +223,11 @@ async function createScoresTable() {
       ended_at            			TIMESTAMPTZ NOT NULL,
       data               			 	JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-			CONSTRAINT beatmap_fk FOREIGN KEY (beatmap_id)
-    	REFERENCES ${DB_BEATMAPS_TABLE}(id)
+			CONSTRAINT score_beatmap_fk FOREIGN KEY (beatmap_id)
+    	REFERENCES ${DB_BEATMAPS_TABLE}(id),
+			CONSTRAINT score_user_fk FOREIGN KEY (user_id)
+			REFERENCES ${DB_PLAYERS_TABLE}(id)
 		)`);
-	// TODO: after adding players table
-	// 			CONSTRAINT user_fk FOREIGN KEY (user_id)
-	// REFERENCES ${DB_PLAYERS_TABLE}(id)
 	// could also add unique constraints to user_id + beatmap_id + ruleset_id and position + beatmap_id + ruleset_id
 
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_idx ON ${DB_SCORES_TABLE}(beatmap_id)`);

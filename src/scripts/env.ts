@@ -16,6 +16,9 @@ export const DB_NAME = process.env.DB_NAME || "pogstats";
 export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";
 export const DB_SCORES_TABLE = process.env.DB_SCORES_TABLE || "SCORES";
 export const DB_PLAYERS_TABLE = process.env.DB_PLAYERS_TABLE || "PLAYERS";
+export const DB_PLAYER_RULESET_STATS_TABLE = process.env.DB_PLAYER_RULESET_STATS_TABLE || "PLAYER_RULESET_STATS";
+export const DB_PLAYER_POG_BADGES_TABLE = process.env.DB_PLAYER_POG_BADGES_TABLE || "PLAYER_POG_BADGES";
+export const DB_POG_BADGES_TABLE = process.env.DB_POG_BADGES_TABLE || "POG_BADGES";
 export const DB_BEATMAPS_TABLE = process.env.DB_BEATMAPS_TABLE || "BEATMAPS";
 export const DB_BEATMAPSETS_TABLE = process.env.DB_BEATMAPSETS_TABLE || "BEATMAPSETS";
 
