@@ -78,17 +78,17 @@ interface Player {
 	stats: { [ruleset in Ruleset]?: PlayerRulesetStats };
 	pogBadges?: number[]; // meta
 	retrievedAt: Date; // meta
-	isScraped: boolean; // meta
-	// TODO: maybe meta fields from poggersltd
+	isFromOsuApi: boolean; // meta
+	// TODO?: maybe meta fields from poggersltd
 }
 
 interface PlayerRulesetStats {
 	playCount: number;
-	playTime: number;
+	playTime: number; // in seconds
 	pp: number;
 	rankedScore: number;
 	gradeCounts: {
-		[grade in ApiScoreHitType]?: number;
+		[grade in PlayerScoreRank]?: number;
 	};
 }
 

@@ -1,10 +1,22 @@
 import { Client } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYER_POG_BADGES_TABLE, DB_PLAYER_RULESET_STATS_TABLE, DB_PLAYERS_TABLE, DB_POG_BADGES_TABLE, DB_PORT, DB_USER } from "./env.js";
+import {
+	DB_HOST,
+	DB_NAME,
+	DB_PASSWORD,
+	DB_PLAYER_POG_BADGES_TABLE,
+	DB_PLAYER_RULESET_STATS_TABLE,
+	DB_PLAYERS_TABLE,
+	DB_POG_BADGES_TABLE,
+	DB_PORT,
+	DB_USER
+} from "./env.js";
 
 let client: Client;
 
 async function createTables() {
-	console.log(`Attempting to create ${DB_PLAYERS_TABLE}, ${DB_PLAYER_RULESET_STATS_TABLE}, ${DB_POG_BADGES_TABLE}, and ${DB_PLAYER_POG_BADGES_TABLE} tables`);
+	console.log(
+		`Attempting to create ${DB_PLAYERS_TABLE}, ${DB_PLAYER_RULESET_STATS_TABLE}, ${DB_POG_BADGES_TABLE}, and ${DB_PLAYER_POG_BADGES_TABLE} tables`
+	);
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_PLAYERS_TABLE} (
@@ -18,7 +30,7 @@ async function createTables() {
 			retrieved_at		TIMESTAMPTZ NOT NULL,
 			is_from_osu_api	BOOLEAN NOT NULL
     )`);
-			// TODO team_id FK contraint after adding teams?
+	// TODO team_id FK contraint after adding teams?
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (
@@ -58,7 +70,9 @@ async function createTables() {
 			REFERENCES ${DB_POG_BADGES_TABLE}(id)
 		)`);
 
-	console.log(`Created ${DB_PLAYERS_TABLE}, ${DB_PLAYER_RULESET_STATS_TABLE}, ${DB_POG_BADGES_TABLE}, and ${DB_PLAYER_POG_BADGES_TABLE} table if didn't exist`);
+	console.log(
+		`Created ${DB_PLAYERS_TABLE}, ${DB_PLAYER_RULESET_STATS_TABLE}, ${DB_POG_BADGES_TABLE}, and ${DB_PLAYER_POG_BADGES_TABLE} table if didn't exist`
+	);
 }
 
 async function main() {

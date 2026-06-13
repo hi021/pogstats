@@ -1,4 +1,5 @@
-// Sequentially "scrapes" all top 100 scores for each beatmap ID listed under BEATMAP_ID_PATH and stores them in DB_SCORES_TABLE postgres table.
+// Sequentially "scrapes" all top 100 scores for each ranked, approved, and loved beatmap last updated before `ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE` from api v2
+// Stores results in the DB_SCORES_TABLE postgres table.
 // Re-authenticates w/ OAuth2 for every script run
 // Includes peppy-pleasing rate limiting (SCRAPE_SCORE_DELAY_MS) and saves logs to SCORE_SCRAPE_LOG_PATH and SCORE_SCRAPE_ERROR_LOG_PATH
 
@@ -26,6 +27,7 @@ import {
 	logError,
 	logInfo
 } from "./shared.js";
+import { convertAdditionalDataToJsonb, convertApiScore, convertDatabaseScore } from "../shared.js";
 
 const SCORE_TABLE_COLUMNS = Object.freeze([
 	"position",
@@ -127,6 +129,7 @@ let infoLogStream: fs.WriteStream;
 let errorLogStream: fs.WriteStream;
 let lastFetchTimestamp = 0;
 
+// TODO accessor and make generic
 async function rateLimit() {
 	const now = Date.now();
 	const elapsed = now - lastFetchTimestamp;
@@ -134,66 +137,6 @@ async function rateLimit() {
 		await new Promise(resolve => setTimeout(resolve, SCRAPE_SCORE_DELAY_MS - elapsed));
 
 	lastFetchTimestamp = Date.now();
-}
-
-function convertApiScore(apiScore: ApiScore, position: number, isScraped = true): BeatmapScoreFull {
-	return {
-		position,
-		isScraped,
-		retrievedAt: new Date(),
-		lazer: apiScore.build_id != null,
-		id: apiScore.id,
-		userId: apiScore.user_id,
-		rulesetId: apiScore.ruleset_id,
-		beatmapId: apiScore.beatmap_id,
-		hasReplay: apiScore.has_replay,
-		grade: apiScore.rank as ScoreRank, // safe because postgres pads to char(2) automatically
-		accuracy: apiScore.accuracy,
-		maxCombo: apiScore.max_combo,
-		totalScore: apiScore.total_score,
-		classicTotalScore: apiScore.classic_total_score,
-		totalScoreWithoutMods: apiScore.total_score_without_mods,
-		isPerfectCombo: apiScore.is_perfect_combo,
-		legacyPerfect: apiScore.legacy_perfect,
-		pp: apiScore.pp,
-		legacyTotalScore: apiScore.legacy_total_score,
-		endedAt: new Date(apiScore.ended_at),
-		data: {
-			mods: apiScore.mods,
-			maximumStatistics: apiScore.maximum_statistics,
-			statistics: apiScore.statistics
-		}
-	};
-}
-
-function convertDatabaseScore(dbScore: Record<string, unknown>) {
-	return {
-		position: dbScore.position,
-		isScraped: dbScore.is_scraped,
-		retrievedAt: dbScore.retrieved_at,
-		lazer: dbScore.lazer,
-		id: Number(dbScore.id),
-		userId: dbScore.user_id,
-		rulesetId: dbScore.ruleset_id,
-		beatmapId: Number(dbScore.beatmap_id),
-		hasReplay: dbScore.has_replay,
-		grade: dbScore.grade,
-		accuracy: dbScore.accuracy,
-		maxCombo: dbScore.max_combo,
-		totalScore: dbScore.total_score,
-		classicTotalScore: Number(dbScore.classic_total_score),
-		totalScoreWithoutMods: dbScore.total_score_without_mods,
-		isPerfectCombo: dbScore.is_perfect_combo,
-		legacyPerfect: dbScore.legacy_perfect,
-		pp: dbScore.pp,
-		legacyTotalScore: Number(dbScore.legacy_total_score),
-		endedAt: dbScore.ended_at,
-		data: dbScore.data
-	} as BeatmapScoreFull;
-}
-
-function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditionalData) {
-	return JSON.stringify(additionalData);
 }
 
 async function createScoresTable() {
@@ -249,7 +192,7 @@ async function createScoresTable() {
 async function addBeatmapColumns() {
 	logInfo(infoLogStream, `Adding 'last_scores_scrape' and 'last_scores_update' columns to ${DB_BEATMAPS_TABLE}`);
 
-	// TODO: not the best solution due to converts
+	// not the best solution due to converts, assuming osu!standard for now
 	await client.query(
 		`ALTER TABLE ${DB_BEATMAPS_TABLE} ADD COLUMN IF NOT EXISTS last_scores_scrape TIMESTAMPTZ DEFAULT NULL`
 	);
@@ -364,7 +307,6 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 
 	await client.query("BEGIN");
 	try {
-		// const updateSetClause = SCORE_TABLE_COLUMNS.map(col => `${col} = EXCLUDED.${col}`).join(", ");
 		await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1 AND ruleset_id = $2`, [
 			beatmapId,
 			rulesetId

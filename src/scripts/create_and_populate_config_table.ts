@@ -27,7 +27,7 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "mania_min_top15", valueInt: 125 },
 	{ key: "mania_min_top8", valueInt: 50 },
 	{ key: "mania_min_top1", valueInt: 5 },
-	{ key: "last_ws_score_id", valueText: '-1' }
+	{ key: "last_ws_score_id", valueText: "-1" }
 ]);
 
 let clients: Pool;
