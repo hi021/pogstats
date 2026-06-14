@@ -2,8 +2,8 @@ import http from "http";
 import Koa from "koa";
 import { WebSocket, WebSocketServer } from "ws";
 import { SERVER_PORT } from "../scripts/env.js";
-import { onConnect, sendDebugMessageToSocket } from "./websocket.js";
 import { handleScoresMessage } from "./scores-ws.js";
+import { onConnect, sendDebugMessageToSocket } from "./websocket.js";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol/";
 

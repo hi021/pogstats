@@ -5,6 +5,7 @@
 
 import fs from "fs";
 import { Client } from "pg";
+import { convertAdditionalDataToJsonb, convertApiScore, convertDatabaseScore } from "../shared.js";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
@@ -24,10 +25,12 @@ import {
 	buildHeadersWithAuth,
 	createLogStream,
 	dumpTableToCsv,
+	getMinDate,
 	logError,
-	logInfo
+	logInfo,
+	parseArgs,
+	rateLimit
 } from "./shared.js";
-import { convertAdditionalDataToJsonb, convertApiScore, convertDatabaseScore } from "../shared.js";
 
 const SCORE_TABLE_COLUMNS = Object.freeze([
 	"position",
@@ -66,61 +69,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 	}
 } as const);
 
-// TODO generalize and move to shared
-type FlagName = keyof typeof FLAG_DEFINITIONS;
-type FlagDefinition = (typeof FLAG_DEFINITIONS)[FlagName];
-interface ParsedFlags {
-	minDate?: string;
-	skipDump?: boolean;
-}
-
-function printHelp() {
-	console.log(`Usage: node ${process.argv[1].split("/").at(-1)} [flags]\n`);
-	console.log("Optional flags:");
-	for (const def of Object.values(FLAG_DEFINITIONS) as FlagDefinition[])
-		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
-	console.log("  --help                   Show this help message");
-}
-
-function parseArgs(argv: string[]): ParsedFlags {
-	const parsed = {} as ParsedFlags;
-
-	for (let i = 0; i < argv.length; i++) {
-		const arg = argv[i];
-		if (arg === "--help") {
-			printHelp();
-			process.exit(0);
-		}
-
-		if (!arg.startsWith("--")) throw new Error(`Unexpected argument: ${arg}`);
-
-		const [flagName, maybeValue] = arg.slice(2).split("=", 2) as [string, string | undefined];
-		if (!Object.prototype.hasOwnProperty.call(FLAG_DEFINITIONS, flagName))
-			throw new Error(`Unknown flag: --${flagName}`);
-
-		const def = FLAG_DEFINITIONS[flagName as FlagName];
-		if (def.takesValue) {
-			const value = maybeValue ?? argv[++i];
-			if (!value || value.startsWith("--")) throw new Error(`Missing value for flag: --${flagName}`);
-			parsed[flagName as "minDate"] = value;
-		} else {
-			if (maybeValue) throw new Error(`Unexpected value for flag: --${flagName}`);
-			parsed[flagName as "skipDump"] = true;
-		}
-	}
-
-	return parsed;
-}
-
-function getMinDate(value: string | undefined) {
-	if (!value) return undefined;
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) throw new Error(`Invalid date for --minDate: ${value}`);
-
-	return date;
-}
-
-const parsedFlags = parseArgs(process.argv.slice(2));
+const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
 const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = getMinDate(parsedFlags.minDate);
 const SKIP_DUMP_BEFORE_SCRAPE = Boolean(parsedFlags.skipDump);
 
@@ -128,16 +77,6 @@ let client: Client;
 let infoLogStream: fs.WriteStream;
 let errorLogStream: fs.WriteStream;
 let lastFetchTimestamp = 0;
-
-// TODO accessor and make generic
-async function rateLimit() {
-	const now = Date.now();
-	const elapsed = now - lastFetchTimestamp;
-	if (lastFetchTimestamp > 0 && elapsed < SCRAPE_SCORE_DELAY_MS)
-		await new Promise(resolve => setTimeout(resolve, SCRAPE_SCORE_DELAY_MS - elapsed));
-
-	lastFetchTimestamp = Date.now();
-}
 
 async function createScoresTable() {
 	logInfo(infoLogStream, `Attempting to create ${DB_SCORES_TABLE} table with indexes and comments`);
@@ -324,7 +263,15 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 }
 
 async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<string, string>) {
-	await rateLimit();
+	await rateLimit(
+		{
+			get: () => lastFetchTimestamp,
+			set: value => {
+				lastFetchTimestamp = value;
+			}
+		},
+		SCRAPE_SCORE_DELAY_MS
+	);
 
 	try {
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processing beatmap`);

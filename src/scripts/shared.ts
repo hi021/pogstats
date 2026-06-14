@@ -19,6 +19,86 @@ export const buildHeadersWithAuth = (token: string) => {
 	};
 };
 
+export type FlagDefinition = Readonly<{ cli: string; description: string; takesValue: boolean }>;
+export type FlagDefinitions = Readonly<Record<string, FlagDefinition>>;
+export type ParsedFlags<Defs extends FlagDefinitions> = {
+	[K in keyof Defs]?: Defs[K] extends { takesValue: true } ? string : boolean;
+};
+
+export function printHelp<Defs extends FlagDefinitions>(
+	flagDefinitions: Defs,
+	usageName = process.argv[1]?.split("/").at(-1) ?? ""
+) {
+	console.log(`Usage: node ${usageName} [flags]\n`);
+	console.log("Optional flags:");
+	for (const def of Object.values(flagDefinitions) as FlagDefinition[])
+		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
+	console.log("  --help                   Show this help message");
+}
+
+export function parseArgs<Defs extends FlagDefinitions>(
+	argv: string[],
+	flagDefinitions: Defs,
+	options?: { onHelp?: () => void; usageName?: string }
+): ParsedFlags<Defs> {
+	const parsed = {} as ParsedFlags<Defs>;
+	argv = argv.slice(2);
+
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === "--help") {
+			if (options?.onHelp) {
+				options.onHelp();
+				return parsed;
+			}
+
+			printHelp(flagDefinitions, options?.usageName);
+			process.exit(0);
+		}
+
+		if (!arg.startsWith("--")) throw new Error(`Unexpected argument: '${arg}'`);
+
+		const [flagName, maybeValue] = arg.slice(2).split("=", 2) as [string, string | undefined];
+		if (!Object.prototype.hasOwnProperty.call(flagDefinitions, flagName))
+			throw new Error(`Unknown flag: --${flagName}`);
+
+		const key = flagName as keyof Defs;
+		const def = flagDefinitions[key];
+		if (def.takesValue) {
+			const value = maybeValue ?? argv[++i];
+			if (!value || value.startsWith("--")) throw new Error(`Missing value for flag: --${flagName}`);
+			parsed[key] = value as ParsedFlags<Defs>[keyof Defs];
+		} else {
+			if (maybeValue) throw new Error(`Unexpected value for flag: --${flagName}`);
+			parsed[key] = true as ParsedFlags<Defs>[keyof Defs];
+		}
+	}
+
+	return parsed;
+}
+
+export function getMinDate(value: string | undefined) {
+	if (!value) return undefined;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) throw new Error(`Invalid date for --minDate: ${value}`);
+
+	return date;
+}
+
+export type TimestampAccessor = {
+	get: () => number;
+	set: (value: number) => void;
+};
+
+export async function rateLimit(accessor: TimestampAccessor, delayMs: number) {
+	const now = Date.now();
+	const lastFetchTimestamp = accessor.get();
+	const elapsed = now - lastFetchTimestamp;
+	if (lastFetchTimestamp > 0 && elapsed < delayMs) await new Promise(resolve => setTimeout(resolve, delayMs - elapsed));
+
+	accessor.set(Date.now());
+}
+
 export const buildBeatmapScoresUrl = (
 	beatmapId: number | string,
 	params: BeatmapScoreParams = { mode: "osu", limit: 100 }
