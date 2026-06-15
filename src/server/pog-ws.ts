@@ -15,7 +15,10 @@ export function onConnect(ws: WebSocket) {
 	});
 }
 
-export async function sendDebugMessageToSocket(ctx: ParameterizedContext<DefaultState, DefaultContext, any>, next: Next) {
+export async function sendDebugMessageToSocket(
+	ctx: ParameterizedContext<DefaultState, DefaultContext, any>,
+	next: Next
+) {
 	if (ctx.path === "/api/v1/socket/scores" && ctx.method === "POST") {
 		const message = "Hello from server!";
 		for (const client of wsClients) client.send(message);

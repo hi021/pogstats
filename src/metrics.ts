@@ -1,4 +1,4 @@
-import prom from 'prom-client'
+import prom from "prom-client";
 import Koa from "koa";
 
 // use esnext (es2026) and typescript 6 syntax
