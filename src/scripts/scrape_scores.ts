@@ -5,7 +5,7 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { convertAdditionalDataToJsonb, convertApiScore, convertDatabaseScore } from "../shared.js";
+import { convertAdditionalDataToJsonb, convertApiScore, convertDatabaseScore, parseArgs } from "../shared.js";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
@@ -28,7 +28,6 @@ import {
 	getMinDate,
 	logError,
 	logInfo,
-	parseArgs,
 	rateLimit
 } from "./shared.js";
 
@@ -321,9 +320,8 @@ async function scrapeScores() {
 		const beatmapIds = await getBeatmapIds(ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE);
 		logInfo(infoLogStream, `Found ${beatmapIds.length} beatmap IDs to process`);
 
-		for (let i = 0; i < beatmapIds.length; i++) {
+		for (let i = 0; i < beatmapIds.length; i++)
 			await handleBeatmap(beatmapIds[i], i + 1, headers);
-		}
 
 		// TODO graceful shutdown handling to ensure logs are flushed and DB connection is closed even if the process is killed mid-run
 		logInfo(infoLogStream, "Finished processing all beatmaps");

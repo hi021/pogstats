@@ -9,7 +9,7 @@ const dbPool = new Pool({
 	database: DB_NAME
 });
 
-export async function getDbClient(tag: string) {
+export async function getDbClient() {
 	try {
 		return await dbPool.connect();
 	} catch (e) {
@@ -21,64 +21,59 @@ export async function closePool() {
 	dbPool.end();
 }
 
-// export async function getScoresForMaps(beatmapIds: number[], rulesetId = 0) {
-// 	const dbClient = await getDbClient("getScoresForMaps");
-// 	if (!dbClient) return console.error("Failed to obtain DB client to get map scores");
-
-// 	const scoreList: QueryResult<BeatmapScoreFull> = await dbClient.query(
-// 		`SELECT * FROM ${DB_SCORES_TABLE} WHERE beatmap_id IN ($1) AND ruleset_id = $2`,
-// 		[beatmapIds, rulesetId]
-// 	);
-// 	console.log(scoreList.rows);
-// }
-
 export async function getBeatenScores(scores: WsScore[]) {
-	const dbClient = await getDbClient("getBeatenScores");
-	if (!dbClient) return console.error("Failed to obtain DB client to get beaten map scores");
+	const dbClient = await getDbClient();
+	if (!dbClient) {
+		 console.error("Failed to obtain DB client to get beaten map scores");
+		 return [];
+	}
 
-	// TODO error: bind message has 36404 parameter formats but 0 parameters
-	const paramTuple = convertToBeatenScoreParamTuple(scores);
-	const scoreSqlPlaceholders = paramTuple
-		.map(
-			(_, i) =>
-				`($${i * 5 + 1}::BIGINT, $${i * 5 + 2}::SMALLINT, $${i * 5 + 3}::BIGINT, $${i * 5 + 4}::INTEGER, $${i * 5 + 5}::INTEGER)`
-		)
-		.join(",");
+	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<BeatmapScoreFull> = await dbClient.query(
-		`WITH candidates (candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-		AS (VALUES ${scoreSqlPlaceholders})
-		select
-			c.candidate_beatmap_id,
-			c.candidate_id,
-			c.candidate_user_id,
-			beaten.id,
-			beaten.position
-		FROM candidates c
-		LEFT JOIN LATERAL (
-			SELECT id, position
-			FROM ${DB_SCORES_TABLE} s
-			WHERE s.beatmap_id = c.candidate_beatmap_id
-				AND s.ruleset_id = c.candidate_ruleset_id
-				AND s.position <= 100
-				AND s.total_score < c.candidate_score
-			ORDER BY s.position ASC
-			LIMIT 1
-		) beaten ON TRUE`,
-		paramTuple.flat()
+		`WITH candidates AS (SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
+			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+			AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score))
+				SELECT c.candidate_beatmap_id, c.candidate_id, c.candidate_user_id, beaten.id, beaten.position
+					FROM candidates c
+				LEFT JOIN LATERAL (
+					SELECT id, position
+					FROM ${DB_SCORES_TABLE} s
+					WHERE s.beatmap_id = c.candidate_beatmap_id
+						AND s.ruleset_id = c.candidate_ruleset_id
+						AND s.position <= 100
+						AND s.total_score < c.candidate_score
+					ORDER BY s.position ASC
+					LIMIT 1
+				) beaten ON TRUE
+				WHERE beaten.id IS NOT NULL`,
+		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
 	);
-	console.log(scoreList.rows);
+
+	return scoreList.rows;
 }
 
-type BeatenScoreParams = [number, number, number, number, number];
-function convertToBeatenScoreParamTuple(scores: WsScore[]) {
-	const tuple = new Array<BeatenScoreParams>(scores.length);
-	for (let i = 0; i < tuple.length; ++i) {
+type BeatenScoreParams = {ids: number[], rulesets: number[], beatmaps: number[], users: number[], totalScores: number[]};
+function convertToBeatenScoreParamObject(scores: WsScore[]) {
+	const ids = new Array<number>(scores.length);
+	const rulesets = new Array<number>(scores.length);
+	const beatmaps = new Array<number>(scores.length);
+	const users = new Array<number>(scores.length);
+	const totalScores = new Array<number>(scores.length);
+
+	for (let i = 0; i < scores.length; ++i) {
 		const score = scores[i];
-		tuple[i] = [score.id, score.ruleset_id, score.beatmap_id, score.user_id, score.total_score];
+		ids[i] = score.id;
+		rulesets[i] = score.ruleset_id;
+		beatmaps[i] = score.beatmap_id;
+		users[i] = score.user_id;
+		totalScores[i] = score.total_score;
 	}
-	return tuple;
+	return {ids, rulesets, beatmaps, users, totalScores} as BeatenScoreParams;
 }
 
 export async function getInexistentPlayers(playerIds: number[]) {
 	// filtered scores that need player data (players not in db)
+}
+
+export async function getInexistentBeatmaps(beatmapIds: number[]) {
 }

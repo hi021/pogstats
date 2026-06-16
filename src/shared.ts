@@ -1,4 +1,4 @@
-export function convertApiScore(apiScore: ApiScore, position: number, isScraped = true): BeatmapScoreFull {
+export function convertApiScore(apiScore: ApiScore | WsScore, position: number, isScraped = true): BeatmapScoreFull {
 	return {
 		position,
 		isScraped,
@@ -56,4 +56,62 @@ export function convertDatabaseScore(dbScore: Record<string, unknown>) {
 
 export function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditionalData) {
 	return JSON.stringify(additionalData);
+}
+
+export type FlagDefinition = Readonly<{ cli: string; description: string; takesValue: boolean }>;
+export type FlagDefinitions = Readonly<Record<string, FlagDefinition>>;
+export type ParsedFlags<Defs extends FlagDefinitions> = {
+	[K in keyof Defs]?: Defs[K] extends { takesValue: true } ? string : boolean;
+};
+
+export function printHelp<Defs extends FlagDefinitions>(
+	flagDefinitions: Defs,
+	usageName = process.argv[1]?.split("/").at(-1) ?? ""
+) {
+	console.log(`Usage: node ${usageName} [flags]\n`);
+	console.log("Optional flags:");
+	for (const def of Object.values(flagDefinitions) as FlagDefinition[])
+		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
+	console.log("  --help                   Show this help message");
+}
+
+export function parseArgs<Defs extends FlagDefinitions>(
+	argv: string[],
+	flagDefinitions: Defs,
+	options?: { onHelp?: () => void; usageName?: string }
+): ParsedFlags<Defs> {
+	const parsed = {} as ParsedFlags<Defs>;
+	argv = argv.slice(2);
+
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === "--help") {
+			if (options?.onHelp) {
+				options.onHelp();
+				return parsed;
+			}
+
+			printHelp(flagDefinitions, options?.usageName);
+			process.exit(0);
+		}
+
+		if (!arg.startsWith("--")) throw new Error(`Unexpected argument: '${arg}'`);
+
+		const [flagName, maybeValue] = arg.slice(2).split("=", 2) as [string, string | undefined];
+		if (!Object.prototype.hasOwnProperty.call(flagDefinitions, flagName))
+			throw new Error(`Unknown flag: --${flagName}`);
+
+		const key = flagName as keyof Defs;
+		const def = flagDefinitions[key];
+		if (def.takesValue) {
+			const value = maybeValue ?? argv[++i];
+			if (!value || value.startsWith("--")) throw new Error(`Missing value for flag: --${flagName}`);
+			parsed[key] = value as ParsedFlags<Defs>[keyof Defs];
+		} else {
+			if (maybeValue) throw new Error(`Unexpected value for flag: --${flagName}`);
+			parsed[key] = true as ParsedFlags<Defs>[keyof Defs];
+		}
+	}
+
+	return parsed;
 }
