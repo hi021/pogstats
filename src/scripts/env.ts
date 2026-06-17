@@ -25,6 +25,7 @@ export const DB_BEATMAPSETS_TABLE = process.env.DB_BEATMAPSETS_TABLE || "BEATMAP
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;
 
+export const DEV_ENV = process.env.DEV_ENV?.toLowerCase() === "true";
 export const VERBOSE = process.env.VERBOSE?.toLowerCase() === "true";
 
 export const SCORE_SCRAPE_LOG_PATH = process.env.SCORE_SCRAPE_LOG_PATH || "../../data/logs/scrape_scores.log";

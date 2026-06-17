@@ -1,9 +1,33 @@
+import https from "https";
 import WebSocket from "ws";
 import { getBeatenScores, getDbClient } from "../db.js";
-import { DB_CONFIG_TABLE } from "../scripts/env.js";
+import { DB_CONFIG_TABLE, DEV_ENV } from "../scripts/env.js";
+
+const SCORES_WS_URL = "wss://ushio.chiffa.lol";
+const SCORES_WS_PING_INTERVAL = 30000;
 
 const batchScores = new Array<WsScore>();
+const batchPlayerIds = new Array<number>();
+const batchBeatmapIds = new Array<number>();
 let batchLowestScoreId = -1;
+
+const scoresWsPing = setInterval(
+	() => scoresWs.readyState === WebSocket.OPEN && scoresWs.ping(),
+	SCORES_WS_PING_INTERVAL
+);
+const agent = new https.Agent({ keepAlive: true, sessionTimeout: 900, rejectUnauthorized: DEV_ENV });
+export const scoresWs = new WebSocket(SCORES_WS_URL, { agent });
+
+export function scoresWsOnClose(code: number, reason: Buffer) {
+	console.log("scores-ws connection closed:", code, reason?.toString());
+	clearInterval(scoresWsPing);
+	saveLastScoreId();
+}
+
+export function scoresWsOnError(e: Error) {
+	console.error("scores-ws error:\n", e);
+	saveLastScoreId();
+}
 
 export async function saveLastScoreId(scoreId = batchLowestScoreId) {
 	const dbClient = await getDbClient();
@@ -15,7 +39,7 @@ async function saveScoresBatch(scores = batchScores) {
 	if (!scores?.length) return;
 
 	const fullLength = scores.length;
-	console.log("Received " + fullLength + " scores");
+	console.log(`Received ${fullLength} candidate scores`);
 	const beatenScores = await getBeatenScores(scores);
 	console.log("beatenScores:\n", beatenScores);
 	// 2. convert
@@ -23,19 +47,19 @@ async function saveScoresBatch(scores = batchScores) {
 	batchScores.length = 0;
 }
 
-export async function handleScoresMessage(event: WebSocket.RawData) {
+export async function scoresWsOnMessage(event: WebSocket.RawData) {
 	const message = event.toString();
-	if (message == "end-batch") {
-		// TODO dump current in-memory batch
-		// clear scoresBatch array
-		// save last score id
-
-		// TODO idkkk workers? synchronous?? for now seems to be quick enough even with the big 87k score batches
-		await saveScoresBatch();
-		return;
+	if (message === "start-batch") return;
+	if (message === "end-batch") {
+		try {
+			// TODO idkkk workers? synchronous?? for now seems to be quick enough even with the big 87k score batches
+			await saveScoresBatch();
+			saveLastScoreId();
+			return;
+		} catch (e) {
+			console.error("failed to process scores-ws scores:\n", e);
+		}
 	}
-
-	if(message == "start-batch" ) {return;}
 
 	try {
 		const score = JSON.parse(message) as WsScore;
@@ -44,19 +68,18 @@ export async function handleScoresMessage(event: WebSocket.RawData) {
 			if (!isCandidateScore(score)) return;
 			batchLowestScoreId = score.id < batchLowestScoreId ? score.id : batchLowestScoreId;
 			batchScores.push(score);
+			batchPlayerIds.push(score.user_id);
+			batchBeatmapIds.push(score.beatmap_id);
 		} else {
 			console.warn("skipping malformed scores-ws score:\n", score);
-			// save last score id
 		}
 	} catch (e) {
 		console.error("failed to parse scores-ws message as JSON:\n", e);
-		// TODO maybe disconnect?
-		// save last score id
+		saveLastScoreId();
 	}
 }
 
 function isCandidateScore(score: WsScore) {
-	if(!score.preserve || score.type != "solo_score")
-	console.log("Possible ignoreable score:\n", score)
+	if (!score.preserve || score.type != "solo_score") console.log("Possible ignoreable score:\n", score);
 	return score.ruleset_id == 0 && score.passed;
 }

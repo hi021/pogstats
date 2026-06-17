@@ -1,18 +1,13 @@
 import http from "http";
 import Koa from "koa";
-import { WebSocket } from "ws";
 import { SERVER_PORT } from "../scripts/env.js";
-import { onConnect, onUpgrade, sendDebugMessageToSocket, wss } from "./pog-ws.js";
-import { handleScoresMessage, saveLastScoreId } from "./scores-ws.js";
+import { onConnect, onUpgrade, POG_WS_URL, sendDebugMessageToSocket, wss } from "./pog-ws.js";
+import { scoresWsOnMessage, scoresWs, scoresWsOnClose, scoresWsOnError } from "./scores-ws.js";
 
-const API_BASE_URL = "/api/v1/"
-const POG_WS_URL = API_BASE_URL + "socket/scores"
-const SCORES_WS_URL = "wss://ushio.chiffa.lol/";
+export const API_BASE_URL = "/api/v1/";
 
-const app = new Koa();
-const server = http.createServer(app.callback());
-
-const scoresWs = new WebSocket(SCORES_WS_URL);
+export const app = new Koa();
+export const server = http.createServer(app.callback());
 
 app.use(async ctx => {
 	if (ctx.path === "/status") {
@@ -32,23 +27,16 @@ scoresWs.on("open", () => {
 	scoresWs.send("connect");
 });
 
-scoresWs.on("message", handleScoresMessage);
-
-scoresWs.on("error", err => {
-	console.error("scores-ws error:\n", err);
-	saveLastScoreId();
-});
-
-scoresWs.on("close", () => {
-	console.log("scores-ws connection closed");
-	saveLastScoreId();
-});
+scoresWs.on("message", scoresWsOnMessage);
+scoresWs.on("error", scoresWsOnError);
+scoresWs.on("close", scoresWsOnClose);
 
 server.listen(SERVER_PORT, () => {
 	console.log(`Server running on http://localhost:${SERVER_PORT}`);
 	console.log(`WebSocket listening on ws://localhost:${SERVER_PORT}${POG_WS_URL}`);
 });
 
+// TODO
 // function reconnect(scoreId) {
 //     setTimeout(_ => {
 //         const socket = new WebSocket("ws://127.0.0.1:7727");

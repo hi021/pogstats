@@ -115,6 +115,9 @@ async function createScoresTable() {
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_idx ON ${DB_SCORES_TABLE}(position)`);
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_ended_at_idx ON ${DB_SCORES_TABLE}(ended_at)`);
 	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_idx ON ${DB_SCORES_TABLE}(user_id)`);
+	await client.query(
+		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position)`
+	);
 	// TODO: verify performance, maybe add JSONB GIN, score, pp, rank, ruleset_id (after adding other modes)
 
 	await client.query(
@@ -320,8 +323,7 @@ async function scrapeScores() {
 		const beatmapIds = await getBeatmapIds(ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE);
 		logInfo(infoLogStream, `Found ${beatmapIds.length} beatmap IDs to process`);
 
-		for (let i = 0; i < beatmapIds.length; i++)
-			await handleBeatmap(beatmapIds[i], i + 1, headers);
+		for (let i = 0; i < beatmapIds.length; i++) await handleBeatmap(beatmapIds[i], i + 1, headers);
 
 		// TODO graceful shutdown handling to ensure logs are flushed and DB connection is closed even if the process is killed mid-run
 		logInfo(infoLogStream, "Finished processing all beatmaps");

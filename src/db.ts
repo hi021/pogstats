@@ -1,5 +1,14 @@
 import { Pool, QueryResult } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_SCORES_TABLE, DB_USER } from "./scripts/env.js";
+import {
+	DB_BEATMAPS_TABLE,
+	DB_HOST,
+	DB_NAME,
+	DB_PASSWORD,
+	DB_PLAYERS_TABLE,
+	DB_PORT,
+	DB_SCORES_TABLE,
+	DB_USER
+} from "./scripts/env.js";
 
 const dbPool = new Pool({
 	host: DB_HOST,
@@ -24,35 +33,42 @@ export async function closePool() {
 export async function getBeatenScores(scores: WsScore[]) {
 	const dbClient = await getDbClient();
 	if (!dbClient) {
-		 console.error("Failed to obtain DB client to get beaten map scores");
-		 return [];
+		console.error("Failed to obtain DB client to get beaten map scores");
+		return [];
 	}
 
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<BeatmapScoreFull> = await dbClient.query(
-		`WITH candidates AS (SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
-			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
-			AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score))
-				SELECT c.candidate_beatmap_id, c.candidate_id, c.candidate_user_id, beaten.id, beaten.position
-					FROM candidates c
-				LEFT JOIN LATERAL (
-					SELECT id, position
-					FROM ${DB_SCORES_TABLE} s
-					WHERE s.beatmap_id = c.candidate_beatmap_id
-						AND s.ruleset_id = c.candidate_ruleset_id
-						AND s.position <= 100
-						AND s.total_score < c.candidate_score
-					ORDER BY s.position ASC
-					LIMIT 1
-				) beaten ON TRUE
-				WHERE beaten.id IS NOT NULL`,
+		`WITH candidates AS (
+			SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
+				FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
+		) SELECT c.candidate_beatmap_id, c.candidate_id, c.candidate_user_id, beaten.id, beaten.position
+			FROM candidates c
+		LEFT JOIN LATERAL (
+			SELECT id, position
+			FROM ${DB_SCORES_TABLE} s
+			WHERE s.beatmap_id = c.candidate_beatmap_id
+				AND s.ruleset_id = c.candidate_ruleset_id
+				AND s.position <= 100
+				AND s.total_score < c.candidate_score
+			ORDER BY s.position ASC
+			LIMIT 1
+		) beaten ON TRUE
+			WHERE beaten.id IS NOT NULL`,
 		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
 	);
 
 	return scoreList.rows;
 }
 
-type BeatenScoreParams = {ids: number[], rulesets: number[], beatmaps: number[], users: number[], totalScores: number[]};
+type BeatenScoreParams = {
+	ids: number[];
+	rulesets: number[];
+	beatmaps: number[];
+	users: number[];
+	totalScores: number[];
+};
 function convertToBeatenScoreParamObject(scores: WsScore[]) {
 	const ids = new Array<number>(scores.length);
 	const rulesets = new Array<number>(scores.length);
@@ -68,12 +84,43 @@ function convertToBeatenScoreParamObject(scores: WsScore[]) {
 		users[i] = score.user_id;
 		totalScores[i] = score.total_score;
 	}
-	return {ids, rulesets, beatmaps, users, totalScores} as BeatenScoreParams;
+	return { ids, rulesets, beatmaps, users, totalScores } as BeatenScoreParams;
 }
 
 export async function getInexistentPlayers(playerIds: number[]) {
-	// filtered scores that need player data (players not in db)
+	const dbClient = await getDbClient();
+	if (!dbClient) {
+		console.error("Failed to obtain DB client to get inexistent players");
+		return [];
+	}
+
+	return (
+		await dbClient.query(
+			`
+		WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
+		SELECT i.id FROM input_ids i
+		LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
+		WHERE u.id IS NULL`,
+			playerIds
+		)
+	).rows as number[];
 }
 
 export async function getInexistentBeatmaps(beatmapIds: number[]) {
+	const dbClient = await getDbClient();
+	if (!dbClient) {
+		console.error("Failed to obtain DB client to get inexistent beatmaps");
+		return [];
+	}
+
+	return (
+		await dbClient.query(
+			`
+		WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
+		SELECT i.id FROM input_ids i
+		LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
+		WHERE b.id IS NULL`,
+			beatmapIds
+		)
+	).rows as number[];
 }

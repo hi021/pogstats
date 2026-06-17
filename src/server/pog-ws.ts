@@ -2,11 +2,14 @@ import http from "http";
 import type { DefaultContext, DefaultState, Next, ParameterizedContext } from "koa";
 import stream from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
+import { API_BASE_URL } from "./main.js";
+
+export const POG_WS_URL = API_BASE_URL + "socket/scores";
 
 export const wss = new WebSocketServer({ noServer: true });
 export const wsClients = new Set<WebSocket>();
 
-export function onUpgrade(req:  http.IncomingMessage, socket: stream.Duplex, head: Buffer) {
+export function onUpgrade(req: http.IncomingMessage, socket: stream.Duplex, head: Buffer) {
 	if (req.url === "/api/v1/socket/scores") {
 		wss.handleUpgrade(req, socket, head, ws => {
 			wss.emit("connection", ws, req);
