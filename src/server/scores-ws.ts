@@ -42,7 +42,8 @@ async function saveScoresBatch(scores = batchScores) {
 	console.log(`Received ${fullLength} candidate scores`);
 	const beatenScores = await getBeatenScores(scores);
 	console.log("beatenScores:\n", beatenScores);
-	// 2. convert
+	// TODO fetch missing maps & players
+	// TODO convert
 	// TODO save to db
 	batchScores.length = 0;
 }

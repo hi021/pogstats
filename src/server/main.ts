@@ -4,8 +4,6 @@ import { SERVER_PORT } from "../scripts/env.js";
 import { onConnect, onUpgrade, POG_WS_URL, sendDebugMessageToSocket, wss } from "./pog-ws.js";
 import { scoresWsOnMessage, scoresWs, scoresWsOnClose, scoresWsOnError } from "./scores-ws.js";
 
-export const API_BASE_URL = "/api/v1/";
-
 export const app = new Koa();
 export const server = http.createServer(app.callback());
 

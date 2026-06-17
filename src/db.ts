@@ -7,7 +7,8 @@ import {
 	DB_PLAYERS_TABLE,
 	DB_PORT,
 	DB_SCORES_TABLE,
-	DB_USER
+	DB_USER,
+	VERBOSE
 } from "./scripts/env.js";
 
 const dbPool = new Pool({
@@ -36,29 +37,31 @@ export async function getBeatenScores(scores: WsScore[]) {
 		console.error("Failed to obtain DB client to get beaten map scores");
 		return [];
 	}
-
+	
+	if(VERBOSE) console.log("Fetching beaten top 100 scores for batch");
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<BeatmapScoreFull> = await dbClient.query(
 		`WITH candidates AS (
 			SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
-				FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
-				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-		) SELECT c.candidate_beatmap_id, c.candidate_id, c.candidate_user_id, beaten.id, beaten.position
+			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+			AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
+			) SELECT c.candidate_beatmap_id, c.candidate_id, c.candidate_user_id, beaten.id, beaten.position
 			FROM candidates c
-		LEFT JOIN LATERAL (
-			SELECT id, position
-			FROM ${DB_SCORES_TABLE} s
-			WHERE s.beatmap_id = c.candidate_beatmap_id
+			LEFT JOIN LATERAL (
+				SELECT id, position
+				FROM ${DB_SCORES_TABLE} s
+				WHERE s.beatmap_id = c.candidate_beatmap_id
 				AND s.ruleset_id = c.candidate_ruleset_id
 				AND s.position <= 100
 				AND s.total_score < c.candidate_score
-			ORDER BY s.position ASC
-			LIMIT 1
-		) beaten ON TRUE
-			WHERE beaten.id IS NOT NULL`,
-		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
-	);
-
+				ORDER BY s.position ASC
+				LIMIT 1
+				) beaten ON TRUE
+				WHERE beaten.id IS NOT NULL`,
+				[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
+			);
+			
+			if(VERBOSE) console.log(`Found ${scoreList.rowCount} beaten top 100 scores`);
 	return scoreList.rows;
 }
 
