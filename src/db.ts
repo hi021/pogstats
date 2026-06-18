@@ -47,11 +47,11 @@ export async function saveLastScoreId(scoreId: number | string) {
 
 export async function getLastScoreId() {
 	return Number(
-		(await dbPool.query(`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`)).rows?.[0] || 0
+		(await dbPool.query(`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`)).rows?.[0]?.value_text || 0
 	);
 }
 
-export async function getInexistentPlayers(playerIds: number[]) {
+export async function getInexistentPlayerIds(playerIds: number[]) {
 	return (
 		await dbPool.query(
 			`
@@ -61,10 +61,10 @@ export async function getInexistentPlayers(playerIds: number[]) {
 			WHERE u.id IS NULL`,
 			[playerIds]
 		)
-	).rows as number[];
+	).rows.map(r => r.id) as number[];
 }
 
-export async function getInexistentBeatmaps(beatmapIds: number[]) {
+export async function getInexistentBeatmapIds(beatmapIds: number[]) {
 	return (
 		await dbPool.query(
 			`
@@ -74,7 +74,7 @@ export async function getInexistentBeatmaps(beatmapIds: number[]) {
 			WHERE b.id IS NULL`,
 			[beatmapIds]
 		)
-	).rows as number[];
+	).rows.map(r => Number(r.id)) as number[];
 }
 
 type BeatenScoreParams = {

@@ -26,7 +26,7 @@ export function onConnect(ws: WebSocket) {
 	});
 }
 
-export async function sendDebugMessageToSocket(
+export async function socketDebugMessageEndpoint(
 	ctx: ParameterizedContext<DefaultState, DefaultContext, any>,
 	next: Next
 ) {
