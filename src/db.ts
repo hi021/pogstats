@@ -1,29 +1,39 @@
-import { Pool, QueryResult } from "pg";
+import { Pool, PoolClient } from "pg";
 import {
 	DB_BEATMAPS_TABLE,
+	DB_CONFIG_TABLE,
 	DB_HOST,
 	DB_NAME,
 	DB_PASSWORD,
 	DB_PLAYERS_TABLE,
 	DB_PORT,
-	DB_SCORES_TABLE,
 	DB_USER,
-	VERBOSE
+	DEV_ENV
 } from "./scripts/env.js";
 
-const dbPool = new Pool({
+export const dbPool = new Pool({
 	host: DB_HOST,
 	port: DB_PORT,
 	user: DB_USER,
 	password: DB_PASSWORD,
-	database: DB_NAME
+	database: DB_NAME,
+	min: 1,
+	connectionTimeoutMillis: 20000,
+	allowExitOnIdle: DEV_ENV
 });
 
-export async function getDbClient() {
+export async function withDbClient<T>(callback: (client: PoolClient) => Promise<T>) {
+	let client: PoolClient = null as unknown as PoolClient;
 	try {
-		return await dbPool.connect();
+		client = await dbPool.connect();
 	} catch (e) {
-		console.error("Failed to get postgres pool client:\n", e);
+		console.error("Failed to connect to postgres pool client:\n", e);
+	}
+
+	try {
+		return await callback(client);
+	} finally {
+		client.release();
 	}
 }
 
@@ -31,38 +41,40 @@ export async function closePool() {
 	dbPool.end();
 }
 
-export async function getBeatenScores(scores: WsScore[]) {
-	const dbClient = await getDbClient();
-	if (!dbClient) {
-		console.error("Failed to obtain DB client to get beaten map scores");
-		return [];
-	}
-	
-	if(VERBOSE) console.log("Fetching beaten top 100 scores for batch");
-	const paramObj = convertToBeatenScoreParamObject(scores);
-	const scoreList: QueryResult<BeatmapScoreFull> = await dbClient.query(
-		`WITH candidates AS (
-			SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
-			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
-			AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-			) SELECT c.candidate_beatmap_id, c.candidate_id, c.candidate_user_id, beaten.id, beaten.position
-			FROM candidates c
-			LEFT JOIN LATERAL (
-				SELECT id, position
-				FROM ${DB_SCORES_TABLE} s
-				WHERE s.beatmap_id = c.candidate_beatmap_id
-				AND s.ruleset_id = c.candidate_ruleset_id
-				AND s.position <= 100
-				AND s.total_score < c.candidate_score
-				ORDER BY s.position ASC
-				LIMIT 1
-				) beaten ON TRUE
-				WHERE beaten.id IS NOT NULL`,
-				[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
-			);
-			
-			if(VERBOSE) console.log(`Found ${scoreList.rowCount} beaten top 100 scores`);
-	return scoreList.rows;
+export async function saveLastScoreId(scoreId: number | string) {
+	await dbPool.query(`UPDATE ${DB_CONFIG_TABLE} SET value_text = '${scoreId}' WHERE key = 'last_ws_score_id'`);
+}
+
+export async function getLastScoreId() {
+	return Number(
+		(await dbPool.query(`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`)).rows?.[0] || 0
+	);
+}
+
+export async function getInexistentPlayers(playerIds: number[]) {
+	return (
+		await dbPool.query(
+			`
+			WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
+			SELECT i.id FROM input_ids i
+			LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
+			WHERE u.id IS NULL`,
+			[playerIds]
+		)
+	).rows as number[];
+}
+
+export async function getInexistentBeatmaps(beatmapIds: number[]) {
+	return (
+		await dbPool.query(
+			`
+			WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
+			SELECT i.id FROM input_ids i
+			LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
+			WHERE b.id IS NULL`,
+			[beatmapIds]
+		)
+	).rows as number[];
 }
 
 type BeatenScoreParams = {
@@ -72,7 +84,7 @@ type BeatenScoreParams = {
 	users: number[];
 	totalScores: number[];
 };
-function convertToBeatenScoreParamObject(scores: WsScore[]) {
+export function convertToBeatenScoreParamObject(scores: WsScore[]) {
 	const ids = new Array<number>(scores.length);
 	const rulesets = new Array<number>(scores.length);
 	const beatmaps = new Array<number>(scores.length);
@@ -88,42 +100,4 @@ function convertToBeatenScoreParamObject(scores: WsScore[]) {
 		totalScores[i] = score.total_score;
 	}
 	return { ids, rulesets, beatmaps, users, totalScores } as BeatenScoreParams;
-}
-
-export async function getInexistentPlayers(playerIds: number[]) {
-	const dbClient = await getDbClient();
-	if (!dbClient) {
-		console.error("Failed to obtain DB client to get inexistent players");
-		return [];
-	}
-
-	return (
-		await dbClient.query(
-			`
-		WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
-		SELECT i.id FROM input_ids i
-		LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
-		WHERE u.id IS NULL`,
-			playerIds
-		)
-	).rows as number[];
-}
-
-export async function getInexistentBeatmaps(beatmapIds: number[]) {
-	const dbClient = await getDbClient();
-	if (!dbClient) {
-		console.error("Failed to obtain DB client to get inexistent beatmaps");
-		return [];
-	}
-
-	return (
-		await dbClient.query(
-			`
-		WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
-		SELECT i.id FROM input_ids i
-		LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
-		WHERE b.id IS NULL`,
-			beatmapIds
-		)
-	).rows as number[];
 }

@@ -12,6 +12,12 @@
   ],
   "author": "hi",
   "license": "ISC",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "format": "prettier ./src --write",
+    "start": "node target/server/main.js"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -19,7 +25,6 @@
       "onFail": "download"
     }
   },
-  "type": "module",
   "dependencies": {
     "dotenv": "^17.4.2",
     "koa": "^3.2.1",
