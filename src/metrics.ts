@@ -20,6 +20,8 @@ import Koa from "koa";
 // count how many total scores come in per batch and how many of them get filtered out
 // labels: is_candidate
 
+// 5. error log that lets the app show custom error messages on grafana
+
 // exported helper prometheus observer functions
 // use reusable Koa middleware where possible
 

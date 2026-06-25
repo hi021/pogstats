@@ -4,7 +4,7 @@ dotenv.config({ path: "../../.env", quiet: true });
 
 export const OSU_CLIENT_ID = process.env.OSU_CLIENT_ID;
 export const OSU_CLIENT_SECRET = process.env.OSU_CLIENT_SECRET;
-export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260615";
+export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260630";
 
 export const DB_HOST = process.env.DB_HOST || "localhost";
 const parsedDbPort = Number(process.env.DB_PORT);
@@ -33,4 +33,4 @@ export const SCORE_SCRAPE_ERROR_LOG_PATH =
 	process.env.SCORE_SCRAPE_ERROR_LOG_PATH || "../../data/logs/scrape_scores_errors.log";
 
 const parsedScrapeDelayMs = Number(process.env.SCRAPE_SCORE_DELAY_MS);
-export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 1001;
+export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 1505;

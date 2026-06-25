@@ -32,15 +32,3 @@ server.listen(SERVER_PORT, () => {
 	console.log(`Server running on http://localhost:${SERVER_PORT}`);
 	console.log(`WebSocket listening on ws://localhost:${SERVER_PORT}${POG_WS_URL}`);
 });
-
-// TODO
-// function reconnect(scoreId) {
-//     setTimeout(_ => {
-//         const socket = new WebSocket("ws://127.0.0.1:7727");
-
-//         // ... we can use that score id. This way we only receive the scores that
-//         // were fetched in the meanwhile that we don't already know about.
-//         socket.on("open", _ => socket.send(scoreId));
-//         socket.on("message", onMessage);
-//     }, 10_000);
-// }

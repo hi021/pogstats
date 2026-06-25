@@ -1,4 +1,4 @@
-import { Pool, PoolClient } from "pg";
+import { Pool, PoolClient, types } from "pg";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_CONFIG_TABLE,
@@ -22,6 +22,15 @@ export const dbPool = new Pool({
 	allowExitOnIdle: DEV_ENV
 });
 
+// TODO make sure this is respected in every script? I assume you have to make them use the dbPool here
+
+// pg returns BIGINTs as strings since numbers over 2^53 (9+E15) lose precision when stored as doubles
+// ignoring this concern here, since score ids are in the billions and ranked score is in the trillions
+// osu! api just returns normal numbers anyway
+types.setTypeParser(20 /* TypeId.INT8 - BIGINT - enums suck, this wouldn't transpile */, val =>
+	val == null ? null : Number(val)
+);
+
 export async function withDbClient<T>(callback: (client: PoolClient) => Promise<T>) {
 	let client: PoolClient = null as unknown as PoolClient;
 	try {
@@ -41,13 +50,15 @@ export async function closePool() {
 	dbPool.end();
 }
 
-export async function saveLastScoreId(scoreId: number | string) {
+export async function saveLastScoreId(scoreId: number) {
+	if (isNaN(scoreId) || !isFinite(scoreId)) return;
 	await dbPool.query(`UPDATE ${DB_CONFIG_TABLE} SET value_text = '${scoreId}' WHERE key = 'last_ws_score_id'`);
 }
 
 export async function getLastScoreId() {
 	return Number(
-		(await dbPool.query(`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`)).rows?.[0]?.value_text || 0
+		(await dbPool.query(`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`)).rows?.[0]
+			?.value_text || 0
 	);
 }
 
@@ -74,7 +85,7 @@ export async function getInexistentBeatmapIds(beatmapIds: number[]) {
 			WHERE b.id IS NULL`,
 			[beatmapIds]
 		)
-	).rows.map(r => Number(r.id)) as number[];
+	).rows.map(r => r.id) as number[];
 }
 
 type BeatenScoreParams = {

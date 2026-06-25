@@ -62,7 +62,15 @@ interface BeatmapScoreAdditionalData {
 	mods: ApiMod[];
 	maximumStatistics: ApiScoreHitStats;
 	statistics: ApiScoreHitStats;
-	// could also include undocumented user object ({ pin?: unknown }) from the API, but seems useless
+	// could also include undocumented object - user: { pin?: unknown } from the API, but seems useless
+}
+
+interface BeatenBeatmapScore {
+	candidate_beatmap_id: number;
+	candidate_id: number;
+	candidate_user_id: number;
+	id: number; // beaten score id
+	position: number; // beaten score position on map
 }
 
 // ------------------------------------------
@@ -86,6 +94,7 @@ interface PlayerRulesetStats {
 	playCount: number;
 	playTime: number; // in seconds
 	pp: number;
+	rank?: number; // can be out of date, but Chiffa wanted it; null for players not in the ranking
 	rankedScore: number;
 	gradeCounts: {
 		[grade in PlayerScoreRank]?: number;

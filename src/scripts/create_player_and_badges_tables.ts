@@ -30,7 +30,7 @@ async function createTables() {
 			retrieved_at		TIMESTAMPTZ NOT NULL,
 			is_from_osu_api	BOOLEAN NOT NULL
     )`);
-	// TODO team_id FK contraint after adding teams?
+	// TODO?: team_id FK contraint if adding teams
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (
@@ -39,6 +39,7 @@ async function createTables() {
 			play_count			INTEGER NOT NULL,
 			play_time				INTEGER NOT NULL,
 			pp							REAL NOT NULL,
+			rank						INTEGER,
 			ranked_score		BIGINT NOT NULL,
 			ss_count				INTEGER DEFAULT 0,
 			ssh_count				INTEGER DEFAULT 0,

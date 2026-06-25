@@ -4,7 +4,7 @@ import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
 let client: Client;
 
 async function createMiscellaneousDBFunctions() {
-	console.log(`Attempting to create miscellaneous DB functions`);
+	console.log("Attempting to create miscellaneous DB functions");
 
 	await client.query(`
 		create or replace function calc_weighted_pp_sfunc(acc real, pp real, idx bigint)
@@ -22,7 +22,7 @@ async function createMiscellaneousDBFunctions() {
 			initcond = 0
 		);`);
 
-	console.log(`Created miscellaneous DB functions`);
+	console.log("Created miscellaneous DB functions");
 }
 
 async function main() {
@@ -38,7 +38,7 @@ async function main() {
 		await client.connect();
 		await createMiscellaneousDBFunctions();
 	} catch (error) {
-		console.error("Error creating miscellaneous DB stuff:", error);
+		console.error("Error creating miscellaneous DB stuff:\n", error);
 	} finally {
 		await client.end();
 	}
