@@ -10,7 +10,7 @@ import {
 	saveLastScoreId
 } from "../db.js";
 import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../scripts/env.js";
-import { convertApiScore, ParsedFlags, sleep } from "../shared.js";
+import { convertApiScore, ParsedFlags, sleep, sortWsScores } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
@@ -82,7 +82,6 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 	if (message === "start-batch") return;
 	if (message === "end-batch") {
 		try {
-			// TODO idkkk workers? synchronous?? for now seems to be quick enough even with the big 100k score batches
 			++sessionBatchCount;
 			await endAndSaveScoresBatch();
 		} catch (e) {
@@ -140,18 +139,31 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	const missingBeatmaps = await getMissingBeatmaps(batchCandidateBeatmapIds);
 	const missingPlayers = await getMissingPlayers(batchCandidatePlayerIds);
 
-	const beatenScores = await getBeatenScores(scores);
-	console.log("beatenScores:\n", beatenScores); // TODO only for debug
+	// TODO move to function
+	const beatenScoresByMap = await getBeatenScoresByMap(scores);
+	console.log("beatenScoresByMap:\n", beatenScoresByMap); // TODO only for debug
+
+	let provenScoreCount = 0;
+	for(const {beatenScores} of beatenScoresByMap) {
 	const provenScoreIds = Object.keys(beatenScores);
-	if (VERBOSE) console.log(`Found ${provenScoreIds.length} beaten top 100 score(s)`);
-
-	const provenScores = scores.filter(it => provenScoreIds.includes(it.id.toString()));
+	
+	const provenScores = scores.filter(it => provenScoreIds.includes(it.id.toString())).sort(sortWsScores);
 	console.log(provenScores); // TODO only for debug
-
+	provenScoreCount += provenScores.length;
+	
+	for(let i in provenScores) {
+		const provenScore = provenScores[i];
+		
+	}
 	// TODO handle multiple scores on the same map - group per map and sort per position, add 0-based index to position
 	const convertedScores = provenScores.map(score =>
 		convertApiScore(score, beatenScores[score.id.toString()].position, false)
 	);
+	if(provenScoreCount >= 2) console.log(`${provenScoreCount} on one map - ${convertedScores[0].beatmapId}!!`) // TODO debug only
+
+	if (VERBOSE) console.log(`Found ${provenScoreCount} beaten top 100 score(s)`);
+}
+
 	// TODO save to db
 	// TODO update existing scores' positions
 
@@ -180,16 +192,16 @@ async function getMissingPlayers(playerIds: number[]) {
 	batchCandidatePlayerIds.length = 0;
 }
 
-// TODO order by beatmap_id and position
-async function getBeatenScores(scores: WsScore[]) {
+async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
-	const scoreList: QueryResult<{ map: Record<string, BeatenBeatmapScore> }> = await dbPool.query(
+	const scoreList: QueryResult<{ beatenScores: Record<string, BeatenBeatmapScore> }> = await dbPool.query(
 		`WITH candidates AS
 				(SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
 				FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
 				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
   		), results AS
 				(SELECT c.candidate_beatmap_id,
+								c.candidate_ruleset_id,
 								c.candidate_id,
 								c.candidate_user_id,
 								beaten.id,
@@ -206,10 +218,11 @@ async function getBeatenScores(scores: WsScore[]) {
 							LIMIT 1
 					) beaten ON TRUE
 					WHERE beaten.id IS NOT NULL
-			) SELECT jsonb_object_agg(candidate_id, to_jsonb(results.*)) AS map
-				FROM results`,
+			) SELECT jsonb_object_agg(candidate_id, to_jsonb(results.*)) AS beatenScores
+				FROM results
+				GROUP BY results.candidate_beatmap_id, results.candidate_ruleset_id`,
 		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
 	);
 
-	return scoreList.rows[0].map || {};
+	return scoreList.rows;
 }

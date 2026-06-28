@@ -10,7 +10,8 @@ import {
 	convertDatabaseScore,
 	parseArgs,
 	prepareScoresTableValuesAndParamPlaceholders,
-	SCORE_TABLE_COLUMNS
+	SCORE_TABLE_COLUMNS,
+	sortScores
 } from "../shared.js";
 import {
 	DB_BEATMAPS_TABLE,
@@ -192,11 +193,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 		mergedById.set(score.id, score);
 	}
 
-	const finalScores = [...mergedById.values()].sort((a, b) => {
-		if (a.totalScore != b.totalScore) return b.totalScore - a.totalScore;
-		if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
-		return a.id - b.id;
-	});
+	const finalScores = [...mergedById.values()].sort(sortScores);
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(finalScores);
 
 	await client.query("BEGIN");
