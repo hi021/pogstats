@@ -5,7 +5,13 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { convertAdditionalDataToJsonb, convertApiScore, convertDatabaseScore, parseArgs } from "../shared.js";
+import {
+	convertApiScore,
+	convertDatabaseScore,
+	parseArgs,
+	prepareScoresTableValuesAndParamPlaceholders,
+	SCORE_TABLE_COLUMNS
+} from "../shared.js";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
@@ -30,30 +36,6 @@ import {
 	logInfo,
 	rateLimit
 } from "./shared.js";
-
-const SCORE_TABLE_COLUMNS = Object.freeze([
-	"position",
-	"is_scraped",
-	"retrieved_at",
-	"lazer",
-	"id",
-	"user_id",
-	"ruleset_id",
-	"beatmap_id",
-	"has_replay",
-	"grade",
-	"accuracy",
-	"max_combo",
-	"total_score",
-	"classic_total_score",
-	"total_score_without_mods",
-	"is_perfect_combo",
-	"legacy_perfect",
-	"pp",
-	"legacy_total_score",
-	"ended_at",
-	"data"
-]);
 
 const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {
@@ -215,36 +197,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 		if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
 		return a.id - b.id;
 	});
-
-	const values: unknown[] = [];
-	const paramGroups = finalScores.map((score, index) => {
-		const offset = index * SCORE_TABLE_COLUMNS.length;
-		values.push(
-			(score.position = index + 1),
-			score.isScraped,
-			score.retrievedAt,
-			score.lazer,
-			score.id,
-			score.userId,
-			score.rulesetId,
-			score.beatmapId,
-			score.hasReplay,
-			score.grade,
-			score.accuracy,
-			score.maxCombo,
-			score.totalScore,
-			score.classicTotalScore ?? null,
-			score.totalScoreWithoutMods ?? null,
-			score.isPerfectCombo,
-			score.legacyPerfect,
-			score.pp ?? null,
-			score.legacyTotalScore,
-			score.endedAt,
-			convertAdditionalDataToJsonb(score.data)
-		);
-
-		return `(${SCORE_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
-	});
+	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(finalScores);
 
 	await client.query("BEGIN");
 	try {

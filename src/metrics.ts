@@ -3,6 +3,7 @@ import Koa from "koa";
 
 // use esnext (es2026) and typescript 6 syntax
 // go easy on the comments
+// try to limit the amount of external dependencies
 
 // 1. public API request duration metric
 // measure how long a given inbound API request takes over time (for pog-ws.ts and pog-api.ts)

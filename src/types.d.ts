@@ -4,6 +4,9 @@ type PlayerScoreRank = "ss" | "ssh" | "s" | "sh" | "a";
 
 type RulesetId = 0 | 1 | 2 | 3;
 type Ruleset = "osu" | "taiko" | "fruits" | "mania";
+type RankingPositionThreshold = 100 | 50 | 25 | 15 | 8 | 1;
+type RankingPositionThresholdName = `Top ${RankingPositionThreshold}`;
+type RankingPositionThresholdCode = `top${RankingPositionThreshold}`;
 interface BeatmapScoreParams {
 	mode?: Ruleset;
 	mods?: string;
@@ -62,7 +65,7 @@ interface BeatmapScoreAdditionalData {
 	mods: ApiMod[];
 	maximumStatistics: ApiScoreHitStats;
 	statistics: ApiScoreHitStats;
-	// could also include undocumented object - user: { pin?: unknown } from the API, but seems useless
+	// could also include undocumented object - current_user_attributes: { pin?: unknown } from the API, but seems useless
 }
 
 interface BeatenBeatmapScore {
@@ -87,6 +90,7 @@ interface Player {
 	pogBadges?: number[]; // meta
 	retrievedAt: Date; // meta
 	isFromOsuApi: boolean; // meta
+	isMia: boolean; // meta - missing in action as in not returned by the API and probably restricted
 	// TODO?: maybe meta fields from poggersltd
 }
 
@@ -106,6 +110,33 @@ interface PlayerTeam {
 	name: string;
 	shortName: string;
 	flagUrl?: string;
+}
+
+// ------------------------------------------
+
+interface RankingType {
+	id: number;
+	rulesetId: number;
+	positionThreshold: number;
+	name: string;
+	code: string;
+}
+
+interface HistoricalRankingEntry {
+	rankingId: number; // FK to Ranking Type id
+	date: Date;
+	userId: number;
+	position: number;
+	value: number; // e.g. top50 count, total pp, etc.
+	previousEntryId: number; // FK to the same table - same rankingId and userId, but earlier date
+	updatedAt: Date;
+	datasetId?: number; // FK to Dataset Type id
+}
+
+interface DatasetType {
+	id: number;
+	name: string;
+	code: string;
 }
 
 // ------------------------------------------

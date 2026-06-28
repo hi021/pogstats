@@ -2,6 +2,22 @@ import fs from "fs";
 import { Pool } from "pg";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUsersUrl } from "./shared.js";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEV_ENV } from "./env.js";
+
+export const dbPool = new Pool({
+	host: DB_HOST,
+	port: DB_PORT,
+	user: DB_USER,
+	password: DB_PASSWORD,
+	database: DB_NAME,
+	min: 1,
+	connectionTimeoutMillis: 20000,
+	allowExitOnIdle: true
+});
+
+async function getRankingPlayerIdBatches() {
+	// dbPool;
+}
 
 async function main() {
 	try {
@@ -14,7 +30,7 @@ async function main() {
 		const data = (await res.json()) as ApiUser[];
 		fs.writeFileSync("../../data/users.json", JSON.stringify(data, null, 2));
 	} catch (error) {
-		console.error("Error scraping players:", error);
+		console.error("Error scraping players:\n", error);
 	} finally {
 		// await clients.end();
 	}

@@ -28,9 +28,10 @@ async function createTables() {
 			team_id					INTEGER,
 			cover_url				TEXT,
 			retrieved_at		TIMESTAMPTZ NOT NULL,
-			is_from_osu_api	BOOLEAN NOT NULL
+			is_from_osu_api	BOOLEAN NOT NULL,
+			is_mia				 	BOOLEAN DEFAULT FALSE
     )`);
-	// TODO?: team_id FK contraint if adding teams
+	// TODO?: team_id FK constraint if adding teams
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (

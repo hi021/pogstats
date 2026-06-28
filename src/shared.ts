@@ -1,3 +1,30 @@
+export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
+export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
+
+export const SCORE_TABLE_COLUMNS = Object.freeze([
+	"position",
+	"is_scraped",
+	"retrieved_at",
+	"lazer",
+	"id",
+	"user_id",
+	"ruleset_id",
+	"beatmap_id",
+	"has_replay",
+	"grade",
+	"accuracy",
+	"max_combo",
+	"total_score",
+	"classic_total_score",
+	"total_score_without_mods",
+	"is_perfect_combo",
+	"legacy_perfect",
+	"pp",
+	"legacy_total_score",
+	"ended_at",
+	"data"
+]);
+
 export function convertApiScore(apiScore: ApiScore | WsScore, position: number, isScraped = true): BeatmapScoreFull {
 	return {
 		position,
@@ -52,6 +79,61 @@ export function convertDatabaseScore(dbScore: Record<string, unknown>) {
 		endedAt: dbScore.ended_at,
 		data: dbScore.data
 	} as BeatmapScoreFull;
+}
+
+export function getRulesetName(id: RulesetId): Ruleset {
+	switch (id) {
+		case 0:
+			return "osu";
+		case 1:
+			return "taiko";
+		case 2:
+			return "fruits";
+		case 3:
+			return "mania";
+	}
+}
+
+export function buildPositionThresholdName(pos: RankingPositionThreshold): RankingPositionThresholdName {
+	return `Top ${pos}`;
+}
+
+export function buildPositionThresholdCode(pos: RankingPositionThreshold): RankingPositionThresholdCode {
+	return `top${pos}`;
+}
+
+export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScoreFull[]) {
+	const values: unknown[] = [];
+	const paramGroups = scores.map((score, index) => {
+		const offset = index * SCORE_TABLE_COLUMNS.length;
+		values.push(
+			(score.position = index + 1),
+			score.isScraped,
+			score.retrievedAt,
+			score.lazer,
+			score.id,
+			score.userId,
+			score.rulesetId,
+			score.beatmapId,
+			score.hasReplay,
+			score.grade,
+			score.accuracy,
+			score.maxCombo,
+			score.totalScore,
+			score.classicTotalScore ?? null,
+			score.totalScoreWithoutMods ?? null,
+			score.isPerfectCombo,
+			score.legacyPerfect,
+			score.pp ?? null,
+			score.legacyTotalScore,
+			score.endedAt,
+			convertAdditionalDataToJsonb(score.data)
+		);
+
+		return `(${SCORE_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
+	});
+
+	return { values, paramGroups };
 }
 
 export function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditionalData) {
@@ -118,4 +200,8 @@ export function parseArgs<Defs extends FlagDefinitions>(
 
 export async function sleep(ms: number) {
 	await new Promise(r => setTimeout(r, ms));
+}
+
+export function toCapitalFirstLetter(string: string) {
+	return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
 }

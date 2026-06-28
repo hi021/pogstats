@@ -10,7 +10,7 @@ import {
 	saveLastScoreId
 } from "../db.js";
 import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../scripts/env.js";
-import { ParsedFlags, sleep } from "../shared.js";
+import { convertApiScore, ParsedFlags, sleep } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
@@ -143,15 +143,18 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	const beatenScores = await getBeatenScores(scores);
 	console.log("beatenScores:\n", beatenScores); // TODO only for debug
 	const provenScoreIds = Object.keys(beatenScores);
-	console.log(provenScoreIds); // TODO only for debug
-	if (VERBOSE) console.log(`Found ${provenScoreIds.length} beaten top 100 scores`);
+	if (VERBOSE) console.log(`Found ${provenScoreIds.length} beaten top 100 score(s)`);
 
-	// TODO move into its own function
 	const provenScores = scores.filter(it => provenScoreIds.includes(it.id.toString()));
 	console.log(provenScores); // TODO only for debug
 
-	// TODO convert
+	// TODO handle multiple scores on the same map - group per map and sort per position, add 0-based index to position
+	const convertedScores = provenScores.map(score =>
+		convertApiScore(score, beatenScores[score.id.toString()].position, false)
+	);
 	// TODO save to db
+	// TODO update existing scores' positions
+
 	saveLastScoreId(batchLowestScoreId);
 	batchLowestScoreId = Infinity;
 	batchTotalScoreCount = 0;
@@ -177,6 +180,7 @@ async function getMissingPlayers(playerIds: number[]) {
 	batchCandidatePlayerIds.length = 0;
 }
 
+// TODO order by beatmap_id and position
 async function getBeatenScores(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<{ map: Record<string, BeatenBeatmapScore> }> = await dbPool.query(
@@ -202,7 +206,7 @@ async function getBeatenScores(scores: WsScore[]) {
 							LIMIT 1
 					) beaten ON TRUE
 					WHERE beaten.id IS NOT NULL
-			) SELECT jsonb_object_agg(id, to_jsonb(results.*)) AS map
+			) SELECT jsonb_object_agg(candidate_id, to_jsonb(results.*)) AS map
 				FROM results`,
 		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
 	);

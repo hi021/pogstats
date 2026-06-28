@@ -21,6 +21,8 @@ export const DB_PLAYER_POG_BADGES_TABLE = process.env.DB_PLAYER_POG_BADGES_TABLE
 export const DB_POG_BADGES_TABLE = process.env.DB_POG_BADGES_TABLE || "POG_BADGES";
 export const DB_BEATMAPS_TABLE = process.env.DB_BEATMAPS_TABLE || "BEATMAPS";
 export const DB_BEATMAPSETS_TABLE = process.env.DB_BEATMAPSETS_TABLE || "BEATMAPSETS";
+export const DB_RANKING_TYPES_TABLE = process.env.DB_RANKING_TYPES_TABLE || "RANKING_TYPES"; // TODO
+export const DB_HISTORICAL_RANKINGS_TABLE = process.env.DB_HISTORICAL_RANKINGS_TABLE || "HISTORICAL_RANKINGS"; // TODO
 
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;
