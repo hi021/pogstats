@@ -141,15 +141,15 @@ export function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditio
 }
 
 export function sortScores(a: BeatmapScoreFull, b: BeatmapScoreFull) {
-			if (a.totalScore != b.totalScore) return b.totalScore - a.totalScore;
-			if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
-			return a.id - b.id;
+	if (a.totalScore != b.totalScore) return b.totalScore - a.totalScore;
+	if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
+	return a.id - b.id;
 }
 
 export function sortWsScores(a: WsScore, b: WsScore) {
-			if (a.total_score != b.total_score) return b.total_score - a.total_score;
-			if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // comparing ISO date string is fine as long as they are of the same format
-			return a.id - b.id;
+	if (a.total_score != b.total_score) return b.total_score - a.total_score;
+	if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // comparing ISO date string is fine as long as they are of the same format
+	return a.id - b.id;
 }
 
 export type FlagDefinition = Readonly<{ cli: string; description: string; takesValue: boolean }>;

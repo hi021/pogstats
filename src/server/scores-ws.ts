@@ -1,16 +1,27 @@
+import { assert } from "console";
 import https from "https";
-import { QueryResult } from "pg";
+import { PoolClient, QueryResult } from "pg";
 import WebSocket from "ws";
 import {
+	acquireBeatmapAdvisoryLock,
 	convertToBeatenScoreParamObject,
 	dbPool,
 	getInexistentBeatmapIds,
 	getInexistentPlayerIds,
 	getLastScoreId,
-	saveLastScoreId
+	recalculateScorePositionsForMap,
+	saveLastScoreId,
+	withDbClientTransaction
 } from "../db.js";
-import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../scripts/env.js";
-import { convertApiScore, ParsedFlags, sleep, sortWsScores } from "../shared.js";
+import { DB_BEATMAPS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../scripts/env.js";
+import {
+	convertApiScore,
+	ParsedFlags,
+	prepareScoresTableValuesAndParamPlaceholders,
+	SCORE_TABLE_COLUMNS,
+	sleep,
+	sortWsScores
+} from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
@@ -135,37 +146,44 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 		);
 	if (!scores?.length) return;
 
-	// TODO fetch missing maps & players
+	// TODO
 	const missingBeatmaps = await getMissingBeatmaps(batchCandidateBeatmapIds);
 	const missingPlayers = await getMissingPlayers(batchCandidatePlayerIds);
 
-	// TODO move to function
-	const beatenScoresByMap = await getBeatenScoresByMap(scores);
-	console.log("beatenScoresByMap:\n", beatenScoresByMap); // TODO only for debug
+	const beatenScoresByMaps = await getBeatenScoresByMap(scores);
+	console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
 
-	let provenScoreCount = 0;
-	for(const {beatenScores} of beatenScoresByMap) {
-	const provenScoreIds = Object.keys(beatenScores);
-	
-	const provenScores = scores.filter(it => provenScoreIds.includes(it.id.toString())).sort(sortWsScores);
-	console.log(provenScores); // TODO only for debug
-	provenScoreCount += provenScores.length;
-	
-	for(let i in provenScores) {
-		const provenScore = provenScores[i];
-		
+	let totalProvenScoreCount = 0;
+	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: number; scores: WsScore[] }>();
+	for (const beatenScoresByMap of beatenScoresByMaps) {
+		const beatmapId = beatenScoresByMap.beatmap_id;
+		const rulesetId = beatenScoresByMap.ruleset_id;
+		const provenScoreIds = new Set(beatenScoresByMap.candidate_ids.map(id => Number(id)));
+		// TODO profile this and try to sort in the db?
+		const provenScores = scores.filter(score => provenScoreIds.has(score.id)).sort(sortWsScores);
+		assert(provenScoreIds.size === provenScores.length);
+		totalProvenScoreCount += provenScores.length;
+
+		if (provenScores.length >= 2) console.log(`${provenScores.length} scores for beatmap ${beatmapId}!!!`); // TODO debug only
+
+		const key = `${beatmapId}:${rulesetId}`;
+		const existing = provenScoresByMaps.get(key);
+		existing
+			? existing.scores.push(...provenScores)
+			: provenScoresByMaps.set(key, { beatmapId, rulesetId, scores: provenScores });
 	}
-	// TODO handle multiple scores on the same map - group per map and sort per position, add 0-based index to position
-	const convertedScores = provenScores.map(score =>
-		convertApiScore(score, beatenScores[score.id.toString()].position, false)
-	);
-	if(provenScoreCount >= 2) console.log(`${provenScoreCount} on one map - ${convertedScores[0].beatmapId}!!`) // TODO debug only
 
-	if (VERBOSE) console.log(`Found ${provenScoreCount} beaten top 100 score(s)`);
-}
+	if (VERBOSE) console.log(`Found ${totalProvenScoreCount} beaten top 100 score(s)`);
 
-	// TODO save to db
-	// TODO update existing scores' positions
+	for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
+		const dedupedScores = dedupeTopScoresByUser(mapScores);
+		const convertedScores = dedupedScores.map(score =>
+			convertApiScore(score, /* positions set later in recalculateScorePositionsForMap */ 0, false)
+		);
+		await withDbClientTransaction(async client => {
+			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
+		});
+	}
 
 	saveLastScoreId(batchLowestScoreId);
 	batchLowestScoreId = Infinity;
@@ -192,35 +210,115 @@ async function getMissingPlayers(playerIds: number[]) {
 	batchCandidatePlayerIds.length = 0;
 }
 
+// TODO: Probably want to do it directly in the database in getBeatenScoresByMap() but brain too small
+function dedupeTopScoresByUser(scores: WsScore[]) {
+	const seenUserIds = new Set<number>();
+	return scores.filter(score => {
+		if (seenUserIds.has(score.user_id)) return false;
+		seenUserIds.add(score.user_id);
+		return true;
+	});
+}
+
+// Single temp table prevents concurrency (processing multiple beatmaps at once) I think
+async function createTempScoresTable(client: PoolClient) {
+	await client.query(`
+		CREATE TEMPORARY TABLE IF NOT EXISTS ws_scores_tmp (
+			position SMALLINT NOT NULL,
+			is_scraped BOOLEAN NOT NULL,
+			retrieved_at TIMESTAMPTZ NOT NULL,
+			lazer BOOLEAN NOT NULL,
+			id BIGINT PRIMARY KEY,
+			user_id INTEGER NOT NULL,
+			ruleset_id SMALLINT NOT NULL,
+			beatmap_id BIGINT NOT NULL,
+			has_replay BOOLEAN NOT NULL DEFAULT FALSE,
+			grade CHAR(2) NOT NULL DEFAULT '',
+			accuracy REAL NOT NULL DEFAULT 0,
+			max_combo INTEGER NOT NULL DEFAULT 0,
+			total_score INTEGER NOT NULL DEFAULT 0,
+			classic_total_score BIGINT,
+			total_score_without_mods INTEGER,
+			is_perfect_combo BOOLEAN,
+			legacy_perfect BOOLEAN,
+			pp REAL,
+			legacy_total_score BIGINT NOT NULL DEFAULT 0,
+			ended_at TIMESTAMPTZ NOT NULL,
+			data JSONB NOT NULL DEFAULT '{}'::jsonb
+		) ON COMMIT DELETE ROWS`);
+	await client.query("TRUNCATE ws_scores_tmp");
+}
+
+async function upsertBeatmapScores(
+	client: PoolClient,
+	beatmapId: number,
+	rulesetId: number,
+	provenScores: BeatmapScoreFull[]
+) {
+	if (!provenScores?.length) return;
+	await acquireBeatmapAdvisoryLock(client, beatmapId, rulesetId);
+	await createTempScoresTable(client);
+
+	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(provenScores);
+	await client.query(
+		`INSERT INTO ws_scores_tmp (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
+		values
+	);
+
+	await client.query(
+		`DELETE FROM ${DB_SCORES_TABLE} s
+		 USING ws_scores_tmp t
+		 WHERE s.beatmap_id = $1
+		   AND s.ruleset_id = $2
+		   AND s.user_id = t.user_id
+		   AND s.total_score < t.total_score`,
+		[beatmapId, rulesetId]
+	);
+
+	// the id conflict should never happen here - if a score was recalced then a score scrape is necessary
+	// WELL ACTUALLY: "ON CONFLICT does not support deferrable unique constraints/exclusion constraints as arbiters"
+	await client.query(
+		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")})
+		 SELECT ${SCORE_TABLE_COLUMNS.join(", ")} FROM ws_scores_tmp`
+		);
+		// ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(SCORE_TABLE_COLUMNS.filter(column => column !== "id"))}`
+
+	await recalculateScorePositionsForMap(client, beatmapId, rulesetId);
+	await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_update = NOW() WHERE id = $1`, [beatmapId]);
+}
+
+// TODO: edge case when the same user gets a worse score than their existing one
 async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
-	const scoreList: QueryResult<{ beatenScores: Record<string, BeatenBeatmapScore> }> = await dbPool.query(
-		`WITH candidates AS
-				(SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
-				FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
-				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-  		), results AS
-				(SELECT c.candidate_beatmap_id,
-								c.candidate_ruleset_id,
-								c.candidate_id,
-								c.candidate_user_id,
-								beaten.id,
-								beaten.position
+	const scoreList: QueryResult<{
+		beatmap_id: number;
+		ruleset_id: number;
+		candidate_ids: number[];
+	}> = await dbPool.query(
+		`WITH candidates AS (
+					SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
+					FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+					AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
+        ),
+        proven_scores AS (
+					SELECT DISTINCT
+						c.candidate_beatmap_id,
+						c.candidate_ruleset_id,
+						c.candidate_id
 					FROM candidates c
-					LEFT JOIN LATERAL (
-							SELECT id, position
-							FROM ${DB_SCORES_TABLE} s
-							WHERE s.beatmap_id = c.candidate_beatmap_id
-								AND s.ruleset_id = c.candidate_ruleset_id
-								AND s.position <= 100
-								AND s.total_score < c.candidate_score
-							ORDER BY s.position ASC
-							LIMIT 1
-					) beaten ON TRUE
-					WHERE beaten.id IS NOT NULL
-			) SELECT jsonb_object_agg(candidate_id, to_jsonb(results.*)) AS beatenScores
-				FROM results
-				GROUP BY results.candidate_beatmap_id, results.candidate_ruleset_id`,
+					INNER JOIN ${DB_SCORES_TABLE} s ON (
+						s.beatmap_id = c.candidate_beatmap_id
+						AND s.ruleset_id = c.candidate_ruleset_id
+						AND s.position <= 100
+						AND s.total_score < c.candidate_score
+					)
+        )
+        SELECT
+					candidate_beatmap_id AS beatmap_id,
+					candidate_ruleset_id AS ruleset_id,
+					array_agg(candidate_id) AS candidate_ids
+        FROM proven_scores
+        GROUP BY candidate_beatmap_id, candidate_ruleset_id`,
 		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
 	);
 

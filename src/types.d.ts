@@ -68,15 +68,6 @@ interface BeatmapScoreAdditionalData {
 	// could also include undocumented object - current_user_attributes: { pin?: unknown } from the API, but seems useless
 }
 
-interface BeatenBeatmapScore {
-	candidate_beatmap_id: number;
-	candidate_id: number;
-	candidate_user_id: number;
-	candidate_ruleset_id: number;
-	id: number; // beaten score id
-	position: number; // beaten score position on map
-}
-
 // ------------------------------------------
 
 interface Player {

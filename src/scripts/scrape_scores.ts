@@ -94,13 +94,22 @@ async function createScoresTable() {
 		)`);
 	// could also add unique constraints to user_id + beatmap_id + ruleset_id and position + beatmap_id + ruleset_id
 
-	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_idx ON ${DB_SCORES_TABLE}(beatmap_id)`);
-	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_idx ON ${DB_SCORES_TABLE}(position)`);
-	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_ended_at_idx ON ${DB_SCORES_TABLE}(ended_at)`);
-	await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_idx ON ${DB_SCORES_TABLE}(user_id)`);
 	await client.query(
-		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position)`
+		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id)`
 	);
+	await client.query(
+		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx ON ${DB_SCORES_TABLE}(user_id, position)`
+	);
+	await client.query(
+		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, total_score DESC, position) WHERE position <= 100`
+	);
+	// await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_idx ON ${DB_SCORES_TABLE}(beatmap_id)`);
+	// await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_idx ON ${DB_SCORES_TABLE}(position)`);
+	// await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_ended_at_idx ON ${DB_SCORES_TABLE}(ended_at)`);
+	// await client.query(`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_idx ON ${DB_SCORES_TABLE}(user_id)`);
+	// await client.query(
+	// 	`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position)`
+	// );
 	// TODO: verify performance, maybe add JSONB GIN, score, pp, rank, ruleset_id (after adding other modes)
 
 	await client.query(
@@ -245,7 +254,7 @@ async function getBeatmapIds(maxRetrievedAt?: Date): Promise<number[]> {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
 		await client.query(
-			`SELECT id FROM ${DB_BEATMAPS_TABLE} WHERE status IN ('ranked','approved','loved') AND mode = 'osu' ${maxRetrievedAt ? `AND (last_scores_scrape < $1 OR last_scores_scrape IS NULL)` : ""} ORDER BY id`,
+			`SELECT id FROM ${DB_BEATMAPS_TABLE} WHERE status IN ('ranked','approved','loved') AND mode = 'osu' AND id BETWEEN 89960 AND 90000 ${maxRetrievedAt ? `AND (last_scores_scrape < $1 OR last_scores_scrape IS NULL)` : ""} ORDER BY id`,
 			params
 		)
 	).rows.map(row => row.id);
