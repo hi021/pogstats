@@ -165,7 +165,7 @@ async function getBeatmapIds(maxRetrievedAt?: Date): Promise<number[]> {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
 		await client.query(
-			`SELECT id FROM ${DB_BEATMAPS_TABLE} WHERE status IN ('ranked','approved','loved') AND mode = 'osu' AND id BETWEEN 89960 AND 90000 ${maxRetrievedAt ? `AND (last_scores_scrape < $1 OR last_scores_scrape IS NULL)` : ""} ORDER BY id`,
+			`SELECT id FROM ${DB_BEATMAPS_TABLE} WHERE status IN ('ranked','approved','loved') AND mode = 'osu' ${maxRetrievedAt ? `AND (last_scores_scrape < $1 OR last_scores_scrape IS NULL)` : ""} ORDER BY id`,
 			params
 		)
 	).rows.map(row => row.id);

@@ -275,19 +275,15 @@ async function upsertBeatmapScores(
 		[beatmapId, rulesetId]
 	);
 
-	// the id conflict should never happen here - if a score was recalced then a score scrape is necessary
-	// WELL ACTUALLY: "ON CONFLICT does not support deferrable unique constraints/exclusion constraints as arbiters"
 	await client.query(
 		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")})
 		 SELECT ${SCORE_TABLE_COLUMNS.join(", ")} FROM ws_scores_tmp`
-		);
-		// ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(SCORE_TABLE_COLUMNS.filter(column => column !== "id"))}`
+	);
 
 	await recalculateScorePositionsForMap(client, beatmapId, rulesetId);
 	await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_update = NOW() WHERE id = $1`, [beatmapId]);
 }
 
-// TODO: edge case when the same user gets a worse score than their existing one
 async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<{
@@ -296,29 +292,44 @@ async function getBeatenScoresByMap(scores: WsScore[]) {
 		candidate_ids: number[];
 	}> = await dbPool.query(
 		`WITH candidates AS (
-					SELECT candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score
-					FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
-					AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-        ),
-        proven_scores AS (
-					SELECT DISTINCT
-						c.candidate_beatmap_id,
-						c.candidate_ruleset_id,
-						c.candidate_id
-					FROM candidates c
-					INNER JOIN ${DB_SCORES_TABLE} s ON (
-						s.beatmap_id = c.candidate_beatmap_id
-						AND s.ruleset_id = c.candidate_ruleset_id
-						AND s.position <= 100
-						AND s.total_score < c.candidate_score
-					)
-        )
-        SELECT
-					candidate_beatmap_id AS beatmap_id,
-					candidate_ruleset_id AS ruleset_id,
-					array_agg(candidate_id) AS candidate_ids
-        FROM proven_scores
-        GROUP BY candidate_beatmap_id, candidate_ruleset_id`,
+				SELECT
+					candidate_id,
+					candidate_ruleset_id,
+					candidate_beatmap_id,
+					candidate_user_id,
+					candidate_score
+				FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
+		),
+		proven_scores AS (
+			SELECT DISTINCT
+				c.candidate_beatmap_id,
+				c.candidate_ruleset_id,
+				c.candidate_id
+			FROM candidates c
+			WHERE EXISTS (
+				SELECT 1
+				FROM scores s
+				WHERE s.beatmap_id = c.candidate_beatmap_id
+					AND s.ruleset_id = c.candidate_ruleset_id
+					AND s.position <= 100
+					AND s.total_score < c.candidate_score
+			)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM scores s2
+				WHERE s2.beatmap_id = c.candidate_beatmap_id
+					AND s2.ruleset_id = c.candidate_ruleset_id
+					AND s2.user_id = c.candidate_user_id
+					AND s2.total_score >= c.candidate_score
+			)
+		)
+		SELECT
+			candidate_beatmap_id AS beatmap_id,
+			candidate_ruleset_id AS ruleset_id,
+			array_agg(candidate_id) AS candidate_ids
+		FROM proven_scores
+		GROUP BY candidate_beatmap_id, candidate_ruleset_id`,
 		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
 	);
 
