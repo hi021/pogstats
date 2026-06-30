@@ -7,7 +7,7 @@ async function createMiscellaneousDBFunctions() {
 	console.log("Attempting to create miscellaneous DB functions");
 
 	await client.query(`
-		create or replace function calc_weighted_pp_sfunc(acc real, pp real, idx bigint)
+		CREATE OR REPLACE FUNCTION calc_weighted_pp_sfunc(acc real, pp real, idx bigint)
 		returns real
 		LANGUAGE plpgsql
 		AS $$
@@ -16,11 +16,14 @@ async function createMiscellaneousDBFunctions() {
 			end;
 		$$;
 
-		create or replace aggregate calc_weighted_pp(real, bigint) (
+		CREATE OR REPLACE AGGREGATE calc_weighted_pp(real, bigint) (
 			sfunc = calc_weighted_pp_sfunc,
 			stype = real,
 			initcond = 0
-		);`);
+		);
+		
+		CREATE EXTENSION if not exists pg_trgm;
+		`);
 
 	console.log("Created miscellaneous DB functions");
 }

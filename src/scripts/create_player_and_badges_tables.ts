@@ -11,7 +11,13 @@ import {
 	DB_USER
 } from "./env.js";
 
-let client: Client;
+const client = new Client({
+	host: DB_HOST,
+	port: DB_PORT,
+	user: DB_USER,
+	password: DB_PASSWORD,
+	database: DB_NAME
+});
 
 async function createTables() {
 	console.log(
@@ -73,19 +79,11 @@ async function createTables() {
 		)`);
 
 	console.log(
-		`Created ${DB_PLAYERS_TABLE}, ${DB_PLAYER_RULESET_STATS_TABLE}, ${DB_POG_BADGES_TABLE}, and ${DB_PLAYER_POG_BADGES_TABLE} table if didn't exist`
+		`Created ${DB_PLAYERS_TABLE}, ${DB_PLAYER_RULESET_STATS_TABLE}, ${DB_POG_BADGES_TABLE}, and ${DB_PLAYER_POG_BADGES_TABLE} tables if didn't exist`
 	);
 }
 
 async function main() {
-	client = new Client({
-		host: DB_HOST,
-		port: DB_PORT,
-		user: DB_USER,
-		password: DB_PASSWORD,
-		database: DB_NAME
-	});
-
 	try {
 		await client.connect();
 		await createTables();

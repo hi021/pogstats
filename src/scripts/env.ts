@@ -35,4 +35,4 @@ export const SCORE_SCRAPE_ERROR_LOG_PATH =
 	process.env.SCORE_SCRAPE_ERROR_LOG_PATH || "../../data/logs/scrape_scores_errors.log";
 
 const parsedScrapeDelayMs = Number(process.env.SCRAPE_SCORE_DELAY_MS);
-export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 1505;
+export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScrapeDelayMs) ? parsedScrapeDelayMs : 1250;
