@@ -5,6 +5,7 @@ import readline from "readline";
 import { OSU_API_VERSION, VERBOSE } from "./env.js";
 
 export const AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/token";
+export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
 
 export const DEFAULT_HEADERS = {
@@ -12,6 +13,11 @@ export const DEFAULT_HEADERS = {
 	"Content-Type": "application/json",
 	"X-API-Version": OSU_API_VERSION
 };
+
+// I am the GOD of ajvascript
+export function buildRandomString() {
+	return String.fromCharCode(Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65))
+}
 
 export const buildHeadersWithAuth = (token: string) => {
 	return {

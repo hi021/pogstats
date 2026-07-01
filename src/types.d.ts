@@ -15,6 +15,8 @@ interface BeatmapScoreParams {
 	limit?: number;
 }
 
+type OsuAuthScope = 'chat.read' | 'chat.write' | 'chat.write_manage' | 'delegate' | 'forum.write' | 'forum.write_manage' | 'friends.read' | 'group_permissions' | 'identify' | 'multiplayer.write_manage' | 'public'
+
 // ------------------------------------------
 
 ////// Final table schema for pog!stats could be smaller, e.g.:
