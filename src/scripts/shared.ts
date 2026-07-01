@@ -16,7 +16,16 @@ export const DEFAULT_HEADERS = {
 
 // I am the GOD of ajvascript
 export function buildRandomString() {
-	return String.fromCharCode(Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65), Math.round(Math.random() * 25 + 65))
+	return String.fromCharCode(
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65),
+		Math.round(Math.random() * 25 + 65)
+	);
 }
 
 export const buildHeadersWithAuth = (token: string) => {
@@ -63,6 +72,12 @@ export const buildBeatmapScoresUrl = (
 
 export const buildUsersUrl = (userIds: Array<number | string>) => {
 	const url = new URL(`${API_BASE_URL}/users`);
+	url.searchParams.append("ids[]", userIds.join(","));
+	return url;
+};
+
+export const buildUserLookupUrl = (userIds: Array<number | string>) => {
+	const url = new URL(`${API_BASE_URL}/users/lookup`);
 	url.searchParams.append("ids[]", userIds.join(","));
 	return url;
 };

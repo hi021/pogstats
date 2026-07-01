@@ -1,7 +1,7 @@
 import fs from "fs";
 import { Pool } from "pg";
 import { getOAuthToken } from "./osu_auth.js";
-import { buildHeadersWithAuth, buildUsersUrl } from "./shared.js";
+import { buildHeadersWithAuth, buildUserLookupUrl, buildUsersUrl } from "./shared.js";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEV_ENV } from "./env.js";
 
 export const dbPool = new Pool({
@@ -17,14 +17,14 @@ export const dbPool = new Pool({
 
 async function getRankingPlayerIdBatches() {
 	// dbPool;
+	return [39828, 23574301];
 }
 
 async function main() {
 	try {
 		const headers = buildHeadersWithAuth(await getOAuthToken());
-		const playerIds = [39828, 23574301];
-		// example result for 39828, 23574301 found in users_endpoint_result.json
-		const res = await fetch(buildUsersUrl(playerIds), { headers });
+		const playerIds = await getRankingPlayerIdBatches();
+		const res = await fetch(buildUserLookupUrl(playerIds), { headers });
 		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
 		const data = (await res.json()) as ApiUser[];

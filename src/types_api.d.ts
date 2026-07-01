@@ -69,64 +69,82 @@ type ApiScoreHitType =
 // -------------------------------------
 
 interface ApiUser {
-	avatarUrl: string;
-	countryCode: string;
-	defaultGroup?: string;
+	avatar_url: string;
+	country_code: string;
+	default_group?: string;
 	id: number;
-	isActive: boolean;
-	isBot: boolean;
-	isDeleted: boolean;
-	isOnline: boolean;
-	isSupporter: boolean;
-	lastVisit?: string;
-	pmFriendsOnly: boolean;
-	profileColour?: string;
+	is_active: boolean;
+	is_bot: boolean;
+	is_deleted: boolean;
+	is_online: boolean;
+	is_supporter: boolean;
+	last_visit?: string;
+	pm_friends_only: boolean;
+	profile_colour?: string;
 	username: string;
+
 	// extended:
-	accountHistory?: ApiUserAccountHistory[];
-	activeTournamentBanner?: ApiProfileBanner;
-	activeTournamentBanners?: ApiProfileBanner[];
+	account_history?: ApiUserAccountHistory[];
+	active_tournament_banner?: ApiProfileBanner;
+	active_tournament_banners?: ApiProfileBanner[];
 	badges?: ApiUserBadge[];
-	beatmapPlaycountsCount?: number;
+	beatmap_playcounts_count?: number;
 	blocks?: unknown;
-	country?: unknown;
-	cover?: unknown;
-	// TODO: I think it's this:
-	//  id	integer
-	//  tournament_id	integer
-	//  image	string?
-	//  image@2x	string?
-	favouriteBeatmapsetCount?: number;
-	followUserMapping?: number[];
-	followerCount?: number;
+	country?: ApiCountry;
+	cover?: ApiProfileCover;
+	favourite_beatmapset_count?: number;
+	follow_user_mapping?: number[];
+	follower_count?: number;
 	friends?: unknown;
-	graveyardBeatmapsetCount?: number;
+	graveyard_beatmapset_count?: number;
 	groups?: ApiUserGroup[];
-	guestBeatmapsetCount?: number;
-	isRestricted?: boolean;
+	guest_beatmapset_count?: number;
+	is_restricted?: boolean;
 	kudosu?: ApiKudosu;
-	lovedBeatmapsetCount?: number;
-	mappingFollowerCount?: number;
-	monthlyPlaycounts?: ApiUserMonthlyPlaycount[];
-	nominatedBeatmapsetCount?: number;
+	loved_beatmapset_count?: number;
+	mapping_follower_count?: number;
+	monthly_playcounts?: ApiUserMonthlyPlaycount[];
+	nominated_beatmapset_count?: number;
 	page?: unknown;
-	pendingBeatmapsetCount?: unknown;
-	previousUsernames?: unknown;
-	rankHighest?: ApiRankHighest;
-	rankHistory?: unknown;
-	rankedBeatmapsetCount?: unknown;
-	replaysWatchedCounts?: unknown;
-	scoresBestCount?: number;
-	scoresFirstCount?: number;
-	scoresRecentCount?: number;
-	sessionVerified?: boolean;
+	pending_beatmapset_count?: unknown;
+	previous_usernames?: unknown;
+	rank_highest?: ApiRankHighest;
+	rank_history?: unknown;
+	ranked_beatmapset_count?: unknown;
+	replays_watched_counts?: unknown;
+	scores_best_count?: number;
+	scores_first_count?: number;
+	scores_recent_count?: number;
+	session_verified?: boolean;
 	statistics?: ApiUserStatistics;
-	statisticsRulesets?: ApiUserStatisticsRulesets;
-	supportLevel?: unknown;
-	unreadPmCount?: unknown;
-	userAchievements?: unknown;
-	userPreferences?: unknown;
+	statistics_rulesets?: ApiUserStatisticsRulesets;
+	support_level?: unknown;
+	unread_pm_count?: unknown;
+	user_achievements?: unknown;
+	user_preferences?: unknown;
+	team?: ApiUserTeam;
 }
+
+type ApiUserLookup = Pick<
+	ApiUser,
+	| "avatar_url"
+	| "country_code"
+	| "default_group"
+	| "id"
+	| "is_active"
+	| "is_bot"
+	| "is_deleted"
+	| "is_online"
+	| "is_supporter"
+	| "last_visit"
+	| "pm_friends_only"
+	| "profile_colour"
+	| "username"
+	| "country"
+	| "cover"
+	| "groups"
+	| "team"
+>;
 
 interface ApiUserAccountHistory {
 	description?: string;
@@ -139,29 +157,47 @@ interface ApiUserAccountHistory {
 
 interface ApiProfileBanner {
 	id: number;
-	tournamentId: number;
+	tournament_id: number;
 	image?: string;
 	image2x?: string;
 }
 
+interface ApiProfileCover {
+	custom_url?: string;
+	url: string;
+	id?: unknown;
+}
+
 interface ApiUserBadge {
-	awardedAt: string;
+	awarded_at: string;
 	description: string;
-	image2xUrl: string;
-	imageUrl: string;
+	image2x_url: string;
+	image_url: string;
 	url: string;
 }
 
 interface ApiUserGroup {
 	colour?: string;
-	hasListing: boolean;
-	hasPlaymodes: boolean;
+	has_listing: boolean;
+	has_playmodes: boolean;
 	id: number;
 	identifier: string;
-	isProbationary: boolean;
+	is_probationary: boolean;
 	name: string;
-	shortName: string;
+	short_name: string;
 	playmodes?: string[];
+}
+
+interface ApiUserTeam {
+	flag_url?: string;
+	id: number;
+	name: string;
+	short_name: string;
+}
+
+interface ApiCountry {
+	code: string;
+	name: string;
 }
 
 interface ApiKudosu {
@@ -171,46 +207,53 @@ interface ApiKudosu {
 
 interface ApiRankHighest {
 	rank: number;
-	updatedAt: string;
+	updated_at: string;
 }
 
 type ApiProfilePageSection = "me" | "recent_activity" | "beatmaps" | "historical" | "kudosu" | "top_ranks" | "medals";
 
 interface ApiUserStatistics {
-	count100: number;
-	count300: number;
-	count50: number;
-	countMiss: number;
-	countryRank?: number;
-	gradeCounts: {
+	count_100: number;
+	count_300: number;
+	count_50: number;
+	count_miss: number;
+
+	country_rank?: number;
+
+	grade_counts: {
 		a: number;
 		s: number;
 		sh: number;
 		ss: number;
 		ssh: number;
 	};
-	hitAccuracy: number;
+
+	hit_accuracy: number;
 	accuracy: number;
-	isRanked: boolean;
+	is_ranked: boolean;
+
 	level: {
 		current: number;
 		progress: number;
 	};
-	maximumCombo: number;
-	playCount: number;
-	playTime: number;
+
+	maximum_combo: number;
+	play_count: number;
+	play_time: number;
 	pp: number;
-	ppExp: number;
-	globalRank?: number;
-	globalRankExp?: number;
-	rankedScore: number;
-	replaysWatchedByOthers: number;
-	totalHits: number;
-	totalScore: number;
+	pp_exp: number;
+
+	global_rank?: number;
+	global_rank_exp?: number;
+
+	ranked_score: number;
+	replays_watched_by_others: number;
+	total_hits: number;
+	total_score: number;
 }
 
 interface ApiUserMonthlyPlaycount {
-	startDate: string;
+	start_date: string;
 	count: number;
 }
 

@@ -1,7 +1,13 @@
 import { Client } from "pg";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
 
-let client: Client;
+const client = new Client({
+	host: DB_HOST,
+	port: DB_PORT,
+	user: DB_USER,
+	password: DB_PASSWORD,
+	database: DB_NAME
+});
 
 async function createMiscellaneousDBFunctions() {
 	console.log("Attempting to create miscellaneous DB functions");
@@ -29,14 +35,6 @@ async function createMiscellaneousDBFunctions() {
 }
 
 async function main() {
-	client = new Client({
-		host: DB_HOST,
-		port: DB_PORT,
-		user: DB_USER,
-		password: DB_PASSWORD,
-		database: DB_NAME
-	});
-
 	try {
 		await client.connect();
 		await createMiscellaneousDBFunctions();
