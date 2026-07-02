@@ -27,12 +27,12 @@ async function main() {
 		const res = await fetch(buildUserLookupUrl(playerIds), { headers });
 		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
-		const data = (await res.json()) as ApiUser[];
-		fs.writeFileSync("../../data/users.json", JSON.stringify(data, null, 2));
-	} catch (error) {
-		console.error("Error scraping players:\n", error);
+		const data = (await res.json()) as ApiUserLookup[];
+		fs.writeFileSync("../../data/users_lookup.json", JSON.stringify(data, null, 2));
+	} catch (e) {
+		console.error("Error scraping players:\n", e);
 	} finally {
-		// await clients.end();
+		// await dbPool.end();
 	}
 }
 

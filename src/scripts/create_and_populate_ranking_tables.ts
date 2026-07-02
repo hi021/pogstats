@@ -76,10 +76,8 @@ async function createRankingTypesTable() {
 			code TEXT NOT NULL
     )`);
 	await clients.query(
-		`CREATE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_position_threshold ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, position_threshold)`
-	);
-	await clients.query(
-		`CREATE UNIQUE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_code_idx ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, code)`
+		`CREATE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_position_threshold ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, position_threshold);
+		 CREATE UNIQUE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_code_idx ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, code);`
 	);
 
 	console.log(`Created ${DB_RANKING_TYPES_TABLE} table if didn't exist`);

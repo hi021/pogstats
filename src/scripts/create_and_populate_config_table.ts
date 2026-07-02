@@ -30,7 +30,13 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "last_ws_score_id", valueText: "0" }
 ]);
 
-let clients: Pool;
+let clients = new Pool({
+		host: DB_HOST,
+		port: DB_PORT,
+		user: DB_USER,
+		password: DB_PASSWORD,
+		database: DB_NAME
+	});
 
 async function createConfigTable() {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);
@@ -41,7 +47,7 @@ async function createConfigTable() {
 			value_int INTEGER,
 			value_text TEXT,
 			value_json JSONB
-      )`);
+    )`);
 
 	console.log(`Created ${DB_CONFIG_TABLE} table if didn't exist`);
 }
@@ -67,14 +73,6 @@ async function populateConfigTable() {
 }
 
 async function main() {
-	clients = new Pool({
-		host: DB_HOST,
-		port: DB_PORT,
-		user: DB_USER,
-		password: DB_PASSWORD,
-		database: DB_NAME
-	});
-
 	try {
 		await createConfigTable();
 		await populateConfigTable();

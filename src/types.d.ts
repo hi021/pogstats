@@ -119,6 +119,14 @@ interface PlayerTeam {
 
 // ------------------------------------------
 
+interface PogBadge {
+	id: number;
+	name: string;
+	imgUrl?: string;
+}
+
+// ------------------------------------------
+
 interface RankingType {
 	id: number;
 	rulesetId: number;
@@ -135,13 +143,13 @@ interface HistoricalRankingEntry {
 	value: number; // e.g. top50 count, total pp, etc.
 	previousEntryId: number; // FK to the same table - same rankingId and userId, but earlier date
 	updatedAt: Date;
-	datasetId?: number; // FK to Dataset Type id
+	sourceId?: number; // FK to Data Source id
 }
 
-interface DatasetType {
+interface DataSource {
 	id: number;
 	name: string;
-	code: string;
+	comment: string;
 }
 
 // ------------------------------------------
