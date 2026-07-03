@@ -31,12 +31,12 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 ]);
 
 let clients = new Pool({
-		host: DB_HOST,
-		port: DB_PORT,
-		user: DB_USER,
-		password: DB_PASSWORD,
-		database: DB_NAME
-	});
+	host: DB_HOST,
+	port: DB_PORT,
+	user: DB_USER,
+	password: DB_PASSWORD,
+	database: DB_NAME
+});
 
 async function createConfigTable() {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);

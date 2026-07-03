@@ -43,6 +43,20 @@ export function getMinDate(value: string | undefined) {
 	return date;
 }
 
+export function convertApiPlayerLookup(player: ApiUserLookup, isFromOsuApi = true, isMia = false): Player {
+	return {
+		id: player.id,
+		username: player.username,
+		countryCode: player.country_code,
+		isActive: player.is_active,
+		teamId: player.team?.id,
+		coverUrl: player.cover?.url, // TODO: verify the difference between url and custom_url
+		retrievedAt: new Date(),
+		isFromOsuApi,
+		isMia
+	};
+}
+
 export type TimestampAccessor = {
 	get: () => number;
 	set: (value: number) => void;

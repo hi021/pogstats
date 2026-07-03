@@ -88,16 +88,19 @@ interface Player {
 	username: string;
 	countryCode: string;
 	isActive: boolean;
-	joinDate: Date;
 	teamId?: number;
 	coverUrl?: string;
-	stats: { [ruleset in Ruleset]?: PlayerRulesetStats };
-	pogBadges?: number[]; // meta
 	retrievedAt: Date; // meta
 	isFromOsuApi: boolean; // meta
 	isMia: boolean; // meta - missing in action as in not returned by the API and probably restricted
-	// TODO?: maybe meta fields from poggersltd
+	// TODO?: maybe poggers stats, e.g. peak/lowest for each ranking type, etc.
 }
+
+type PlayerInRanking = Pick<Player, "id" | "username" | "countryCode" | "teamId" | "coverUrl"> & {
+	pogBadges?: PogBadge[];
+};
+
+type PlayerWithStats = Player & { stats: { [ruleset in Ruleset]?: PlayerRulesetStats } };
 
 interface PlayerRulesetStats {
 	playCount: number;

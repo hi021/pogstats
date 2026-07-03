@@ -47,6 +47,7 @@ export async function getUserOAuthCode(scopes: OsuAuthScope[], responseType = "c
 	const data = await response.json();
 	console.log(data);
 
+	// not even finished btw
 	console.log("Successfully obtained osu! user OAuth code.");
 	return data as string;
 }

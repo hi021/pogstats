@@ -1,12 +1,5 @@
 import { Client } from "pg";
-import {
-	DB_HOST,
-	DB_NAME,
-	DB_PASSWORD,
-	DB_PLAYERS_TABLE,
-	DB_PORT,
-	DB_USER
-} from "./env.js";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYERS_TABLE, DB_PORT, DB_USER } from "./env.js";
 
 const client = new Client({
 	host: DB_HOST,
@@ -17,9 +10,7 @@ const client = new Client({
 });
 
 async function createTables() {
-	console.log(
-		`Attempting to create ${DB_PLAYERS_TABLE} table`
-	);
+	console.log(`Attempting to create ${DB_PLAYERS_TABLE} table`);
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_PLAYERS_TABLE} (
@@ -35,8 +26,9 @@ async function createTables() {
     )`);
 	// TODO?: team_id FK constraint if adding teams
 
+	// TODO: it would be cool to store this, but the main /user endpoint has a high cost, using simple /lookup for now
 	// await client.query(`
-  //   CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (
+	//   CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (
 	// 		user_id 				INTEGER NOT NULL,
 	// 		ruleset_id 			SMALLINT NOT NULL,
 	// 		play_count			INTEGER NOT NULL,
@@ -52,12 +44,10 @@ async function createTables() {
 
 	// 		PRIMARY KEY (user_id, ruleset_id),
 	// 		CONSTRAINT ruleset_stats_user_fk FOREIGN KEY(user_id)
-	// 		REFERENCES ${DB_PLAYERS_TABLE}(id)	
-  //   )`);
+	// 		REFERENCES ${DB_PLAYERS_TABLE}(id)
+	//   )`);
 
-	console.log(
-		`Created ${DB_PLAYERS_TABLE} table if didn't exist`
-	);
+	console.log(`Created ${DB_PLAYERS_TABLE} table if didn't exist`);
 }
 
 async function main() {

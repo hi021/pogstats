@@ -53,6 +53,11 @@ async function createScoresTable() {
 	// could also add unique constraints to user_id + beatmap_id + ruleset_id and position + beatmap_id + ruleset_id
 
 	// TODO: verify performance, maybe add JSONB GIN, score, pp, rank (after adding other rankings)
+
+	// TODO: CLUSTER ON beatmap_id, ruleset_id, position? (or maybe just on beatmap_id, ruleset_id)
+
+	// TODO PARTITION BY beatmap_id & ruleset_id? or position?
+
 	// CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
 	await client.query(
 		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id);

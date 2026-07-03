@@ -192,8 +192,8 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 }
 
 function isCandidateScore(score: WsScore) {
-	if (!score.preserve || score.type != "solo_score") console.log("Possible ignoreable score:\n", score);
-	return score.ruleset_id == 0 && score.passed;
+	// TODO osu!standard only for now, maybe add other rulesets later
+	return score.ruleset_id == 0;
 }
 
 async function getMissingBeatmaps(beatmapIds: number[]) {
