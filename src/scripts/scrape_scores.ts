@@ -6,14 +6,6 @@
 import fs from "fs";
 import { Client } from "pg";
 import {
-	convertApiScore,
-	convertDatabaseScore,
-	parseArgs,
-	prepareScoresTableValuesAndParamPlaceholders,
-	SCORE_TABLE_COLUMNS,
-	sortScores
-} from "../shared.js";
-import {
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
 	DB_NAME,
@@ -24,7 +16,15 @@ import {
 	SCORE_SCRAPE_ERROR_LOG_PATH,
 	SCORE_SCRAPE_LOG_PATH,
 	SCRAPE_SCORE_DELAY_MS
-} from "./env.js";
+} from "../env.js";
+import {
+	convertApiScore,
+	convertDatabaseScore,
+	parseArgs,
+	prepareScoresTableValuesAndParamPlaceholders,
+	SCORE_TABLE_COLUMNS,
+	sortScores
+} from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import {
 	buildBeatmapScoresUrl,

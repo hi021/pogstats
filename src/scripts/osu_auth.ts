@@ -1,4 +1,4 @@
-import { OSU_CLIENT_ID, OSU_CLIENT_SECRET } from "./env.js";
+import { OSU_CLIENT_ID, OSU_CLIENT_SECRET } from "../env.js";
 import { AUTH_ENDPOINT, buildRandomString, USER_AUTH_ENDPOINT } from "./shared.js";
 
 export async function getOAuthToken(grantType = "client_credentials", code?: string) {

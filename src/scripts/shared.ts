@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Client } from "pg";
 import readline from "readline";
-import { OSU_API_VERSION, VERBOSE } from "./env.js";
+import { OSU_API_VERSION, VERBOSE } from "../env.js";
 
 export const AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/token";
 export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
@@ -92,7 +92,7 @@ export const buildUsersUrl = (userIds: Array<number | string>) => {
 
 export const buildUserLookupUrl = (userIds: Array<number | string>) => {
 	const url = new URL(`${API_BASE_URL}/users/lookup`);
-	url.searchParams.append("ids[]", userIds.join(","));
+	for (const userId of userIds) url.searchParams.append("ids[]", String(userId));
 	return url;
 };
 

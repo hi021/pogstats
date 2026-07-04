@@ -13,7 +13,7 @@ import {
 	saveLastScoreId,
 	withDbClientTransaction
 } from "../db.js";
-import { DB_BEATMAPS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../scripts/env.js";
+import { DB_BEATMAPS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
 import {
 	convertApiScore,
 	ParsedFlags,
@@ -23,6 +23,7 @@ import {
 	sortWsScores
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
+import { scrapePlayers } from "../scripts/scrape_players.js";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
 const SCORES_WS_PING_INTERVAL = 30000;
@@ -146,9 +147,8 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 		);
 	if (!scores?.length) return;
 
-	// TODO
-	const missingBeatmaps = await getMissingBeatmaps(batchCandidateBeatmapIds);
-	const missingPlayers = await getMissingPlayers(batchCandidatePlayerIds);
+	await fetchMissingBeatmaps(batchCandidateBeatmapIds);
+	await fetchMissingPlayers(batchCandidatePlayerIds);
 
 	const beatenScoresByMaps = await getBeatenScoresByMap(scores);
 	console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
@@ -196,18 +196,28 @@ function isCandidateScore(score: WsScore) {
 	return score.ruleset_id == 0;
 }
 
-async function getMissingBeatmaps(beatmapIds: number[]) {
+async function fetchMissingBeatmaps(beatmapIds: number[]) {
 	const missingIds = await getInexistentBeatmapIds(beatmapIds);
-	if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
+	if (missingIds?.length) {
+		if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
+		// TODO
+	}
 
 	batchCandidateBeatmapIds.length = 0;
 }
 
-async function getMissingPlayers(playerIds: number[]) {
-	const missingIds = await getInexistentPlayerIds(playerIds);
-	if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
+async function fetchMissingPlayers(playerIds: number[]) {
+	try {
+		const missingIds = await getInexistentPlayerIds(playerIds);
+		if (missingIds?.length) {
+			if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
+			await scrapePlayers(missingIds);
+		}
 
-	batchCandidatePlayerIds.length = 0;
+		batchCandidatePlayerIds.length = 0;
+	} catch (e) {
+		console.error("failed to get missing players:\n", e);
+	}
 }
 
 // TODO: Probably want to do it directly in the database in getBeatenScoresByMap() but brain too small

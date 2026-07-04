@@ -217,3 +217,14 @@ export async function sleep(ms: number) {
 export function toCapitalFirstLetter(string: string) {
 	return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
 }
+
+export function splitIntoBatches(array: number[], batchSize: number): IdBatch[] {
+	const batches: IdBatch[] = [];
+	for (let i = 0; i < array.length; i += batchSize) {
+		batches.push({
+			batch_no: Math.floor(i / batchSize) + 1,
+			ids: array.slice(i, i + batchSize)
+		});
+	}
+	return batches;
+}

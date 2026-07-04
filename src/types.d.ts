@@ -28,6 +28,8 @@ type OsuAuthScope =
 	| "multiplayer.write_manage"
 	| "public";
 
+type IdBatch = { batch_no: number; ids: number[] };
+
 // ------------------------------------------
 
 ////// Final table schema for pog!stats could be smaller, e.g.:

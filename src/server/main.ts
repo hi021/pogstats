@@ -1,6 +1,6 @@
 import http from "http";
 import Koa from "koa";
-import { SERVER_PORT } from "../scripts/env.js";
+import { SERVER_PORT } from "../env.js";
 import { onConnect, onUpgrade, POG_WS_URL, socketDebugMessageEndpoint, wss } from "./pog-ws.js";
 import { scoresWs, scoresWsOnClose, scoresWsOnError, scoresWsOnMessage, scoresWsOnOpen } from "./scores-ws.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";

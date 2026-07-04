@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
 
 const client = new Client({
 	host: DB_HOST,

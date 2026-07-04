@@ -8,7 +8,7 @@ import {
 	DB_PORT,
 	DB_SCORES_TABLE,
 	DB_USER
-} from "./env.js";
+} from "../env.js";
 
 const client = new Client({
 	host: DB_HOST,
@@ -51,18 +51,16 @@ async function createScoresTable() {
       REFERENCES ${DB_PLAYERS_TABLE}(id)
     )`);
 	// could also add unique constraints to user_id + beatmap_id + ruleset_id and position + beatmap_id + ruleset_id
+	// TODO?: PARTITION BY ruleset_id
 
-	// TODO: verify performance, maybe add JSONB GIN, score, pp, rank (after adding other rankings)
+	// TODO: verify performance, maybe add JSONB GIN, score, pp, grade after verifying ranking queries
 
-	// TODO: CLUSTER ON beatmap_id, ruleset_id, position? (or maybe just on beatmap_id, ruleset_id)
-
-	// TODO PARTITION BY beatmap_id & ruleset_id? or position?
-
-	// CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
+	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
 	await client.query(
 		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id);
      CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx ON ${DB_SCORES_TABLE}(user_id, position);
-     CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, total_score DESC, position) WHERE position <= 100;`
+     CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, total_score DESC, position) WHERE position <= 100;
+		 CREATE INDEX ${DB_SCORES_TABLE}_position_brin_idx ON ${DB_SCORES_TABLE} USING BRIN (position);`
 	);
 
 	await client.query(

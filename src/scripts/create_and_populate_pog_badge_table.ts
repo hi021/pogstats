@@ -8,7 +8,7 @@ import {
 	DB_POG_BADGES_TABLE,
 	DB_PORT,
 	DB_USER
-} from "./env.js";
+} from "../env.js";
 
 const client = new Client({
 	host: DB_HOST,

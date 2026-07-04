@@ -10,7 +10,7 @@ import {
 	DB_SCORES_TABLE,
 	DB_USER,
 	DEV_ENV
-} from "./scripts/env.js";
+} from "./env.js";
 
 // TODO make sure this is respected in every script? I assume you have to make them use the dbPool here
 

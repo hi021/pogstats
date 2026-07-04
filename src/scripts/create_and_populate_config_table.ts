@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { DB_CONFIG_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
+import { DB_CONFIG_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
 
 // TODO: come up with real values
 const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([

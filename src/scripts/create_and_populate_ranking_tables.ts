@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_RANKING_TYPES_TABLE, DB_USER } from "../env.js";
 import {
 	buildPositionThresholdCode,
 	buildPositionThresholdName,
@@ -6,7 +7,6 @@ import {
 	RULESET_IDS,
 	toCapitalFirstLetter
 } from "../shared.js";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_RANKING_TYPES_TABLE, DB_USER } from "./env.js";
 
 interface ProtoRankingType {
 	nameTemplate: string;
