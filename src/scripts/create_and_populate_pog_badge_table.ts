@@ -20,13 +20,14 @@ const dbPool = new Pool({
 
 type ProtoPogBadge = PogBadge & { playerIds: number[] };
 
-// TODO badge for chiffa and myself perhaps
 // TODO actually upload the badge images
 const POG_BADGES: Readonly<ProtoPogBadge[]> = Object.freeze([
 	{ id: 1, name: "poggers", imgUrl: "/badges/pogu.png", playerIds: [5795337] },
 	{ id: 2, name: "idiot", imgUrl: "/badges/unhappi.png", playerIds: [1023489] },
-	{ id: 3, name: undefined, imgUrl: "/badges/bowing.svg", playerIds: [6502403] },
-	{ id: 4, name: undefined, imgUrl: "/badges/doggo.png", playerIds: [11495715] }
+	{ id: 3, name: undefined, imgUrl: "/badges/wither.svg", playerIds: [9991650] },
+	{ id: 4, name: undefined, imgUrl: "/badges/star.svg", playerIds: [11482346] },
+	{ id: 5, name: undefined, imgUrl: "/badges/doggo.png", playerIds: [11495715] },
+	{ id: 6, name: "poge", imgUrl: "/badges/pognerchamp.png", playerIds: [14697237] }
 ]);
 
 async function createTables() {

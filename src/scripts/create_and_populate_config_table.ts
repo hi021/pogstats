@@ -1,5 +1,11 @@
 import { Pool } from "pg";
 import { DB_CONFIG_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
+import { parseArgs } from "../shared.js";
+
+	const FLAG_DEFINITIONS = Object.freeze({
+		reset: { cli: "--reset", description: "WARNING: will remove last_ws_score_id. Truncates config table to repopulate it", takesValue: false }
+	} as const);
+
 
 // TODO: come up with real values
 const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
@@ -27,7 +33,8 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "mania_min_top15", valueInt: 125 },
 	{ key: "mania_min_top8", valueInt: 50 },
 	{ key: "mania_min_top1", valueInt: 5 },
-	{ key: "last_ws_score_id", valueText: "0" }
+	{ key: "last_ws_score_id", valueText: "0" },
+	{ key: "global_message", valueText: "" }
 ]);
 
 let clients = new Pool({
@@ -73,8 +80,16 @@ async function populateConfigTable() {
 }
 
 async function main() {
+	const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
+
 	try {
 		await createConfigTable();
+
+		if (parsedFlags.reset) {
+			console.log(`Truncating ${DB_CONFIG_TABLE} table`);
+			await clients.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
+		}
+
 		await populateConfigTable();
 	} catch (error) {
 		console.error("Error creating config table:", error);
