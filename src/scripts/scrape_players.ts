@@ -1,11 +1,11 @@
 import { resolve } from "path";
 import { Pool, PoolClient, QueryResult } from "pg";
 import { fileURLToPath } from "url";
+import { buildUpdateAssignmentsString, withDbClientTransaction } from "../db.js";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYERS_TABLE, DB_PORT, DB_USER, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
+import { PLAYER_TABLE_COLUMNS, preparePlayersTableValuesAndParamPlaceholders, splitIntoBatches } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, rateLimit } from "./shared.js";
-import { PLAYER_TABLE_COLUMNS, preparePlayersTableValuesAndParamPlaceholders, splitIntoBatches } from "../shared.js";
-import { buildUpdateAssignmentsString, withDbClientTransaction } from "../db.js";
 
 const PLAYER_BATCH_SIZE = 100;
 const dbPool = new Pool({
@@ -67,14 +67,14 @@ async function createTempPlayersTable(client: PoolClient) {
 	await client.query(`
 		CREATE TEMPORARY TABLE IF NOT EXISTS scrape_players_tmp (
 			id 							INTEGER PRIMARY KEY,
-			username				TEXT NOT NULL,
-			country_code		CHAR(2) NOT NULL,
-			is_active				BOOLEAN NOT NULL,
+			username				TEXT,
+			country_code		CHAR(2),
+			is_active				BOOLEAN,
 			team_id					INTEGER,
 			cover_url				TEXT,
-			retrieved_at		TIMESTAMPTZ NOT NULL,
-			is_from_osu_api	BOOLEAN NOT NULL,
-			is_mia				 	BOOLEAN DEFAULT FALSE
+			retrieved_at		TIMESTAMPTZ,
+			is_from_osu_api	BOOLEAN,
+			is_mia				 	BOOLEAN
 		) ON COMMIT DELETE ROWS`);
 	await client.query("TRUNCATE scrape_players_tmp");
 }
@@ -101,8 +101,6 @@ export async function scrapePlayers(ids?: number[]) {
 				playerMap.set(id, player ?? { id, retrievedAt, isFromOsuApi: true, isMia: true });
 			}
 
-			return; //TODO debug only
-
 			await rateLimit(
 				{
 					get: () => lastFetchTimestamp,
@@ -113,7 +111,7 @@ export async function scrapePlayers(ids?: number[]) {
 		}
 
 		await withDbClientTransaction(async client => {
-			createTempPlayersTable(client);
+			await createTempPlayersTable(client);
 
 			const { values, paramGroups } = preparePlayersTableValuesAndParamPlaceholders([...playerMap.values()]);
 			await client.query(
@@ -122,9 +120,13 @@ export async function scrapePlayers(ids?: number[]) {
 			);
 
 			await client.query(`
-					INSERT INTO ${DB_PLAYERS_TABLE} p (${PLAYER_TABLE_COLUMNS.join(", ")})
+					INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
 					SELECT ${PLAYER_TABLE_COLUMNS.join(", ")} FROM scrape_players_tmp tmp
-					WHERE EXISTS (SELECT 1 FROM p WHERE tmp.is_mia = TRUE AND tmp.id = p.id)
+					WHERE tmp.is_mia = FALSE
+						OR (
+							tmp.is_mia = TRUE
+							AND EXISTS (SELECT 1 FROM ${DB_PLAYERS_TABLE} p WHERE p.id = tmp.id)
+						)
 					ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(PLAYER_TABLE_COLUMNS)}
 				`);
 		});
@@ -136,4 +138,4 @@ export async function scrapePlayers(ids?: number[]) {
 	}
 }
 
-if (resolve(process.argv[1]) == resolve(fileURLToPath(import.meta.filename))) scrapePlayers();
+if (resolve(process.argv[1]) == resolve(fileURLToPath(import.meta.url))) scrapePlayers();

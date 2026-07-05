@@ -159,8 +159,9 @@ function buildBeatmapArrays(batch: Beatmap[]) {
 async function insertBeatmapBatch(batch: Beatmap[]) {
 	const arrays = buildBeatmapArrays(batch);
 
-  // TODO DO UPDATE instead of DO NOTHING based on cli flag
-	await client.query(`
+	// TODO DO UPDATE instead of DO NOTHING based on cli flag
+	await client.query(
+		`
     INSERT INTO ${DB_BEATMAPS_TABLE} (${BEATMAP_TABLE_COLUMNS.join(", ")})
     SELECT *
     FROM UNNEST(
@@ -223,7 +224,7 @@ async function main() {
 		console.log(`Inserted ${i + batch.length} / ${beatmaps.length} beatmaps`);
 	}
 
-  client.end();
+	client.end();
 	console.log("Beatmap import done :)");
 }
 
