@@ -2,10 +2,13 @@ import { Pool } from "pg";
 import { DB_CONFIG_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
 import { parseArgs } from "../shared.js";
 
-	const FLAG_DEFINITIONS = Object.freeze({
-		reset: { cli: "--reset", description: "WARNING: will remove last_ws_score_id. Truncates config table to repopulate it", takesValue: false }
-	} as const);
-
+const FLAG_DEFINITIONS = Object.freeze({
+	reset: {
+		cli: "--reset",
+		description: "WARNING: will remove last_ws_score_id. Truncates config table to repopulate it",
+		takesValue: false
+	}
+} as const);
 
 // TODO: come up with real values
 const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
@@ -37,7 +40,7 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "global_message", valueText: "" }
 ]);
 
-let clients = new Pool({
+const dbPool = new Pool({
 	host: DB_HOST,
 	port: DB_PORT,
 	user: DB_USER,
@@ -48,7 +51,7 @@ let clients = new Pool({
 async function createConfigTable() {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);
 
-	await clients.query(`
+	await dbPool.query(`
     CREATE TABLE IF NOT EXISTS ${DB_CONFIG_TABLE} (
       key TEXT PRIMARY KEY,
 			value_int INTEGER,
@@ -67,7 +70,7 @@ async function populateConfigTable() {
 	for (const config of INITIAL_CONFIG) {
 		promises.push(
 			(async () => {
-				await clients.query(
+				await dbPool.query(
 					`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
 					[config.key, config.valueInt, config.valueText, config.valueJson ? JSON.stringify(config.valueJson) : null]
 				);
@@ -87,14 +90,14 @@ async function main() {
 
 		if (parsedFlags.reset) {
 			console.log(`Truncating ${DB_CONFIG_TABLE} table`);
-			await clients.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
+			await dbPool.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
 		}
 
 		await populateConfigTable();
 	} catch (error) {
 		console.error("Error creating config table:", error);
 	} finally {
-		await clients.end();
+		await dbPool.end();
 	}
 }
 

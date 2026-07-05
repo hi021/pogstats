@@ -37,6 +37,27 @@ export const PLAYER_TABLE_COLUMNS = Object.freeze([
 	"is_mia"
 ]);
 
+export const BEATMAP_TABLE_COLUMNS = Object.freeze([
+	"id",
+	"beatmapset_id",
+	"status",
+	"artist",
+	"title",
+	"version",
+	"creator",
+	"creator_id",
+	"mode",
+	"approved_date",
+	"star_rating",
+	"total_length",
+	"bpm",
+	"cs",
+	"od",
+	"ar",
+	"hp",
+	"packs"
+]);
+
 export function convertApiScore(apiScore: ApiScore | WsScore, position: number, isScraped = true): BeatmapScoreFull {
 	return {
 		position,
@@ -165,12 +186,43 @@ export function preparePlayersTableValuesAndParamPlaceholders(players: Array<Pla
 			isMia ? null : player.isActive,
 			isMia ? null : player.teamId,
 			isMia ? null : player.coverUrl,
-			isMia ? null : player.retrievedAt,
-			isMia ? true : player.isFromOsuApi, // only osu! api is authoritative over this
+			player.retrievedAt,
+			player.isFromOsuApi,
 			player.isMia
 		);
 
 		return `(${PLAYER_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
+	});
+
+	return { values, paramGroups };
+}
+
+export function prepareBeatmapTableValuesAndParamPlaceholders(beatmaps: Beatmap[]) {
+	const values: unknown[] = [];
+	const paramGroups = beatmaps.map((beatmap, index) => {
+		const offset = index * BEATMAP_TABLE_COLUMNS.length;
+		values.push(
+			beatmap.id,
+			beatmap.beatmapsetId,
+			beatmap.status,
+			beatmap.artist,
+			beatmap.title,
+			beatmap.version,
+			beatmap.creator,
+			beatmap.creatorId,
+			beatmap.mode,
+			beatmap.approvedDate,
+			beatmap.starRating,
+			beatmap.totalLength,
+			beatmap.bpm,
+			beatmap.cs,
+			beatmap.od,
+			beatmap.ar,
+			beatmap.hp,
+			beatmap.packs
+		);
+
+		return `(${BEATMAP_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
 	return { values, paramGroups };

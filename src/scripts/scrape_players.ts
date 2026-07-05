@@ -57,7 +57,8 @@ async function lookupPlayers(headers: Record<string, string>, playerIds: number[
 
 function convertPlayers(players: ApiUserLookup[], retrievedAt?: Date): Player[] {
 	const convertedPlayers = new Array<Player>(players.length);
-	for (let i = 0; i < players.length; ++i) convertedPlayers[i] = convertApiPlayerLookup(players[i], retrievedAt || new Date());
+	for (let i = 0; i < players.length; ++i)
+		convertedPlayers[i] = convertApiPlayerLookup(players[i], retrievedAt || new Date());
 
 	return convertedPlayers;
 }
