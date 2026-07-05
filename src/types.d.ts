@@ -7,6 +7,7 @@ type Ruleset = "osu" | "taiko" | "fruits" | "mania";
 type RankingPositionThreshold = 100 | 50 | 25 | 15 | 8 | 1;
 type RankingPositionThresholdName = `Top ${RankingPositionThreshold}`;
 type RankingPositionThresholdCode = `top${RankingPositionThreshold}`;
+type MapStatusId = 0 | 1 | 2 | 3 | 4; // 0 - pending, 1 - ranked, 2 - approved, 3 - qualified, 4 - loved
 interface BeatmapScoreParams {
 	mode?: Ruleset;
 	mods?: string;
@@ -98,6 +99,8 @@ interface Player {
 	// TODO?: maybe poggers stats, e.g. peak/lowest for each ranking type, etc.
 }
 
+type MissingPlayer = Pick<Player, "id" | "isMia"> & { isMia: true };
+
 type PlayerInRanking = Pick<Player, "id" | "username" | "countryCode" | "teamId" | "coverUrl"> & {
 	pogBadges?: PogBadge[];
 };
@@ -128,6 +131,29 @@ interface PogBadge {
 	id: number;
 	name: string;
 	imgUrl?: string;
+}
+
+// ------------------------------------------
+
+interface Beatmap {
+	id: number;
+	beatmapsetId: number;
+	status: MapStatusId;
+	artist: string;
+	title: string;
+	version: string; // diff name
+	creator: string;
+	creatorId: number;
+	mode: RulesetId;
+	approvedDate: Date;
+	starRating: number;
+	totalLength: number; // in seconds
+	bpm: number;
+	cs: number;
+	od: number;
+	ar: number;
+	hp: number;
+	packs: string; // comma-separated, e.g. "R92,S255,T49", TODO: separate junction table if needed for queries
 }
 
 // ------------------------------------------

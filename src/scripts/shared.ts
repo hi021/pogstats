@@ -7,6 +7,7 @@ import { OSU_API_VERSION, VERBOSE } from "../env.js";
 export const AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/token";
 export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
+export const BEATMAP_DB_BASE_URL = "https://osu.respektive.pw";
 
 export const DEFAULT_HEADERS = {
 	Accept: "application/json",

@@ -29,6 +29,7 @@ async function createMiscellaneousDBFunctions() {
 		);
 		
 		CREATE EXTENSION if not exists pg_trgm;
+		CREATE EXTENSION if not exists timescaledb;
 		`);
 
 	console.log("Created miscellaneous DB functions");
