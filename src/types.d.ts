@@ -129,8 +129,8 @@ interface PlayerTeam {
 
 interface PogBadge {
 	id: number;
-	name: string;
-	imgUrl?: string;
+	name?: string;
+	imgUrl: string;
 }
 
 // ------------------------------------------

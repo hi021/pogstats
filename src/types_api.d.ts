@@ -262,51 +262,51 @@ interface ApiUserStatisticsRulesets {
 }
 
 interface ApiBeatmapDbBeatmap {
-  beatmap_id: number;
-  beatmapset_id: number;
-  approved: MapStatusId; 
-  total_length: number; // in seconds
-  hit_length: number; // in seconds
-  version: string; // diff name
-  artist: string;
-  title: string;
-  creator: string;
-  creator_id: number;
-  mode: RulesetId;
-  cs: number;
-  od: number;
-  ar: number;
-  hp: number;
-  approved_date: string; // ISO 8601 format, e.g. "2020-01-01T00:00:00.000Z"
-  submitted_date: string; // ISO
-  last_updated_date: string; // ISO
-  bpm: number;
-  bpm_min?: number;
-  bpm_max?: number;
-  source: string;
-  tags: string; // joined by spaces
-  genre_id: number;
-  language_id: number;
-  max_combo: number;
-  star_rating: number;
-  star_rating_aim?: number;
-  star_rating_speed?: number;
-  hit_objects: number;
-  num_circles: number;
-  num_sliders: number;
-  num_spinners: number;
-  favorites: number;
-  plays: number;
-  passes: number;
-  recalculate: number; // 0 or 1?
-  max_score: number; // useless stable scoring
-  packs: string;
-  rating: number;
-  video: number; // 0 or 1
-  storyboard: number; // 0 or 1
-  download_unavailable: number; // 0 or 1
-  audio_unavailable: number; // 0 or 1
-  file_md5: string;
-  eyup_star_rating: number;
-  max_score_fullmod: number; // useless stable scoring
+	beatmap_id: number;
+	beatmapset_id: number;
+	approved: MapStatusId;
+	total_length: number; // in seconds
+	hit_length: number; // in seconds
+	version: string; // diff name
+	artist: string;
+	title: string;
+	creator: string;
+	creator_id: number;
+	mode: RulesetId;
+	cs: number;
+	od: number;
+	ar: number;
+	hp: number;
+	approved_date: string; // ISO 8601 format, e.g. "2020-01-01T00:00:00.000Z"
+	submitted_date: string; // ISO
+	last_updated_date: string; // ISO
+	bpm: number;
+	bpm_min?: number;
+	bpm_max?: number;
+	source: string;
+	tags: string; // joined by spaces
+	genre_id: number;
+	language_id: number;
+	max_combo: number;
+	star_rating: number;
+	star_rating_aim?: number;
+	star_rating_speed?: number;
+	hit_objects: number;
+	num_circles: number;
+	num_sliders: number;
+	num_spinners: number;
+	favorites: number;
+	plays: number;
+	passes: number;
+	recalculate: number; // 0 or 1?
+	max_score: number; // useless stable scoring
+	packs: string;
+	rating: number;
+	video: number; // 0 or 1
+	storyboard: number; // 0 or 1
+	download_unavailable: number; // 0 or 1
+	audio_unavailable: number; // 0 or 1
+	file_md5: string;
+	eyup_star_rating: number;
+	max_score_fullmod: number; // useless stable scoring
 }
