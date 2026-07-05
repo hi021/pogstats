@@ -25,6 +25,18 @@ export const SCORE_TABLE_COLUMNS = Object.freeze([
 	"data"
 ]);
 
+export const PLAYER_TABLE_COLUMNS = Object.freeze([
+	"id",
+	"username",
+	"country_code",
+	"is_active",
+	"team_id",
+	"cover_url",
+	"retrieved_at",
+	"is_from_osu_api",
+	"is_mia"
+]);
+
 export function convertApiScore(apiScore: ApiScore | WsScore, position: number, isScraped = true): BeatmapScoreFull {
 	return {
 		position,
@@ -102,6 +114,10 @@ export function buildPositionThresholdCode(pos: RankingPositionThreshold): Ranki
 	return `top${pos}`;
 }
 
+export function isMissingPlayer(player: Player | MissingPlayer): player is MissingPlayer {
+	return !(player as Player).username && player.isMia;
+}
+
 export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScoreFull[]) {
 	const values: unknown[] = [];
 	const paramGroups = scores.map((score, index) => {
@@ -120,17 +136,41 @@ export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScor
 			score.accuracy,
 			score.maxCombo,
 			score.totalScore,
-			score.classicTotalScore ?? null,
-			score.totalScoreWithoutMods ?? null,
+			score.classicTotalScore,
+			score.totalScoreWithoutMods,
 			score.isPerfectCombo,
 			score.legacyPerfect,
-			score.pp ?? null,
+			score.pp,
 			score.legacyTotalScore,
 			score.endedAt,
 			convertAdditionalDataToJsonb(score.data)
 		);
 
 		return `(${SCORE_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
+	});
+
+	return { values, paramGroups };
+}
+
+export function preparePlayersTableValuesAndParamPlaceholders(players: Array<Player | MissingPlayer>) {
+	const values: unknown[] = [];
+	const paramGroups = players.map((player, index) => {
+		const offset = index * PLAYER_TABLE_COLUMNS.length;
+		const isMia = isMissingPlayer(player);
+
+		values.push(
+			player.id,
+			isMia ? null : player.username,
+			isMia ? null : player.countryCode,
+			isMia ? null : player.isActive,
+			isMia ? null : player.teamId,
+			isMia ? null : player.coverUrl,
+			isMia ? null : player.retrievedAt,
+			isMia ? true : player.isFromOsuApi, // only osu! api is authoritative over this
+			player.isMia
+		);
+
+		return `(${PLAYER_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
 	return { values, paramGroups };

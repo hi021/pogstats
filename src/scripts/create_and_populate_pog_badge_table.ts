@@ -20,7 +20,8 @@ const dbPool = new Pool({
 
 type ProtoPogBadge = PogBadge & { playerIds: number[] };
 
-// TODO
+// TODO badge for chiffa and myself perhaps
+// TODO actually upload the badge images
 const POG_BADGES: Readonly<ProtoPogBadge[]> = Object.freeze([
 	{ id: 1, name: "poggers", imgUrl: "/badges/pogu.png", playerIds: [5795337] },
 	{ id: 2, name: "idiot", imgUrl: "/badges/unhappi.png", playerIds: [1023489] },
@@ -53,6 +54,8 @@ async function createTables() {
 	console.log(`Created ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables if didn't exist`);
 }
 
+// TODO YES HELLO THIS WILL FAIL!!!!!
+// can always just comment out the pog_badges_user_fk or only run it after scrape_players
 async function populateTables() {
 	console.log(`Populating ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables with initial values`);
 

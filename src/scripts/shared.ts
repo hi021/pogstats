@@ -44,7 +44,7 @@ export function getMinDate(value: string | undefined) {
 	return date;
 }
 
-export function convertApiPlayerLookup(player: ApiUserLookup, isFromOsuApi = true, isMia = false): Player {
+export function convertApiPlayerLookup(player: ApiUserLookup, retrievedAt: Date, isFromOsuApi = true, isMia = false): Player {
 	return {
 		id: player.id,
 		username: player.username,
@@ -52,7 +52,7 @@ export function convertApiPlayerLookup(player: ApiUserLookup, isFromOsuApi = tru
 		isActive: player.is_active,
 		teamId: player.team?.id,
 		coverUrl: player.cover?.url, // TODO: verify the difference between url and custom_url
-		retrievedAt: new Date(),
+		retrievedAt,
 		isFromOsuApi,
 		isMia
 	};

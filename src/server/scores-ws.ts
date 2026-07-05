@@ -14,6 +14,7 @@ import {
 	withDbClientTransaction
 } from "../db.js";
 import { DB_BEATMAPS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
 	convertApiScore,
 	ParsedFlags,
@@ -23,7 +24,6 @@ import {
 	sortWsScores
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
-import { scrapePlayers } from "../scripts/scrape_players.js";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
 const SCORES_WS_PING_INTERVAL = 30000;
@@ -290,10 +290,12 @@ async function upsertBeatmapScores(
 		 SELECT ${SCORE_TABLE_COLUMNS.join(", ")} FROM ws_scores_tmp`
 	);
 
+	// TODO USE THE NEW TABLE !!
 	await recalculateScorePositionsForMap(client, beatmapId, rulesetId);
 	await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_update = NOW() WHERE id = $1`, [beatmapId]);
 }
 
+// TODO return beaten score details to show cool live data
 async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<{

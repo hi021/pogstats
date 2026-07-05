@@ -1,10 +1,11 @@
 import { resolve } from "path";
-import { Pool, QueryResult } from "pg";
+import { Pool, PoolClient, QueryResult } from "pg";
 import { fileURLToPath } from "url";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYERS_TABLE, DB_PORT, DB_USER, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, rateLimit } from "./shared.js";
-import { splitIntoBatches } from "../shared.js";
+import { PLAYER_TABLE_COLUMNS, preparePlayersTableValuesAndParamPlaceholders, splitIntoBatches } from "../shared.js";
+import { buildUpdateAssignmentsString, withDbClientTransaction } from "../db.js";
 
 const PLAYER_BATCH_SIZE = 100;
 const dbPool = new Pool({
@@ -42,7 +43,7 @@ async function getRankingPlayerIdBatches(): Promise<IdBatch[] | null> {
 	const idCount = idBatches.rowCount
 		? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
 		: 0;
-	console.log(`Found ${idCount} player IDs to scrape`);
+	console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
 	return idCount ? [{ batch_no: 1, ids: [39828, 23574301] }] : null;
 }
 
@@ -54,11 +55,27 @@ async function lookupPlayers(headers: Record<string, string>, playerIds: number[
 	return players.users;
 }
 
-function convertPlayers(players: ApiUserLookup[]): Player[] {
+function convertPlayers(players: ApiUserLookup[], retrievedAt?: Date): Player[] {
 	const convertedPlayers = new Array<Player>(players.length);
-	for (let i = 0; i < players.length; ++i) convertedPlayers[i] = convertApiPlayerLookup(players[i]);
+	for (let i = 0; i < players.length; ++i) convertedPlayers[i] = convertApiPlayerLookup(players[i], retrievedAt || new Date());
 
 	return convertedPlayers;
+}
+
+async function createTempPlayersTable(client: PoolClient) {
+	await client.query(`
+		CREATE TEMPORARY TABLE IF NOT EXISTS scrape_players_tmp (
+			id 							INTEGER PRIMARY KEY,
+			username				TEXT NOT NULL,
+			country_code		CHAR(2) NOT NULL,
+			is_active				BOOLEAN NOT NULL,
+			team_id					INTEGER,
+			cover_url				TEXT,
+			retrieved_at		TIMESTAMPTZ NOT NULL,
+			is_from_osu_api	BOOLEAN NOT NULL,
+			is_mia				 	BOOLEAN DEFAULT FALSE
+		) ON COMMIT DELETE ROWS`);
+	await client.query("TRUNCATE scrape_players_tmp");
 }
 
 export async function scrapePlayers(ids?: number[]) {
@@ -67,13 +84,21 @@ export async function scrapePlayers(ids?: number[]) {
 		if (!playerIdBatches) return;
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
+		const playerMap = new Map<number, Player | MissingPlayer>();
 
 		for (const batch of playerIdBatches) {
-			console.log(`Fetching player batch #${batch.batch_no}`);
+			console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
 			const apiPlayers = await lookupPlayers(headers, batch.ids);
 
-			// convert
-			console.log(`Processing player batch #${batch.batch_no}`);
+			console.log(`[scrape_players] Processing player batch #${batch.batch_no}`);
+			const retrievedAt = new Date();
+			const players = convertPlayers(apiPlayers, retrievedAt);
+
+			for (const id of batch.ids) {
+				const player = players.find(p => p.id == id); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
+				if (!player) console.log(`[scrape_players] Player with ID ${id} not in the API response, marking as MIA`);
+				playerMap.set(id, player ?? { id, retrievedAt, isFromOsuApi: true, isMia: true });
+			}
 
 			return; //TODO debug only
 
@@ -85,6 +110,24 @@ export async function scrapePlayers(ids?: number[]) {
 				SCRAPE_PLAYER_DELAY_MS
 			);
 		}
+
+		await withDbClientTransaction(async client => {
+			createTempPlayersTable(client);
+
+			const { values, paramGroups } = preparePlayersTableValuesAndParamPlaceholders([...playerMap.values()]);
+			await client.query(
+				`INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
+				values
+			);
+
+			await client.query(`
+					INSERT INTO ${DB_PLAYERS_TABLE} p (${PLAYER_TABLE_COLUMNS.join(", ")})
+					SELECT ${PLAYER_TABLE_COLUMNS.join(", ")} FROM scrape_players_tmp tmp
+					WHERE EXISTS (SELECT 1 FROM p WHERE tmp.is_mia = TRUE AND tmp.id = p.id)
+					ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(PLAYER_TABLE_COLUMNS)}
+				`);
+		});
+		console.log(`[scrape_players] Finished inserting ${playerMap.size} players into the database`);
 	} catch (e) {
 		console.error("Error scraping players:\n", e);
 	} finally {
@@ -92,4 +135,4 @@ export async function scrapePlayers(ids?: number[]) {
 	}
 }
 
-if (resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.filename))) scrapePlayers();
+if (resolve(process.argv[1]) == resolve(fileURLToPath(import.meta.filename))) scrapePlayers();

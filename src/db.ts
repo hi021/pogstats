@@ -72,7 +72,7 @@ export async function acquireBeatmapAdvisoryLock(client: PoolClient, beatmapId: 
 	await client.query("SELECT pg_advisory_xact_lock($1)", [lockKey]);
 }
 
-export function buildUpdateAssignmentsString(columns: string[]) {
+export function buildUpdateAssignmentsString(columns: readonly string[]) {
 	let assignments = "";
 	for (const i in columns) {
 		if (i != "0") assignments += ",";
