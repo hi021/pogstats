@@ -6,6 +6,7 @@ export const SCORE_TABLE_COLUMNS = Object.freeze([
 	"is_scraped",
 	"retrieved_at",
 	"lazer",
+	"is_perma",
 	"id",
 	"user_id",
 	"ruleset_id",
@@ -58,12 +59,19 @@ export const BEATMAP_TABLE_COLUMNS = Object.freeze([
 	"packs"
 ]);
 
-export function convertApiScore(apiScore: ApiScore | WsScore, position: number, isScraped = true): BeatmapScoreFull {
+// TODO calculate is_perma here?
+export function convertApiScore(
+	apiScore: ApiScore | WsScore,
+	position: number,
+	isScraped = true,
+	isPerma = false
+): BeatmapScoreFull {
 	return {
 		position,
 		isScraped,
 		retrievedAt: new Date(),
 		lazer: apiScore.build_id != null,
+		isPerma,
 		id: apiScore.id,
 		userId: apiScore.user_id,
 		rulesetId: apiScore.ruleset_id,
@@ -88,30 +96,31 @@ export function convertApiScore(apiScore: ApiScore | WsScore, position: number, 
 	};
 }
 
-export function convertDatabaseScore(dbScore: Record<string, unknown>) {
+export function convertDatabaseScore(dbScore: Record<string, unknown>): BeatmapScoreFull {
 	return {
-		position: dbScore.position,
-		isScraped: dbScore.is_scraped,
-		retrievedAt: dbScore.retrieved_at,
-		lazer: dbScore.lazer,
+		position: dbScore.position as number,
+		isScraped: dbScore.is_scraped as boolean,
+		retrievedAt: dbScore.retrieved_at as Date,
+		lazer: dbScore.lazer as boolean,
+		isPerma: dbScore.is_perma as boolean,
 		id: Number(dbScore.id),
-		userId: dbScore.user_id,
-		rulesetId: dbScore.ruleset_id,
+		userId: dbScore.user_id as number,
+		rulesetId: dbScore.ruleset_id as number,
 		beatmapId: Number(dbScore.beatmap_id),
-		hasReplay: dbScore.has_replay,
-		grade: dbScore.grade,
-		accuracy: dbScore.accuracy,
-		maxCombo: dbScore.max_combo,
-		totalScore: dbScore.total_score,
+		hasReplay: dbScore.has_replay as boolean,
+		grade: dbScore.grade as ScoreRank,
+		accuracy: dbScore.accuracy as number,
+		maxCombo: dbScore.max_combo as number,
+		totalScore: dbScore.total_score as number,
 		classicTotalScore: Number(dbScore.classic_total_score),
-		totalScoreWithoutMods: dbScore.total_score_without_mods,
-		isPerfectCombo: dbScore.is_perfect_combo,
-		legacyPerfect: dbScore.legacy_perfect,
-		pp: dbScore.pp,
+		totalScoreWithoutMods: dbScore.total_score_without_mods as number | undefined,
+		isPerfectCombo: dbScore.is_perfect_combo as boolean,
+		legacyPerfect: dbScore.legacy_perfect as boolean,
+		pp: dbScore.pp as number | undefined,
 		legacyTotalScore: Number(dbScore.legacy_total_score),
-		endedAt: dbScore.ended_at,
-		data: dbScore.data
-	} as BeatmapScoreFull;
+		endedAt: dbScore.ended_at as Date,
+		data: dbScore.data as BeatmapScoreAdditionalData
+	};
 }
 
 export function getRulesetName(id: RulesetId): Ruleset {
@@ -148,6 +157,7 @@ export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScor
 			score.isScraped,
 			score.retrievedAt,
 			score.lazer,
+			score.isPerma,
 			score.id,
 			score.userId,
 			score.rulesetId,

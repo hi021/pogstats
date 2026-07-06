@@ -51,13 +51,14 @@ type IdBatch = { batch_no: number; ids: number[] };
 //     total_score_without_mods - INTEGER instead of BIGINT
 //     pp - REAL instead of DOUBLE PRECISION
 //     build_id - dropped
-//     + 3 other meta columns: is_scraped, retrieved_at, position
+//     + 3 other meta columns: is_scraped, retrieved_at, position, is_perma
 
 interface BeatmapScoreFull {
-	position: number; // meta, not from API
+	position: number; // meta, not from API, 0 = score is MIA (from potentially restricted player)
 	isScraped: boolean; // meta, not from API
 	retrievedAt: Date; // meta, not from API
 	lazer: boolean; // meta, not from API (true only if build_id is present)
+	isPerma: boolean; // meta, whether highest possible total_score on map
 	id: number;
 	userId: number;
 	rulesetId: number;
@@ -67,7 +68,7 @@ interface BeatmapScoreFull {
 	accuracy: number; // 0-1
 	maxCombo: number;
 	totalScore: number;
-	classicTotalScore?: number;
+	classicTotalScore?: number; // seems to always be present
 	totalScoreWithoutMods?: number;
 	isPerfectCombo: boolean;
 	legacyPerfect: boolean;
@@ -127,6 +128,14 @@ interface PlayerTeam {
 
 // ------------------------------------------
 
+interface PlayerMiaHistoryEntry {
+	userId: number;
+	startDate: Date;
+	endDate?: Date;
+}
+
+// ------------------------------------------
+
 interface PogBadge {
 	id: number;
 	name?: string;
@@ -166,6 +175,7 @@ interface RankingType {
 	code: string;
 }
 
+// TODO DDL
 interface HistoricalRankingEntry {
 	rankingId: number; // FK to Ranking Type id
 	date: Date;
@@ -177,6 +187,7 @@ interface HistoricalRankingEntry {
 	sourceId?: number; // FK to Data Source id
 }
 
+// TODO DDL
 interface DataSource {
 	id: number;
 	name: string;

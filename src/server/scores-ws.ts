@@ -9,7 +9,7 @@ import {
 	getInexistentBeatmapIds,
 	getInexistentPlayerIds,
 	getLastScoreId,
-	recalculateScorePositionsForMap,
+	recalculateScorePositionsForMaps,
 	saveLastScoreId,
 	withDbClientTransaction
 } from "../db.js";
@@ -97,7 +97,7 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 			++sessionBatchCount;
 			await endAndSaveScoresBatch();
 		} catch (e) {
-			console.error("failed to process scores-ws scores:\n", e);
+			console.error("failed to process scores-ws batch:\n", e);
 		}
 		return;
 	}
@@ -132,7 +132,7 @@ function parseCursorScoreId(cursorScoreIdCli?: string) {
 	const parsed = parseInt(cursorScoreIdCli, 10);
 	if (isNaN(parsed) || parsed < 0) {
 		console.error(`Invalid cursor score id, must be a non-negative number: ${cursorScoreIdCli}`);
-		process.exit(1);
+		process.exit(9);
 	}
 	return parsed;
 }
@@ -151,7 +151,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	await fetchMissingPlayers(batchCandidatePlayerIds);
 
 	const beatenScoresByMaps = await getBeatenScoresByMap(scores);
-	console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
+	if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
 
 	let totalProvenScoreCount = 0;
 	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: number; scores: WsScore[] }>();
@@ -159,12 +159,10 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 		const beatmapId = beatenScoresByMap.beatmap_id;
 		const rulesetId = beatenScoresByMap.ruleset_id;
 		const provenScoreIds = new Set(beatenScoresByMap.candidate_ids.map(id => Number(id)));
-		// TODO profile this and try to sort in the db?
+		// TODO?: profile this and try to sort in the db
 		const provenScores = scores.filter(score => provenScoreIds.has(score.id)).sort(sortWsScores);
 		assert(provenScoreIds.size === provenScores.length);
 		totalProvenScoreCount += provenScores.length;
-
-		if (provenScores.length >= 2) console.log(`${provenScores.length} scores for beatmap ${beatmapId}!!!`); // TODO debug only
 
 		const key = `${beatmapId}:${rulesetId}`;
 		const existing = provenScoresByMaps.get(key);
@@ -192,6 +190,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 }
 
 function isCandidateScore(score: WsScore) {
+	// only passed scores are sent anyway, not much to do here
 	// TODO osu!standard only for now, maybe add other rulesets later
 	return score.ruleset_id == 0;
 }
@@ -238,6 +237,7 @@ async function createTempScoresTable(client: PoolClient) {
 			is_scraped BOOLEAN NOT NULL,
 			retrieved_at TIMESTAMPTZ NOT NULL,
 			lazer BOOLEAN NOT NULL,
+			is_perma BOOLEAN NOT NULL DEFAULT FALSE,
 			id BIGINT PRIMARY KEY,
 			user_id INTEGER NOT NULL,
 			ruleset_id SMALLINT NOT NULL,
@@ -290,12 +290,21 @@ async function upsertBeatmapScores(
 		 SELECT ${SCORE_TABLE_COLUMNS.join(", ")} FROM ws_scores_tmp`
 	);
 
+	await recalculateScorePositionsForMaps(client, [beatmapId], [rulesetId]);
 	// TODO USE THE NEW TABLE !!
-	await recalculateScorePositionsForMap(client, beatmapId, rulesetId);
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
+	// TODO USE THE NEW TABLE !!
 	await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_update = NOW() WHERE id = $1`, [beatmapId]);
 }
 
 // TODO return beaten score details to show cool live data
+// TODO calculate is_perma here?
 async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<{
@@ -324,7 +333,7 @@ async function getBeatenScoresByMap(scores: WsScore[]) {
 				FROM scores s
 				WHERE s.beatmap_id = c.candidate_beatmap_id
 					AND s.ruleset_id = c.candidate_ruleset_id
-					AND s.position <= 100
+					AND s.position BETWEEN 1 AND 100
 					AND s.total_score < c.candidate_score
 			)
 			AND NOT EXISTS (

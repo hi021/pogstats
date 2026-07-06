@@ -28,6 +28,7 @@ async function createScoreTables() {
       is_scraped      					BOOLEAN NOT NULL,
       retrieved_at     					TIMESTAMPTZ NOT NULL,
       lazer      								BOOLEAN NOT NULL,
+      is_perma      						BOOLEAN NOT NULL DEFAULT FALSE,
       id                  			BIGINT PRIMARY KEY DEFERRABLE INITIALLY DEFERRED,
       user_id             			INTEGER NOT NULL,
       ruleset_id          			SMALLINT NOT NULL,
@@ -52,7 +53,7 @@ async function createScoreTables() {
       REFERENCES ${DB_PLAYERS_TABLE}(id)
     )`);
 	// could also add unique constraints to user_id + beatmap_id + ruleset_id and position + beatmap_id + ruleset_id
-	// TODO?: PARTITION BY ruleset_id
+	// TODO: PARTITION BY ruleset_id if implementing other modes!
 
 	await client.query(`
 		COMMENT ON COLUMN ${DB_SCORES_TABLE}.position IS 'Meta (not from the API): 1-based position of the score on the beatmap';
@@ -75,10 +76,11 @@ async function createScoreTables() {
 
 	// TODO: verify performance, maybe add JSONB GIN, score, pp, grade after verifying ranking queries
 	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
+	// ? MIA scores index? (position, user_id) WHERE position = 0?
 	await client.query(
 		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);
      CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 			ON ${DB_SCORES_TABLE} (user_id, position);
-     CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position <= 100;
+     CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
 		 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
 	);
 

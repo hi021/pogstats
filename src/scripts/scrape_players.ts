@@ -1,7 +1,7 @@
 import { resolve } from "path";
 import { Pool, PoolClient, QueryResult } from "pg";
 import { fileURLToPath } from "url";
-import { buildUpdateAssignmentsString, withDbClientTransaction } from "../db.js";
+import { buildUpdateAssignmentsString, insertNewMiaPlayers, withDbClientTransaction } from "../db.js";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYERS_TABLE, DB_PORT, DB_USER, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
 import { PLAYER_TABLE_COLUMNS, preparePlayersTableValuesAndParamPlaceholders, splitIntoBatches } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
@@ -44,7 +44,8 @@ async function getRankingPlayerIdBatches(): Promise<IdBatch[] | null> {
 		? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
 		: 0;
 	console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
-	return idCount ? [{ batch_no: 1, ids: [39828, 23574301] }] : null;
+	return idCount ? idBatches.rows : null;
+	// [{ batch_no: 1, ids: [39828, 23574301] }]
 }
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {
@@ -86,6 +87,7 @@ export async function scrapePlayers(ids?: number[]) {
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
 		const playerMap = new Map<number, Player | MissingPlayer>();
+		const miaPlayers = new Map<number, Date>();
 
 		for (const batch of playerIdBatches) {
 			console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
@@ -97,9 +99,11 @@ export async function scrapePlayers(ids?: number[]) {
 
 			for (const id of batch.ids) {
 				const player = players.find(p => p.id == id); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
-				if (!player) console.log(`[scrape_players] Player with ID ${id} not in the API response, marking as MIA`);
+				if (!player) miaPlayers.set(id, retrievedAt);
 				playerMap.set(id, player ?? { id, retrievedAt, isFromOsuApi: true, isMia: true });
 			}
+
+			break; // TODO DEBUG ONLY
 
 			await rateLimit(
 				{
@@ -120,17 +124,26 @@ export async function scrapePlayers(ids?: number[]) {
 			);
 
 			await client.query(`
-					INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
-					SELECT ${PLAYER_TABLE_COLUMNS.join(", ")} FROM scrape_players_tmp tmp
+				INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
+				SELECT ${PLAYER_TABLE_COLUMNS.join(", ")} FROM scrape_players_tmp tmp
 					WHERE tmp.is_mia = FALSE
-						OR (
-							tmp.is_mia = TRUE
-							AND EXISTS (SELECT 1 FROM ${DB_PLAYERS_TABLE} p WHERE p.id = tmp.id)
+					OR (
+						tmp.is_mia = TRUE
+						AND EXISTS (SELECT 1 FROM ${DB_PLAYERS_TABLE} p WHERE p.id = tmp.id)
 						)
-					ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(PLAYER_TABLE_COLUMNS)}
+				ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(PLAYER_TABLE_COLUMNS)}
 				`);
 		});
 		console.log(`[scrape_players] Finished inserting ${playerMap.size} players into the database`);
+
+		if (!miaPlayers.size) return;
+		console.log(
+			`[scrape_players] Player(s) with ID(s) ${miaPlayers.keys()} not in the API response, marking all as MIA`
+		);
+		for (const [id, retrievedAt] of miaPlayers.entries()) {
+			// TODO 
+			// insertNewMiaPlayers();
+		}
 	} catch (e) {
 		console.error("Error scraping players:\n", e);
 	} finally {

@@ -25,6 +25,7 @@ export const DB_BEATMAP_RULESET_UPDATE_DATES_TABLE =
 	process.env.DB_BEATMAP_RULESET_UPDATE_DATES_TABLE || "BEATMAP_RULESET_UPDATE_DATES";
 export const DB_RANKING_TYPES_TABLE = process.env.DB_RANKING_TYPES_TABLE || "RANKING_TYPES";
 export const DB_HISTORICAL_RANKINGS_TABLE = process.env.DB_HISTORICAL_RANKINGS_TABLE || "HISTORICAL_RANKINGS";
+export const DB_PLAYER_MIA_HISTORY_TABLE = process.env.DB_PLAYER_MIA_HISTORY_TABLE || "PLAYER_MIA_HISTORY";
 
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;

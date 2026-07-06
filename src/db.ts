@@ -1,10 +1,11 @@
-import { Pool, PoolClient, types } from "pg";
+import { Client, ClientBase, Pool, PoolClient, types } from "pg";
 import {
 	DB_BEATMAPS_TABLE,
 	DB_CONFIG_TABLE,
 	DB_HOST,
 	DB_NAME,
 	DB_PASSWORD,
+	DB_PLAYER_MIA_HISTORY_TABLE,
 	DB_PLAYERS_TABLE,
 	DB_PORT,
 	DB_SCORES_TABLE,
@@ -101,8 +102,7 @@ export async function getLastScoreId() {
 export async function getInexistentPlayerIds(playerIds: number[]) {
 	return (
 		await dbPool.query(
-			`
-			WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
+			`WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
 			SELECT i.id FROM input_ids i
 			LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
 			WHERE u.id IS NULL`,
@@ -114,8 +114,7 @@ export async function getInexistentPlayerIds(playerIds: number[]) {
 export async function getInexistentBeatmapIds(beatmapIds: number[]) {
 	return (
 		await dbPool.query(
-			`
-			WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
+			`WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
 			SELECT i.id FROM input_ids i
 			LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
 			WHERE b.id IS NULL`,
@@ -124,20 +123,87 @@ export async function getInexistentBeatmapIds(beatmapIds: number[]) {
 	).rows.map(r => r.id) as number[];
 }
 
-export async function recalculateScorePositionsForMap(client: PoolClient, beatmapId: number, rulesetId: number) {
+export async function recalculateScorePositionsForMaps(client: ClientBase, beatmapIds: number[], rulesetIds: number[]) {
 	await client.query(
 		`WITH ranked AS (
-			SELECT id,
-						 ROW_NUMBER() OVER (ORDER BY total_score DESC, ended_at ASC, id ASC) AS pos
-			FROM ${DB_SCORES_TABLE}
-			WHERE beatmap_id = $1 AND ruleset_id = $2
-		)
-		UPDATE ${DB_SCORES_TABLE} s
-		SET position = ranked.pos
-		FROM ranked
-		WHERE s.id = ranked.id`,
-		[beatmapId, rulesetId]
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY beatmap_id, ruleset_id
+          ORDER BY total_score DESC, ended_at ASC, id ASC
+        ) AS pos
+      FROM ${DB_SCORES_TABLE}
+      WHERE beatmap_id IN ($1)
+        AND ruleset_id IN ($2)
+				AND position > 0
+    )
+    UPDATE ${DB_SCORES_TABLE} s
+    SET position = ranked.pos
+    FROM ranked
+    WHERE s.id = ranked.id`,
+		[beatmapIds, rulesetIds]
 	);
+}
+
+export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[]) {
+	await client.query(
+		`
+		SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
+		WHERE user_id IN ($1)`,
+		[playerIds]
+	);
+}
+
+export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
+	const paramGroups = [];
+	const values = [];
+	let i = 0;
+
+	for (const [userId, startDate] of miaPlayers) {
+		paramGroups.push(`($${++i}, $${++i})`);
+		values.push(userId, startDate);
+	}
+
+	const sql = `
+    WITH incoming(user_id, start_date) AS (
+      VALUES ${paramGroups.join(",")}
+    )
+    INSERT INTO ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id, start_date)
+    SELECT i.user_id, i.start_date
+    FROM incoming i
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM ${DB_PLAYER_MIA_HISTORY_TABLE} h
+      WHERE h.user_id = i.user_id
+        AND h.end_date IS NULL
+    );
+  `;
+
+	await client.query(sql, values);
+}
+
+export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
+	const paramGroups = [];
+	const values = [];
+	let i = 0;
+
+	for (const [userId, endDate] of miaPlayers) {
+		paramGroups.push(`($${++i}, $${++i})`);
+		values.push(userId, endDate);
+	}
+
+	const sql = `
+    WITH incoming(user_id, end_date) AS (
+      VALUES ${paramGroups.join(",")}
+    )
+    UPDATE ${DB_PLAYER_MIA_HISTORY_TABLE} h
+    SET end_date = i.end_date
+    FROM incoming i
+    WHERE h.user_id = i.user_id
+      AND h.end_date IS NULL;
+  `;
+
+	await client.query(sql, values);
 }
 
 type BeatenScoreParams = {
