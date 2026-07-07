@@ -53,18 +53,18 @@ async function createScoreTables() {
 	// TODO: PARTITION BY ruleset_id if implementing other modes!
 
 	await client.query(`
-		COMMENT ON COLUMN ${DB_SCORES_TABLE}.position IS 'Meta (not from the API): 1-based position of the score on the beatmap';
-		COMMENT ON COLUMN ${DB_SCORES_TABLE}.data IS 'mods, maximum_statistics, statistics columns from the API as JSONB';`);
+		COMMENT ON COLUMN ${DB_SCORES_TABLE}.position 	IS 'Meta (not from the API): 1-based position of the score on the beatmap';
+		COMMENT ON COLUMN ${DB_SCORES_TABLE}.data 			IS 'mods, maximum_statistics, statistics columns from the API as JSONB';`);
 
 	await client.query(`
 		CREATE TABLE IF NOT EXISTS ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} (
 			beatmap_id 						INTEGER NOT NULL,
-			mode SMALLINT 				NOT NULL,
+			ruleset_id						SMALLINT NOT NULL,
 			last_scores_scrape 		TIMESTAMPTZ,
 			last_scores_update 		TIMESTAMPTZ,
 
-			PRIMARY KEY (beatmap_id, mode),
-			CONSTRAINT beatmap_mode_update_dates_beatmap_fk FOREIGN KEY(beatmap_id)
+			PRIMARY KEY (beatmap_id, ruleset_id),
+			CONSTRAINT beatmap_ruleset_update_dates_beatmap_fk FOREIGN KEY(beatmap_id)
 			REFERENCES ${DB_BEATMAPS_TABLE}(id)
 		)`);
 	await client.query(`

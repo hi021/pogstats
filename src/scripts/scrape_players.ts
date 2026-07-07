@@ -1,13 +1,22 @@
 import { resolve } from "path";
-import { Pool, PoolClient, QueryResult } from "pg";
+import { ClientBase, Pool, PoolClient, QueryResult } from "pg";
 import { fileURLToPath } from "url";
-import { buildUpdateAssignmentsString, insertNewMiaPlayers, withDbClientTransaction } from "../db.js";
+import {
+	buildUpdateAssignmentsString,
+	findNoLongerMiaPlayerIds,
+	getBeatmapIdsWithPlayerScores,
+	insertNewMiaPlayers,
+	insertNoLongerMiaPlayers,
+	recalculateScorePositionsForMaps,
+	setAllPlayerScoresToPosition,
+	withDbClientTransaction
+} from "../db.js";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYERS_TABLE, DB_PORT, DB_USER, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
 import { PLAYER_TABLE_COLUMNS, preparePlayersTableValuesAndParamPlaceholders, splitIntoBatches } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, rateLimit } from "./shared.js";
 
-const PLAYER_BATCH_SIZE = 100;
+const PLAYER_BATCH_SIZE = 50;
 const dbPool = new Pool({
 	host: DB_HOST,
 	port: DB_PORT,
@@ -103,8 +112,6 @@ export async function scrapePlayers(ids?: number[]) {
 				playerMap.set(id, player ?? { id, retrievedAt, isFromOsuApi: true, isMia: true });
 			}
 
-			break; // TODO DEBUG ONLY
-
 			await rateLimit(
 				{
 					get: () => lastFetchTimestamp,
@@ -136,14 +143,25 @@ export async function scrapePlayers(ids?: number[]) {
 		});
 		console.log(`[scrape_players] Finished inserting ${playerMap.size} players into the database`);
 
+		return; // TODO
 		if (!miaPlayers.size) return;
 		console.log(
 			`[scrape_players] Player(s) with ID(s) ${miaPlayers.keys()} not in the API response, marking all as MIA`
 		);
-		for (const [id, retrievedAt] of miaPlayers.entries()) {
-			// TODO 
-			// insertNewMiaPlayers();
-		}
+
+		await withDbClientTransaction(async client => {
+			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client);
+			// TODO send event to socket to notify about MIA and non MIA changes
+			await setAllPlayerScoresToPosition(client, [...miaPlayers.keys()], 0);
+			await setAllPlayerScoresToPosition(client, nonMiaPlayerIds, 100);
+			// TODO use getBeatmapIdsWithPlayerScores to find beatmaps that need position reindexing and create a set of unique ids with the ones from miaPlayers
+			const miaBeatmaps = await getBeatmapIdsWithPlayerScores();
+			// TODO use getBeatmapIdsWithPlayerScores to find beatmaps that need position reindexing and create a set of unique ids with the ones from nonMiaPlayers
+			await insertNewMiaPlayers(client, miaPlayers);
+			await insertNoLongerMiaPlayers(client);
+			// TODO reindex beatmap positions
+			await recalculateScorePositionsForMaps(client);
+		});
 	} catch (e) {
 		console.error("Error scraping players:\n", e);
 	} finally {

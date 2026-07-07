@@ -6,6 +6,7 @@
 import fs from "fs";
 import { Client } from "pg";
 import {
+	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
 	DB_HOST,
 	DB_NAME,
@@ -36,6 +37,7 @@ import {
 	logInfo,
 	rateLimit
 } from "./shared.js";
+import { updateBeatmapScoresRetrievalDate } from "../db.js";
 
 const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {
@@ -128,7 +130,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 			`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
 			values
 		);
-		await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_scrape = NOW() WHERE id = $1`, [beatmapId]);
+		await updateBeatmapScoresRetrievalDate(beatmapId, rulesetId, "last_scores_scrape");
 		await client.query("COMMIT");
 	} catch (error) {
 		await client.query("ROLLBACK");
@@ -161,11 +163,19 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 	}
 }
 
+// TODO: only osu!standard for now, change if implementing modes
 async function getBeatmapIds(maxRetrievedAt?: Date): Promise<number[]> {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
 		await client.query(
-			`SELECT id FROM ${DB_BEATMAPS_TABLE} WHERE status IN ('ranked','approved','loved') AND mode = 'osu' ${maxRetrievedAt ? `AND (last_scores_scrape < $1 OR last_scores_scrape IS NULL)` : ""} ORDER BY id`,
+			`SELECT b.id
+			FROM ${DB_BEATMAPS_TABLE} b
+			LEFT JOIN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} u
+				ON u.beatmap_id = b.id AND u.ruleset_id = 0
+			WHERE b.status IN (1,2,4)
+				AND b.mode = 0
+				${maxRetrievedAt ? `AND (u.last_scores_scrape IS NULL OR u.last_scores_scrape < $1)` : ""}
+			ORDER BY b.id`,
 			params
 		)
 	).rows.map(row => row.id);

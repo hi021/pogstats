@@ -11,9 +11,10 @@ import {
 	getLastScoreId,
 	recalculateScorePositionsForMaps,
 	saveLastScoreId,
+	updateBeatmapScoresRetrievalDate,
 	withDbClientTransaction
 } from "../db.js";
-import { DB_BEATMAPS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
 	convertApiScore,
@@ -288,16 +289,7 @@ async function upsertBeatmapScores(
 	);
 
 	await recalculateScorePositionsForMaps(client, [beatmapId], [rulesetId]);
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	// TODO USE THE NEW TABLE !!
-	await client.query(`UPDATE ${DB_BEATMAPS_TABLE} SET last_scores_update = NOW() WHERE id = $1`, [beatmapId]);
+	await updateBeatmapScoresRetrievalDate(beatmapId, rulesetId, "last_scores_scrape");
 }
 
 // TODO return beaten score details to show cool live data

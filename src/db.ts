@@ -1,5 +1,6 @@
-import { Client, ClientBase, Pool, PoolClient, types } from "pg";
+import { ClientBase, Pool, PoolClient, QueryResult, types } from "pg";
 import {
+	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
 	DB_CONFIG_TABLE,
 	DB_HOST,
@@ -99,6 +100,17 @@ export async function getLastScoreId() {
 	);
 }
 
+export async function updateBeatmapScoresRetrievalDate(
+	beatmapId: number,
+	rulesetId: number,
+	column: "last_scores_scrape" | "last_scores_update" = "last_scores_update"
+) {
+	await dbPool.query(
+		`UPDATE ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} SET ${column} = NOW() WHERE beatmap_id = $1 AND ruleset_id = $2`,
+		[beatmapId, rulesetId]
+	);
+}
+
 export async function getInexistentPlayerIds(playerIds: number[]) {
 	return (
 		await dbPool.query(
@@ -145,13 +157,35 @@ export async function recalculateScorePositionsForMaps(client: ClientBase, beatm
 	);
 }
 
-export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[]) {
-	await client.query(
-		`
+export async function getBeatmapIdsWithPlayerScores(
+	client: ClientBase,
+	playerIds: number[]
+): Promise<Array<{ beatmap_id: number; ruleset_id: number }>> {
+	return (
+		(await client.query(
+			`
 		SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
 		WHERE user_id IN ($1)`,
-		[playerIds]
+			[playerIds]
+		)) as QueryResult<{ beatmap_id: number; ruleset_id: number }>
+	).rows;
+}
+
+export async function setAllPlayerScoresToPosition(client: ClientBase, playerIds: number[], position = 0) {
+	await client.query(
+		`
+		UPDATE ${DB_SCORES_TABLE}
+		SET position = $1
+		WHERE user_id IN ($2)`,
+		[position, playerIds]
 	);
+}
+
+export async function findNoLongerMiaPlayerIds(client: ClientBase) {
+	const nonMiaPlayerIds = new Array<number>();
+	// end_date in mia history is null, but is_mia in players is false?
+
+	return nonMiaPlayerIds;
 }
 
 export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
