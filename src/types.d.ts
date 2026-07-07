@@ -33,37 +33,28 @@ type IdBatch = { batch_no: number; ids: number[] };
 
 // ------------------------------------------
 
-////// Final table schema for pog!stats could be smaller, e.g.:
-// id            bigint PRIMARY KEY,
-// beatmap_id    bigint NOT NULL,
-// position      smallint NOT NULL,
-// accuracy      real NOT NULL,
-// timestamp     timestamptz NOT NULL,
-// score         integer NOT NULL,
-// score_classic bigint NOT NULL,
-// pp            real NOT NULL,
-// rank          char(2) NOT NULL,
-// mods          jsonb NOT NULL,
-// user_id       integer NOT NULL
-
+////// Final table schema for pog!stats could be smaller!
 ////// differences betweeen pekkie schema
 //     total_score - INTEGER instead of BIGINT
 //     total_score_without_mods - INTEGER instead of BIGINT
 //     pp - REAL instead of DOUBLE PRECISION
 //     build_id - dropped
+//     has_replay - dropped
+//     legacy_perfect - dropped
+//     legacy_total_score - dropped
+// 		 lazer - renamed to is_lazer
 //     + 3 other meta columns: is_scraped, retrieved_at, position, is_perma
 
 interface BeatmapScoreFull {
-	position: number; // meta, not from API, 0 = score is MIA (from potentially restricted player)
-	isScraped: boolean; // meta, not from API
+	position: number; // meta, not from API, 0 means score is MIA (from potentially restricted player)
+	isScraped: boolean; // meta, not from API - whether it came from /beatmaps/{id}/scores (scrape_scores script)
 	retrievedAt: Date; // meta, not from API
-	lazer: boolean; // meta, not from API (true only if build_id is present)
+	isLazer: boolean; // meta, not from API (true only if build_id is present)
 	isPerma: boolean; // meta, whether highest possible total_score on map
 	id: number;
 	userId: number;
 	rulesetId: number;
 	beatmapId: number;
-	hasReplay: boolean;
 	grade: ScoreRank;
 	accuracy: number; // 0-1
 	maxCombo: number;
@@ -71,9 +62,7 @@ interface BeatmapScoreFull {
 	classicTotalScore?: number; // seems to always be present
 	totalScoreWithoutMods?: number;
 	isPerfectCombo: boolean;
-	legacyPerfect: boolean;
 	pp?: number;
-	legacyTotalScore: number;
 	endedAt: Date;
 	data: BeatmapScoreAdditionalData;
 }
