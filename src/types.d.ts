@@ -30,6 +30,7 @@ type OsuAuthScope =
 	| "public";
 
 type IdBatch = { batch_no: number; ids: number[] };
+type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
 
 // ------------------------------------------
 

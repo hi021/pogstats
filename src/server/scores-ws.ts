@@ -155,7 +155,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
 
 	let totalProvenScoreCount = 0;
-	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: number; scores: WsScore[] }>();
+	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: RulesetId; scores: WsScore[] }>();
 	for (const beatenScoresByMap of beatenScoresByMaps) {
 		const beatmapId = beatenScoresByMap.beatmap_id;
 		const rulesetId = beatenScoresByMap.ruleset_id;
@@ -260,7 +260,7 @@ async function createTempScoresTable(client: PoolClient) {
 async function upsertBeatmapScores(
 	client: PoolClient,
 	beatmapId: number,
-	rulesetId: number,
+	rulesetId: RulesetId,
 	provenScores: BeatmapScoreFull[]
 ) {
 	if (!provenScores?.length) return;
@@ -288,7 +288,7 @@ async function upsertBeatmapScores(
 		 SELECT ${SCORE_TABLE_COLUMNS.join(", ")} FROM ws_scores_tmp`
 	);
 
-	await recalculateScorePositionsForMaps(client, [beatmapId], [rulesetId]);
+	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }]);
 	await updateBeatmapScoresRetrievalDate(beatmapId, rulesetId, "last_scores_scrape");
 }
 
@@ -298,7 +298,7 @@ async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<{
 		beatmap_id: number;
-		ruleset_id: number;
+		ruleset_id: RulesetId;
 		candidate_ids: number[];
 	}> = await dbPool.query(
 		`WITH candidates AS (

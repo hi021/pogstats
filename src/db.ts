@@ -13,6 +13,7 @@ import {
 	DB_USER,
 	DEV_ENV
 } from "./env.js";
+import { unnestObjectsIntoArrays } from "./shared.js";
 
 // TODO make sure this is respected in every script? I assume you have to make them use the dbPool here
 
@@ -37,7 +38,7 @@ export const dbPool = new Pool({
 });
 
 export async function withDbClient<T>(callback: (client: PoolClient) => Promise<T>) {
-	let client: PoolClient = null as unknown as PoolClient;
+	let client = null as unknown as PoolClient;
 	try {
 		client = await dbPool.connect();
 	} catch (e) {
@@ -79,6 +80,15 @@ export function buildUpdateAssignmentsString(columns: readonly string[]) {
 	for (const i in columns) {
 		if (i != "0") assignments += ",";
 		assignments += `${columns[i]} = EXCLUDED.${columns[i]}`;
+	}
+	return assignments;
+}
+
+export function buildUpdateCoalesceAssignmentsString(columns: readonly string[], table: string) {
+	let assignments = "";
+	for (const i in columns) {
+		if (i != "0") assignments += ",";
+		assignments += `${columns[i]} = COALESCE(EXCLUDED.${columns[i]}, ${table}.${columns[i]})`;
 	}
 	return assignments;
 }
@@ -135,21 +145,44 @@ export async function getInexistentBeatmapIds(beatmapIds: number[]) {
 	).rows.map(r => r.id) as number[];
 }
 
-export async function recalculateScorePositionsForMaps(client: ClientBase, beatmapIds: number[], rulesetIds: number[]) {
+export async function recalculateScorePositionsForMaps(client: ClientBase, beatmaps: BeatmapRuleset[]) {
+	const ids = unnestObjectsIntoArrays(beatmaps);
+	return recalculateScorePositionsForMapIds(client, ids.beatmap_id, ids.ruleset_id);
+}
+
+export async function recalculateScorePositionsForMapIds(
+	client: ClientBase,
+	beatmapIds: number[],
+	rulesetIds: RulesetId[]
+) {
+	if (!beatmapIds?.length || !rulesetIds?.length) return;
+
 	await client.query(
-		`WITH ranked AS (
+		`
+   	WITH input_raw AS (
       SELECT
-        id,
+        UNNEST($1::int[]) AS beatmap_id,
+        UNNEST($2::int[]) AS ruleset_id
+    ),
+    input AS (
+      SELECT beatmap_id, ruleset_id
+      FROM input_raw
+      GROUP BY beatmap_id, ruleset_id
+    ),
+    ranked AS (
+      SELECT
+        s.id,
         ROW_NUMBER() OVER (
-          PARTITION BY beatmap_id, ruleset_id
-          ORDER BY total_score DESC, ended_at ASC, id ASC
+          PARTITION BY s.beatmap_id, s.ruleset_id
+          ORDER BY s.total_score DESC, s.ended_at ASC, s.id ASC
         ) AS pos
-      FROM ${DB_SCORES_TABLE}
-      WHERE beatmap_id IN ($1)
-        AND ruleset_id IN ($2)
-				AND position > 0
+      FROM ${DB_SCORES_TABLE} s
+      JOIN input i
+        ON s.beatmap_id = i.beatmap_id
+       AND s.ruleset_id = i.ruleset_id
+      WHERE s.position > 0
     )
-    UPDATE ${DB_SCORES_TABLE} s
+    UPDATE ${DB_SCORES_TABLE} AS s
     SET position = ranked.pos
     FROM ranked
     WHERE s.id = ranked.id`,
@@ -157,28 +190,28 @@ export async function recalculateScorePositionsForMaps(client: ClientBase, beatm
 	);
 }
 
-export async function getBeatmapIdsWithPlayerScores(
-	client: ClientBase,
-	playerIds: number[]
-): Promise<Array<{ beatmap_id: number; ruleset_id: number }>> {
-	return (
-		(await client.query(
-			`
-		SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
-		WHERE user_id IN ($1)`,
-			[playerIds]
-		)) as QueryResult<{ beatmap_id: number; ruleset_id: number }>
-	).rows;
+export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[]) {
+	const beatmaps: QueryResult<BeatmapRuleset> = await client.query(
+		`
+			SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
+			WHERE user_id = ANY($1::INTEGER[])`,
+		[playerIds]
+	);
+	return beatmaps.rows;
 }
 
-export async function setAllPlayerScoresToPosition(client: ClientBase, playerIds: number[], position = 0) {
-	await client.query(
+export async function setAllPlayerScoresPosition(client: ClientBase, playerIds: number[], position = 0) {
+	if (!playerIds?.length) return [];
+
+	const beatmaps: QueryResult<BeatmapRuleset> = await client.query(
 		`
-		UPDATE ${DB_SCORES_TABLE}
+		UPDATE ${DB_SCORES_TABLE} s
 		SET position = $1
-		WHERE user_id IN ($2)`,
+		WHERE s.user_id = ANY($2::INTEGER[])
+		RETURNING s.beatmap_id, s.ruleset_id`,
 		[position, playerIds]
 	);
+	return beatmaps.rows;
 }
 
 export async function findNoLongerMiaPlayerIds(client: ClientBase) {
@@ -189,55 +222,46 @@ export async function findNoLongerMiaPlayerIds(client: ClientBase) {
 }
 
 export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
+	if (!miaPlayers?.size) return;
+
 	const paramGroups = [];
 	const values = [];
 	let i = 0;
 
 	for (const [userId, startDate] of miaPlayers) {
-		paramGroups.push(`($${++i}, $${++i})`);
+		paramGroups.push(`($${++i}::INTEGER, $${++i}::TIMESTAMPTZ)`);
 		values.push(userId, startDate);
 	}
 
-	const sql = `
-    WITH incoming(user_id, start_date) AS (
+	await client.query(
+		`
+		WITH input(user_id, start_date) AS (
       VALUES ${paramGroups.join(",")}
     )
     INSERT INTO ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id, start_date)
     SELECT i.user_id, i.start_date
-    FROM incoming i
+    FROM input i
     WHERE NOT EXISTS (
       SELECT 1
       FROM ${DB_PLAYER_MIA_HISTORY_TABLE} h
       WHERE h.user_id = i.user_id
         AND h.end_date IS NULL
-    );
-  `;
-
-	await client.query(sql, values);
+    )`,
+		values
+	);
 }
 
-export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
-	const paramGroups = [];
-	const values = [];
-	let i = 0;
+export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayerIds: number[]) {
+	if (!miaPlayerIds?.length) return;
 
-	for (const [userId, endDate] of miaPlayers) {
-		paramGroups.push(`($${++i}, $${++i})`);
-		values.push(userId, endDate);
-	}
-
-	const sql = `
-    WITH incoming(user_id, end_date) AS (
-      VALUES ${paramGroups.join(",")}
-    )
+	await client.query(
+		`
     UPDATE ${DB_PLAYER_MIA_HISTORY_TABLE} h
-    SET end_date = i.end_date
-    FROM incoming i
-    WHERE h.user_id = i.user_id
-      AND h.end_date IS NULL;
-  `;
-
-	await client.query(sql, values);
+    SET end_date = NOW()
+    WHERE h.user_id IN ($1)
+      AND h.end_date IS NULL`,
+		[miaPlayerIds]
+	);
 }
 
 type BeatenScoreParams = {

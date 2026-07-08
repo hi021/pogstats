@@ -1,33 +1,27 @@
 import { resolve } from "path";
-import { ClientBase, Pool, PoolClient, QueryResult } from "pg";
+import { PoolClient, QueryResult } from "pg";
 import { fileURLToPath } from "url";
 import {
-	buildUpdateAssignmentsString,
+	buildUpdateCoalesceAssignmentsString,
+	dbPool,
 	findNoLongerMiaPlayerIds,
-	getBeatmapIdsWithPlayerScores,
 	insertNewMiaPlayers,
 	insertNoLongerMiaPlayers,
-	recalculateScorePositionsForMaps,
-	setAllPlayerScoresToPosition,
+	recalculateScorePositionsForMapIds,
+	setAllPlayerScoresPosition,
 	withDbClientTransaction
 } from "../db.js";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PLAYERS_TABLE, DB_PORT, DB_USER, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
-import { PLAYER_TABLE_COLUMNS, preparePlayersTableValuesAndParamPlaceholders, splitIntoBatches } from "../shared.js";
+import { DB_PLAYERS_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
+import {
+	PLAYER_TABLE_COLUMNS,
+	preparePlayersTableValuesAndParamPlaceholders,
+	splitIntoBatches,
+	unnestObjectsIntoArrays
+} from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, rateLimit } from "./shared.js";
 
 const PLAYER_BATCH_SIZE = 50;
-const dbPool = new Pool({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME,
-	min: 1,
-	connectionTimeoutMillis: 20000,
-	allowExitOnIdle: true
-});
-
 let lastFetchTimestamp = 0;
 
 async function getRankingPlayerIdBatches(): Promise<IdBatch[] | null> {
@@ -53,8 +47,8 @@ async function getRankingPlayerIdBatches(): Promise<IdBatch[] | null> {
 		? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
 		: 0;
 	console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
-	return idCount ? idBatches.rows : null;
-	// [{ batch_no: 1, ids: [39828, 23574301] }]
+	// return idCount ? idBatches.rows : null;
+	return [{ batch_no: 1, ids: [39828, 23574301] }];
 }
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {
@@ -66,9 +60,9 @@ async function lookupPlayers(headers: Record<string, string>, playerIds: number[
 }
 
 function convertPlayers(players: ApiUserLookup[], retrievedAt?: Date): Player[] {
+	retrievedAt = retrievedAt || new Date();
 	const convertedPlayers = new Array<Player>(players.length);
-	for (let i = 0; i < players.length; ++i)
-		convertedPlayers[i] = convertApiPlayerLookup(players[i], retrievedAt || new Date());
+	for (let i = 0; i < players.length; ++i) convertedPlayers[i] = convertApiPlayerLookup(players[i], retrievedAt);
 
 	return convertedPlayers;
 }
@@ -99,6 +93,7 @@ export async function scrapePlayers(ids?: number[]) {
 		const miaPlayers = new Map<number, Date>();
 
 		for (const batch of playerIdBatches) {
+			// TODO: use respektive's osu-score-rank-api and osu! api as a fallback to save some calls
 			console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
 			const apiPlayers = await lookupPlayers(headers, batch.ids);
 
@@ -132,35 +127,44 @@ export async function scrapePlayers(ids?: number[]) {
 
 			await client.query(`
 				INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
-				SELECT ${PLAYER_TABLE_COLUMNS.join(", ")} FROM scrape_players_tmp tmp
-					WHERE tmp.is_mia = FALSE
-					OR (
-						tmp.is_mia = TRUE
-						AND EXISTS (SELECT 1 FROM ${DB_PLAYERS_TABLE} p WHERE p.id = tmp.id)
-						)
-				ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(PLAYER_TABLE_COLUMNS)}
+				SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
+				FROM scrape_players_tmp tmp
+					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
+				WHERE tmp.is_mia = FALSE
+					OR (tmp.is_mia = TRUE AND p.id IS NOT NULL)
+				ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}
 				`);
 		});
 		console.log(`[scrape_players] Finished inserting ${playerMap.size} players into the database`);
 
-		return; // TODO
-		if (!miaPlayers.size) return;
-		console.log(
-			`[scrape_players] Player(s) with ID(s) ${miaPlayers.keys()} not in the API response, marking all as MIA`
-		);
+		const miaPlayerIds = [...miaPlayers.keys()];
+		if (miaPlayerIds.length)
+			console.log(`[scrape_players] Player(s) with ID(s) ${miaPlayerIds} not in the API response, marking all as MIA`);
 
 		await withDbClientTransaction(async client => {
-			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client);
-			// TODO send event to socket to notify about MIA and non MIA changes
-			await setAllPlayerScoresToPosition(client, [...miaPlayers.keys()], 0);
-			await setAllPlayerScoresToPosition(client, nonMiaPlayerIds, 100);
-			// TODO use getBeatmapIdsWithPlayerScores to find beatmaps that need position reindexing and create a set of unique ids with the ones from miaPlayers
-			const miaBeatmaps = await getBeatmapIdsWithPlayerScores();
-			// TODO use getBeatmapIdsWithPlayerScores to find beatmaps that need position reindexing and create a set of unique ids with the ones from nonMiaPlayers
+			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0);
 			await insertNewMiaPlayers(client, miaPlayers);
-			await insertNoLongerMiaPlayers(client);
-			// TODO reindex beatmap positions
-			await recalculateScorePositionsForMaps(client);
+
+			// TODO v
+			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client);
+			if (!miaPlayerIds.length && !nonMiaPlayerIds.length) return;
+
+			const nonMiaBeatmaps = await setAllPlayerScoresPosition(client, nonMiaPlayerIds, 100);
+			await insertNoLongerMiaPlayers(client, nonMiaPlayerIds);
+
+			// TODO send event to socket to notify about MIA and non MIA changes
+
+			const miaBeatmapsUnnested = miaBeatmaps.length
+				? unnestObjectsIntoArrays(miaBeatmaps)
+				: { beatmap_id: [], ruleset_id: [] };
+			const nonMiaBeatmapsUnnested = nonMiaBeatmaps.length
+				? unnestObjectsIntoArrays(nonMiaBeatmaps)
+				: { beatmap_id: [], ruleset_id: [] };
+			await recalculateScorePositionsForMapIds(
+				client,
+				[...miaBeatmapsUnnested.beatmap_id, ...nonMiaBeatmapsUnnested.beatmap_id],
+				[...miaBeatmapsUnnested.ruleset_id, ...nonMiaBeatmapsUnnested.ruleset_id]
+			);
 		});
 	} catch (e) {
 		console.error("Error scraping players:\n", e);

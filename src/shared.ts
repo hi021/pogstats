@@ -238,7 +238,7 @@ export function sortScores(a: BeatmapScoreFull, b: BeatmapScoreFull) {
 
 export function sortWsScores(a: WsScore, b: WsScore) {
 	if (a.total_score != b.total_score) return b.total_score - a.total_score;
-	if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // comparing ISO date string is fine as long as they are of the same format
+	if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // comparing ISO date strings is fine as long as they are of the same format
 	return a.id - b.id;
 }
 
@@ -317,4 +317,18 @@ export function splitIntoBatches(array: number[], batchSize: number): IdBatch[] 
 		});
 	}
 	return batches;
+}
+
+export function unnestObjectsIntoArrays<T extends Record<string, unknown>>(objs: T[], exemplaryObj?: T) {
+	exemplaryObj = exemplaryObj || objs[0];
+	const props: Array<keyof T> = Object.keys(exemplaryObj);
+	const result = {} as { [K in keyof T]: Array<T[K]> };
+
+	for (const prop of props) result[prop] = new Array(objs.length);
+
+	for (let i = 0; i < objs.length; ++i) {
+		for (const prop of props) result[prop][i] = objs[i][prop];
+	}
+
+	return result;
 }
