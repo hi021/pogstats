@@ -47,8 +47,7 @@ async function getRankingPlayerIdBatches(): Promise<IdBatch[] | null> {
 		? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
 		: 0;
 	console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
-	// return idCount ? idBatches.rows : null;
-	return [{ batch_no: 1, ids: [39828, 23574301] }];
+	return idCount ? idBatches.rows : null;
 }
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {
@@ -145,9 +144,10 @@ export async function scrapePlayers(ids?: number[]) {
 			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0);
 			await insertNewMiaPlayers(client, miaPlayers);
 
-			// TODO v
 			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client);
-			if (!miaPlayerIds.length && !nonMiaPlayerIds.length) return;
+			if (nonMiaPlayerIds.length)
+				console.log(`[scrape_players] Player(s) with ID(s) ${nonMiaPlayerIds} are no longer MIA`);
+			else if (!miaPlayerIds.length) return;
 
 			const nonMiaBeatmaps = await setAllPlayerScoresPosition(client, nonMiaPlayerIds, 100);
 			await insertNoLongerMiaPlayers(client, nonMiaPlayerIds);

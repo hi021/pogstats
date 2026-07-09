@@ -80,7 +80,7 @@ interface ApiUser {
 	is_supporter: boolean;
 	last_visit?: string;
 	pm_friends_only: boolean;
-	profile_colour?: string;
+	profile_colour: string | null;
 	username: string;
 
 	// extended:
@@ -185,7 +185,7 @@ interface ApiUserGroup {
 	is_probationary: boolean;
 	name: string;
 	short_name: string;
-	playmodes?: string[];
+	playmodes: string[] | null;
 }
 
 interface ApiUserTeam {

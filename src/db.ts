@@ -215,10 +215,12 @@ export async function setAllPlayerScoresPosition(client: ClientBase, playerIds: 
 }
 
 export async function findNoLongerMiaPlayerIds(client: ClientBase) {
-	const nonMiaPlayerIds = new Array<number>();
-	// end_date in mia history is null, but is_mia in players is false?
+	const result: QueryResult<{ id: number }> = await client.query(`
+		SELECT p.id FROM ${DB_PLAYERS_TABLE} p
+		JOIN ${DB_PLAYER_MIA_HISTORY_TABLE} h ON h.user_id = p.id AND h.end_date IS NULL
+		WHERE p.is_mia = false`);
 
-	return nonMiaPlayerIds;
+	return result.rows.map(row => row.id);
 }
 
 export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
@@ -258,7 +260,7 @@ export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayerIds:
 		`
     UPDATE ${DB_PLAYER_MIA_HISTORY_TABLE} h
     SET end_date = NOW()
-    WHERE h.user_id IN ($1)
+    WHERE h.user_id = ANY($1::INTEGER[])
       AND h.end_date IS NULL`,
 		[miaPlayerIds]
 	);

@@ -177,7 +177,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
 		const dedupedScores = dedupeTopScoresByUser(mapScores);
 		const convertedScores = dedupedScores.map(score =>
-			convertApiScore(score, /* positions set later in recalculateScorePositionsForMap */ 0, false)
+			convertApiScore(score, /* positions set later in recalculateScorePositionsForMap */ -1, false)
 		);
 		await withDbClientTransaction(async client => {
 			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
