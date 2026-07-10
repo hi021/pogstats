@@ -12,11 +12,7 @@ import {
 	withDbClientTransaction
 } from "../db.js";
 import { DB_PLAYERS_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
-import {
-	PLAYER_TABLE_COLUMNS,
-	splitIntoBatches,
-	unnestObjectsIntoArrays
-} from "../shared.js";
+import { PLAYER_TABLE_COLUMNS, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, rateLimit } from "./shared.js";
 
@@ -88,7 +84,10 @@ async function insertPlayerBatch(
 	batch: Array<Player | MissingPlayer>,
 	exemplaryPlayer: Player | MissingPlayer
 ) {
-	const arrays = unnestObjectsIntoArrays(batch as Array<Record<string, unknown>>, exemplaryPlayer as Record<string, unknown>);
+	const arrays = unnestObjectsIntoArrays(
+		batch as Array<Record<string, unknown>>,
+		exemplaryPlayer as Record<string, unknown>
+	);
 	await client.query(
 		`
       INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")})

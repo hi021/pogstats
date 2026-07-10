@@ -168,12 +168,13 @@ async function getBeatmapIds(maxRetrievedAt?: Date): Promise<number[]> {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
 		await client.query(
-			`SELECT b.id
+			`
+			SELECT b.id
 			FROM ${DB_BEATMAPS_TABLE} b
 			LEFT JOIN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} u
 				ON u.beatmap_id = b.id AND u.ruleset_id = 0
 			WHERE b.status IN (1,2,4)
-				AND b.mode = 0
+				AND b.ruleset_id = 0
 				${maxRetrievedAt ? `AND (u.last_scores_scrape IS NULL OR u.last_scores_scrape < $1)` : ""}
 			ORDER BY b.id`,
 			params

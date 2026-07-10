@@ -70,7 +70,7 @@ const OUTPUT_COLUMNS: Readonly<
 	title: { column: "title", type: "string" },
 	creator: { column: "creator", type: "string" },
 	creatorId: { column: "creator_id", type: "number" },
-	mode: { column: "mode", type: "number" },
+	rulesetId: { column: "mode", type: "number" },
 	cs: { column: "cs", type: "number" },
 	od: { column: "od", type: "number" },
 	ar: { column: "ar", type: "number" },
@@ -135,7 +135,7 @@ function buildBeatmapArrays(batch: Beatmap[]) {
 		versions: batch.map(b => b.version),
 		creators: batch.map(b => b.creator),
 		creatorIds: batch.map(b => b.creatorId),
-		modes: batch.map(b => b.mode),
+		rulesetIds: batch.map(b => b.rulesetId),
 		approvedDates: batch.map(b => b.approvedDate),
 		starRatings: batch.map(b => b.starRating),
 		totalLengths: batch.map(b => b.totalLength),
@@ -152,7 +152,8 @@ async function insertBeatmapBatch(batch: Beatmap[]) {
 	const arrays = buildBeatmapArrays(batch);
 
 	// TODO DO UPDATE instead of DO NOTHING based on cli flag
-	await dbPool.query(`
+	await dbPool.query(
+		`
     INSERT INTO ${DB_BEATMAPS_TABLE} (${BEATMAP_TABLE_COLUMNS.join(", ")})
     SELECT *
     FROM UNNEST(
@@ -184,7 +185,7 @@ async function insertBeatmapBatch(batch: Beatmap[]) {
 			arrays.versions,
 			arrays.creators,
 			arrays.creatorIds,
-			arrays.modes,
+			arrays.rulesetIds,
 			arrays.approvedDates,
 			arrays.starRatings,
 			arrays.totalLengths,

@@ -143,7 +143,7 @@ interface Beatmap {
 	version: string; // diff name
 	creator: string;
 	creatorId: number;
-	mode: RulesetId;
+	rulesetId: RulesetId;
 	approvedDate: Date;
 	starRating: number;
 	totalLength: number; // in seconds

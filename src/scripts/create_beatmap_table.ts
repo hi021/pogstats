@@ -23,7 +23,7 @@ async function createTables() {
 			version					TEXT NOT NULL,
 			creator 				TEXT NOT NULL,
 			creator_id 			INTEGER NOT NULL,
-			mode 						SMALLINT NOT NULL,
+			ruleset_id			SMALLINT NOT NULL,
 			approved_date 	TIMESTAMPTZ,
 			star_rating 		REAL,
 			total_length 		SMALLINT NOT NULL,
