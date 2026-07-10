@@ -67,14 +67,14 @@ async function createTempPlayersTable(client: ClientBase) {
 	await client.query(`
 		CREATE TEMPORARY TABLE IF NOT EXISTS scrape_players_tmp (
 			id 							INTEGER PRIMARY KEY,
-			username				TEXT,
-			country_code		CHAR(2),
-			is_active				BOOLEAN,
+			username				TEXT NOT NULL,
+			country_code		CHAR(2) NOT NULL,
+			is_active				BOOLEAN NOT NULL,
 			team_id					INTEGER,
 			cover_url				TEXT,
-			retrieved_at		TIMESTAMPTZ,
-			is_from_osu_api	BOOLEAN,
-			is_mia				 	BOOLEAN
+			retrieved_at		TIMESTAMPTZ NOT NULL,
+			is_from_osu_api	BOOLEAN NOT NULL,
+			is_mia				 	BOOLEAN DEFAULT FALSE
 		) ON COMMIT DELETE ROWS`);
 	await client.query("TRUNCATE scrape_players_tmp");
 }
@@ -88,6 +88,7 @@ async function insertPlayerBatch(
 		batch as Array<Record<string, unknown>>,
 		exemplaryPlayer as Record<string, unknown>
 	);
+
 	await client.query(
 		`
       INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")})
@@ -123,9 +124,9 @@ export async function scrapePlayers(ids?: number[]) {
 		if (!playerIdBatches) return;
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
-		const playerMap = new Map<number, Player | MissingPlayer>();
+		const playerMap = new Map<number, Player>();
 		const miaPlayers = new Map<number, Date>();
-		let exemplaryPlayer: Player | MissingPlayer;
+		let exemplaryPlayer: Player;
 
 		for (const batch of playerIdBatches) {
 			try {
@@ -141,8 +142,8 @@ export async function scrapePlayers(ids?: number[]) {
 				for (const id of batch.ids) {
 					const player = convertedPlayers.find(p => p.id == id); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
 					if (!player) miaPlayers.set(id, retrievedAt);
-					else if (!exemplaryPlayer) exemplaryPlayer = { id, retrievedAt, isFromOsuApi: true, isMia: true };
-					playerMap.set(id, player ?? { id, retrievedAt, isFromOsuApi: true, isMia: true });
+					else if (!exemplaryPlayer) exemplaryPlayer = { id, countryCode: "XX", isActive: false, username: "<POGSTATS::UNKNOWN>", retrievedAt, isFromOsuApi: true, isMia: true };
+					playerMap.set(id, player ?? { id, countryCode: "XX", isActive: false, username: "<POGSTATS::UNKNOWN>", retrievedAt, isFromOsuApi: true, isMia: true });
 				}
 
 				await rateLimit(
@@ -158,6 +159,7 @@ export async function scrapePlayers(ids?: number[]) {
 			}
 		}
 
+		// TODO: insert players into the database straight away to avoid problems with huge batches of new players from scores-ws!!
 		const players = [...playerMap.values()];
 		const miaPlayerIds = [...miaPlayers.keys()];
 		await withDbClientTransaction(async client => {
@@ -172,9 +174,6 @@ export async function scrapePlayers(ids?: number[]) {
 				INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
 				SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
 				FROM scrape_players_tmp tmp
-					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
-				WHERE tmp.is_mia = FALSE
-					OR (tmp.is_mia = TRUE AND p.id IS NOT NULL)
 				ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}
 				`);
 		});
