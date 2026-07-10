@@ -3,18 +3,10 @@
 // use this regex to check for maps with newlines in their tags that break this import
 // just replace all instances with blank
 
-import { Client } from "pg";
-import { DB_BEATMAPS_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
+import { dbPool } from "../db.js";
+import { DB_BEATMAPS_TABLE } from "../env.js";
 import { BEATMAP_TABLE_COLUMNS } from "../shared.js";
 import { readFileByLine } from "./shared.js";
-
-const client = new Client({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
 
 const INPUT_COLUMNS: Readonly<Array<keyof ApiBeatmapDbBeatmap>> = Object.freeze([
 	"beatmap_id",
@@ -160,8 +152,7 @@ async function insertBeatmapBatch(batch: Beatmap[]) {
 	const arrays = buildBeatmapArrays(batch);
 
 	// TODO DO UPDATE instead of DO NOTHING based on cli flag
-	await client.query(
-		`
+	await dbPool.query(`
     INSERT INTO ${DB_BEATMAPS_TABLE} (${BEATMAP_TABLE_COLUMNS.join(", ")})
     SELECT *
     FROM UNNEST(
@@ -208,7 +199,6 @@ async function insertBeatmapBatch(batch: Beatmap[]) {
 }
 
 async function main() {
-	await client.connect();
 	const beatmaps: Beatmap[] = [];
 
 	// TODO custom path via flag, option to truncate, option to skip 1st header row
@@ -224,7 +214,6 @@ async function main() {
 		console.log(`Inserted ${i + batch.length} / ${beatmaps.length} beatmaps`);
 	}
 
-	client.end();
 	console.log("Beatmap import done :)");
 }
 

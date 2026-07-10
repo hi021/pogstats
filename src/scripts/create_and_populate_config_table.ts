@@ -1,5 +1,6 @@
-import { Pool } from "pg";
-import { DB_CONFIG_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
+import { PoolClient } from "pg";
+import { dbPool } from "../db.js";
+import { DB_CONFIG_TABLE } from "../env.js";
 import { parseArgs } from "../shared.js";
 
 const FLAG_DEFINITIONS = Object.freeze({
@@ -40,18 +41,12 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "global_message", valueText: "" }
 ]);
 
-const dbPool = new Pool({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
+let client: PoolClient;
 
 async function createConfigTable() {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);
 
-	await dbPool.query(`
+	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_CONFIG_TABLE} (
       key TEXT PRIMARY KEY,
 			value_int INTEGER,
@@ -70,7 +65,7 @@ async function populateConfigTable() {
 	for (const config of INITIAL_CONFIG) {
 		promises.push(
 			(async () => {
-				await dbPool.query(
+				await client.query(
 					`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
 					[config.key, config.valueInt, config.valueText, config.valueJson ? JSON.stringify(config.valueJson) : null]
 				);
@@ -86,18 +81,19 @@ async function main() {
 	const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
 
 	try {
+		client = await dbPool.connect();
 		await createConfigTable();
 
 		if (parsedFlags.reset) {
 			console.log(`Truncating ${DB_CONFIG_TABLE} table`);
-			await dbPool.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
+			await client.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
 		}
 
 		await populateConfigTable();
 	} catch (error) {
 		console.error("Error creating config table:", error);
 	} finally {
-		await dbPool.end();
+		client.release();
 	}
 }
 

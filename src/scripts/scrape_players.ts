@@ -1,5 +1,5 @@
 import { resolve } from "path";
-import { ClientBase, PoolClient, QueryResult } from "pg";
+import { ClientBase, QueryResult } from "pg";
 import { fileURLToPath } from "url";
 import {
 	buildUpdateCoalesceAssignmentsString,
@@ -14,7 +14,6 @@ import {
 import { DB_PLAYERS_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
 import {
 	PLAYER_TABLE_COLUMNS,
-	preparePlayersTableValuesAndParamPlaceholders,
 	splitIntoBatches,
 	unnestObjectsIntoArrays
 } from "../shared.js";
@@ -89,7 +88,7 @@ async function insertPlayerBatch(
 	batch: Array<Player | MissingPlayer>,
 	exemplaryPlayer: Player | MissingPlayer
 ) {
-	const arrays = unnestObjectsIntoArrays(batch, exemplaryPlayer);
+	const arrays = unnestObjectsIntoArrays(batch as Array<Record<string, unknown>>, exemplaryPlayer as Record<string, unknown>);
 	await client.query(
 		`
       INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")})
@@ -131,7 +130,7 @@ export async function scrapePlayers(ids?: number[]) {
 
 		for (const batch of playerIdBatches) {
 			try {
-				// TODO: use respektive's osu-score-rank-api and osu! api as a fallback to save some calls
+				// TODO: use respektive's osu-score-rank-api and osu! api only as a fallback to save some calls
 				console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
 				const apiPlayers = await lookupPlayers(headers, batch.ids);
 
@@ -213,8 +212,6 @@ export async function scrapePlayers(ids?: number[]) {
 		});
 	} catch (e) {
 		console.error("Error scraping players:\n", e);
-	} finally {
-		await dbPool.end();
 	}
 }
 

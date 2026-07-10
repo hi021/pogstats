@@ -1,5 +1,6 @@
-import { Pool } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_RANKING_TYPES_TABLE, DB_USER } from "../env.js";
+import { PoolClient } from "pg";
+import { dbPool } from "../db.js";
+import { DB_RANKING_TYPES_TABLE } from "../env.js";
 import {
 	buildPositionThresholdCode,
 	buildPositionThresholdName,
@@ -13,14 +14,6 @@ interface ProtoRankingType {
 	codeTemplate: string;
 }
 
-const dbPool = new Pool({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
-
 const PROTO_RANKING_TYPES: Readonly<ProtoRankingType[]> = Object.freeze([
 	{ nameTemplate: "%t% count", codeTemplate: "%t%" },
 	{ nameTemplate: "Weighted %t% count", codeTemplate: "%t%-weighted" },
@@ -29,6 +22,8 @@ const PROTO_RANKING_TYPES: Readonly<ProtoRankingType[]> = Object.freeze([
 	{ nameTemplate: "%t% ranked score", codeTemplate: "%t%-ranked-score" },
 	{ nameTemplate: "%t% SS count", codeTemplate: "%t%-ss" }
 ]);
+
+let client: PoolClient;
 
 function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 	const baseIdMultiplier = 100;
@@ -67,7 +62,7 @@ function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 async function createRankingTypesTable() {
 	console.log(`Attempting to create ${DB_RANKING_TYPES_TABLE} table`);
 
-	await dbPool.query(`
+	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_RANKING_TYPES_TABLE} (
       id SMALLINT PRIMARY KEY,
 			ruleset_id SMALLINT NOT NULL,
@@ -75,7 +70,7 @@ async function createRankingTypesTable() {
 			name TEXT NOT NULL,
 			code TEXT NOT NULL
     )`);
-	await dbPool.query(`
+	await client.query(`
 		CREATE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_position_threshold ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, position_threshold);
 		CREATE UNIQUE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_code_idx ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, code);`);
 
@@ -90,7 +85,7 @@ async function populateRankingTypesTable() {
 	for (const rankingType of rankingTypes) {
 		promises.push(
 			(async () => {
-				await dbPool.query(
+				await client.query(
 					`INSERT INTO ${DB_RANKING_TYPES_TABLE} (id, ruleset_id, position_threshold, name, code) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
 					[rankingType.id, rankingType.rulesetId, rankingType.positionThreshold, rankingType.name, rankingType.code]
 				);
@@ -104,12 +99,13 @@ async function populateRankingTypesTable() {
 
 async function main() {
 	try {
+		client = await dbPool.connect();
 		await createRankingTypesTable();
 		await populateRankingTypesTable();
 	} catch (error) {
 		console.error("Error creating ranking tables:\n", error);
 	} finally {
-		await dbPool.end();
+		client.release();
 	}
 }
 
