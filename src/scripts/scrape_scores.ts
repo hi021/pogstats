@@ -5,7 +5,7 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { SCORE_TABLE_COLUMNS, updateBeatmapScoresRetrievalDate } from "../db.js";
+import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL, updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
@@ -195,7 +195,7 @@ async function scrapeScores() {
 		});
 
 		await client.connect();
-		if (!SKIP_DUMP_BEFORE_SCRAPE) await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS, client, infoLogStream);
+		if (!SKIP_DUMP_BEFORE_SCRAPE) await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream);
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
 		const beatmapIds = await getBeatmapIds(ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE);

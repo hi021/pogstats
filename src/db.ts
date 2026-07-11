@@ -15,12 +15,33 @@ import {
 } from "./env.js";
 import { unnestObjectsIntoArrays } from "./shared.js";
 
-export const SCORE_TABLE_COLUMNS = Object.freeze([
+export const SCORE_TABLE_COLUMNS_ALL = Object.freeze([
 	"position",
 	"is_scraped",
 	"retrieved_at",
 	"is_lazer",
 	"is_perma",
+	"id",
+	"user_id",
+	"ruleset_id",
+	"beatmap_id",
+	"grade",
+	"accuracy",
+	"max_combo",
+	"total_score",
+	"classic_total_score",
+	"total_score_without_mods",
+	"is_perfect_combo",
+	"pp",
+	"ended_at",
+	"data"
+]);
+
+export const SCORE_TABLE_COLUMNS = Object.freeze([
+	"position",
+	"is_scraped",
+	"retrieved_at",
+	"is_lazer",
 	"id",
 	"user_id",
 	"ruleset_id",
@@ -176,8 +197,9 @@ export async function updateBeatmapScoresRetrievalDate(
 	rulesetId: number,
 	column: "last_scores_scrape" | "last_scores_update" = "last_scores_update"
 ) {
-	await client.query(`
-		INSERT INTO ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} (${BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS.slice(0,2).join(", ")}, ${column})
+	await client.query(
+		`
+		INSERT INTO ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} (${BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS.slice(0, 2).join(", ")}, ${column})
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (beatmap_id, ruleset_id) DO UPDATE SET ${column} = EXCLUDED.${column}`,
 		[beatmapId, rulesetId]

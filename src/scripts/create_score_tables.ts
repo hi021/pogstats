@@ -22,13 +22,22 @@ const client = new Client({
 async function createScoreTables() {
 	console.log(`Attempting to create ${DB_SCORES_TABLE} and ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} tables`);
 
+	// is_perma - 1.972464 is the exact value of the highest possible mod multiplier
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_SCORES_TABLE} (
       position      						SMALLINT NOT NULL,
       is_scraped      					BOOLEAN NOT NULL,
       retrieved_at     					TIMESTAMPTZ NOT NULL,
       is_lazer      						BOOLEAN NOT NULL,
-      is_perma      						BOOLEAN NOT NULL DEFAULT FALSE,
+      is_perma      						BOOLEAN GENERATED ALWAYS AS (
+																	is_lazer = true
+																		and grade = 'XH'
+																		and total_score >= round(
+																							(1_000_000 +
+																								coalesce((data->'maximumStatistics'->>'small_bonus')::smallint, 0) * 10 +
+																								coalesce((data->'maximumStatistics'->>'large_bonus')::smallint, 0) * 50)
+																							* 1.972464)
+																) STORED,
       id                  			BIGINT PRIMARY KEY DEFERRABLE INITIALLY DEFERRED,
       user_id             			INTEGER NOT NULL,
       ruleset_id          			SMALLINT NOT NULL,

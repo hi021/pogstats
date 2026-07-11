@@ -177,7 +177,11 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
 		const dedupedScores = dedupeTopScoresByUser(mapScores);
 		const convertedScores = dedupedScores.map(score =>
-			convertApiScore(score, /* positions set later in upsertBeatmapScores > recalculateScorePositionsForMap */ -1, false)
+			convertApiScore(
+				score,
+				/* positions set later in upsertBeatmapScores > recalculateScorePositionsForMap */ -1,
+				false
+			)
 		);
 		await withDbClientTransaction(async client => {
 			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
@@ -232,13 +236,13 @@ function dedupeTopScoresByUser(scores: WsScore[]) {
 
 // Single temp table prevents concurrency (processing multiple beatmaps at once) I think
 async function createTempScoresTable(client: PoolClient) {
+	// this omits is_perma since it'll get calculated on insertion into the actual table
 	await client.query(`
 		CREATE TEMPORARY TABLE IF NOT EXISTS ws_scores_tmp (
       position      						SMALLINT NOT NULL,
       is_scraped      					BOOLEAN NOT NULL,
       retrieved_at     					TIMESTAMPTZ NOT NULL,
       is_lazer      						BOOLEAN NOT NULL,
-      is_perma      						BOOLEAN NOT NULL DEFAULT FALSE,
       id                  			BIGINT PRIMARY KEY,
       user_id             			INTEGER NOT NULL,
       ruleset_id          			SMALLINT NOT NULL,
@@ -293,7 +297,6 @@ async function upsertBeatmapScores(
 }
 
 // TODO return beaten score details to show cool live data
-// TODO calculate is_perma here?
 async function getBeatenScoresByMap(scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
 	const scoreList: QueryResult<{

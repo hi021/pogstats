@@ -3,7 +3,6 @@ import { BEATMAP_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db.js";
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
 
-// TODO calculate is_perma here?
 export function convertApiScore(
 	apiScore: ApiScore | WsScore,
 	position: number,
@@ -95,7 +94,6 @@ export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScor
 			score.isScraped,
 			score.retrievedAt,
 			score.isLazer,
-			score.isPerma,
 			score.id,
 			score.userId,
 			score.rulesetId,
