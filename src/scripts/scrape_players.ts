@@ -11,34 +11,50 @@ import {
 	setAllPlayerScoresPosition,
 	withDbClientTransaction
 } from "../db.js";
-import { DB_PLAYERS_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
-import { PLAYER_TABLE_COLUMNS, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
+import { DB_PLAYERS_TABLE, DB_SCORES_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
+import { PLAYER_TABLE_COLUMNS, splitIntoBatches, unnestObjectsIntoArrays, parseArgs } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
-import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, rateLimit } from "./shared.js";
+import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, getMinDate, rateLimit } from "./shared.js";
 
 const INSERT_BATCH_SIZE = 12500;
 const PLAYER_BATCH_SIZE = 50;
+const FLAG_DEFINITIONS = Object.freeze({
+	minDate: {
+		cli: "--minDate <date>",
+		description: "Only scrape players whose retrieved_at is NULL or before this date (ISO 8601 or YYYY-MM-DD)",
+		takesValue: true
+	}
+} as const);
+
+const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
+const MAX_RETRIEVED_AT = getMinDate(parsedFlags.minDate);
+
 let lastFetchTimestamp = 0;
 
-// TODO minimum retrieved_at condition via CLI flag
-async function getRankingPlayerIdBatches(): Promise<IdBatch[] | null> {
-	const idBatches: QueryResult<IdBatch> = await dbPool.query(`
+async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch[] | null> {
+	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
+	const idBatches: QueryResult<IdBatch> = await dbPool.query(
+		`
 		WITH numbered AS (
 			SELECT
-					s.user_id,
-					ROW_NUMBER() OVER (ORDER BY s.user_id) AS rn
-			FROM scores s
+				s.user_id,
+				ROW_NUMBER() OVER (ORDER BY s.user_id) AS rn
+			FROM ${DB_SCORES_TABLE} s
+			LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
 			WHERE s.position <= 104
+			${maxRetrievedAt ? `AND (p.retrieved_at IS NULL OR p.retrieved_at < $1)` : ""}
 			GROUP BY s.user_id
 		),
 		batched AS (
 			SELECT
-					((rn - 1) / ${PLAYER_BATCH_SIZE}) + 1 AS batch_no,
-					ARRAY_AGG(user_id ORDER BY rn) AS ids
+				((rn - 1) / ${PLAYER_BATCH_SIZE}) + 1 AS batch_no,
+				ARRAY_AGG(user_id ORDER BY rn) AS ids
 			FROM numbered
 			GROUP BY batch_no
 		)
-		SELECT * FROM batched ORDER BY batch_no`);
+		SELECT * FROM batched ORDER BY batch_no`,
+		params
+	);
 
 	const idCount = idBatches.rowCount
 		? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
@@ -61,6 +77,18 @@ function convertPlayers(players: ApiUserLookup[], retrievedAt?: Date): Player[] 
 	for (let i = 0; i < players.length; ++i) convertedPlayers[i] = convertApiPlayerLookup(players[i], retrievedAt);
 
 	return convertedPlayers;
+}
+
+function buildMiaPlayer(id: number, retrievedAt: Date): Player {
+	return {
+		id,
+		countryCode: "XX",
+		isActive: false,
+		username: "<POGSTATS::UNKNOWN>",
+		retrievedAt,
+		isFromOsuApi: true,
+		isMia: true
+	};
 }
 
 async function createTempPlayersTable(client: ClientBase) {
@@ -91,19 +119,19 @@ async function insertPlayerBatch(
 
 	await client.query(
 		`
-      INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")})
-      SELECT *
-      FROM UNNEST(
-        $1::INTEGER[],
-        $2::TEXT[],
-        $3::CHAR(2)[],
-        $4::BOOLEAN[],
-        $5::INTEGER[],
-        $6::TEXT[],
-        $7::TIMESTAMPTZ[],
-        $8::BOOLEAN[],
-        $9::BOOLEAN[]
-      )`,
+		INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")})
+		SELECT *
+		FROM UNNEST(
+			$1::INTEGER[],
+			$2::TEXT[],
+			$3::CHAR(2)[],
+			$4::BOOLEAN[],
+			$5::INTEGER[],
+			$6::TEXT[],
+			$7::TIMESTAMPTZ[],
+			$8::BOOLEAN[],
+			$9::BOOLEAN[]
+		)`,
 		[
 			arrays.id,
 			arrays.username,
@@ -120,7 +148,9 @@ async function insertPlayerBatch(
 
 export async function scrapePlayers(ids?: number[]) {
 	try {
-		const playerIdBatches = ids ? splitIntoBatches(ids, PLAYER_BATCH_SIZE) : await getRankingPlayerIdBatches();
+		const playerIdBatches = ids
+			? splitIntoBatches(ids, PLAYER_BATCH_SIZE)
+			: await getRankingPlayerIdBatches(MAX_RETRIEVED_AT);
 		if (!playerIdBatches) return;
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
@@ -142,8 +172,8 @@ export async function scrapePlayers(ids?: number[]) {
 				for (const id of batch.ids) {
 					const player = convertedPlayers.find(p => p.id == id); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
 					if (!player) miaPlayers.set(id, retrievedAt);
-					else if (!exemplaryPlayer) exemplaryPlayer = { id, countryCode: "XX", isActive: false, username: "<POGSTATS::UNKNOWN>", retrievedAt, isFromOsuApi: true, isMia: true };
-					playerMap.set(id, player ?? { id, countryCode: "XX", isActive: false, username: "<POGSTATS::UNKNOWN>", retrievedAt, isFromOsuApi: true, isMia: true });
+					else if (!exemplaryPlayer) exemplaryPlayer = buildMiaPlayer(id, retrievedAt);
+					playerMap.set(id, player ?? buildMiaPlayer(id, retrievedAt));
 				}
 
 				await rateLimit(
@@ -172,8 +202,9 @@ export async function scrapePlayers(ids?: number[]) {
 
 			await client.query(`
 				INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
-				SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
-				FROM scrape_players_tmp tmp
+					SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
+					FROM scrape_players_tmp tmp
+					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id 
 				ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}
 				`);
 		});
