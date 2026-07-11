@@ -1,6 +1,4 @@
-import { resolve } from "path";
 import { ClientBase, QueryResult } from "pg";
-import { fileURLToPath } from "url";
 import {
 	buildUpdateCoalesceAssignmentsString,
 	dbPool,
@@ -26,7 +24,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 	}
 } as const);
 
-const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
+const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 const MAX_RETRIEVED_AT = getMinDate(parsedFlags.minDate);
 
 let lastFetchTimestamp = 0;
@@ -243,4 +241,4 @@ export async function scrapePlayers(ids?: number[]) {
 	}
 }
 
-if (resolve(process.argv[1]) == resolve(fileURLToPath(import.meta.url))) scrapePlayers();
+if (import.meta.main) scrapePlayers();

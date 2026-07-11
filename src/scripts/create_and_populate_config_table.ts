@@ -78,7 +78,7 @@ async function populateConfigTable() {
 }
 
 async function main() {
-	const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
+	const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
 	try {
 		client = await dbPool.connect();

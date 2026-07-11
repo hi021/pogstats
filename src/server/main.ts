@@ -16,7 +16,7 @@ export const FLAG_DEFINITIONS = Object.freeze({
 export const app = new Koa();
 export const server = http.createServer(app.callback());
 
-const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
+const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
 app.use(socketDebugMessageEndpoint);
 

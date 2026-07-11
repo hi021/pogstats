@@ -182,12 +182,14 @@ export function printHelp<Defs extends FlagDefinitions>(
 
 export function parseArgs<Defs extends FlagDefinitions>(
 	argv: string[],
+	isMainEntryPoint: boolean,
 	flagDefinitions: Defs,
 	options?: { onHelp?: () => void; usageName?: string }
 ): ParsedFlags<Defs> {
 	const parsed = {} as ParsedFlags<Defs>;
-	argv = argv.slice(2);
+	if (!isMainEntryPoint) return parsed;
 
+	argv = argv.slice(2);
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 		if (arg === "--help") {

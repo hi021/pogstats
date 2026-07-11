@@ -13,6 +13,7 @@
   "author": "hi",
   "license": "ISC",
   "type": "module",
+  "main": "target/server/main.js",
   "scripts": {
     "build": "tsc",
     "format": "prettier ./src --write",

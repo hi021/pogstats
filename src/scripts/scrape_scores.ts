@@ -51,7 +51,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 	}
 } as const);
 
-const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, FLAG_DEFINITIONS);
+const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = getMinDate(parsedFlags.minDate);
 const SKIP_DUMP_BEFORE_SCRAPE = Boolean(parsedFlags.skipDump);
 
