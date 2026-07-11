@@ -5,7 +5,7 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { updateBeatmapScoresRetrievalDate } from "../db.js";
+import { SCORE_TABLE_COLUMNS, updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
@@ -24,7 +24,6 @@ import {
 	convertDatabaseScore,
 	parseArgs,
 	prepareScoresTableValuesAndParamPlaceholders,
-	SCORE_TABLE_COLUMNS,
 	sortScores
 } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
@@ -130,7 +129,7 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 			`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
 			values
 		);
-		await updateBeatmapScoresRetrievalDate(beatmapId, rulesetId, "last_scores_scrape");
+		await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_scrape");
 		await client.query("COMMIT");
 	} catch (error) {
 		await client.query("ROLLBACK");

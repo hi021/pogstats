@@ -11,6 +11,7 @@ import {
 	getLastScoreId,
 	recalculateScorePositionsForMaps,
 	saveLastScoreId,
+	SCORE_TABLE_COLUMNS,
 	updateBeatmapScoresRetrievalDate,
 	withDbClientTransaction
 } from "../db.js";
@@ -20,7 +21,6 @@ import {
 	convertApiScore,
 	ParsedFlags,
 	prepareScoresTableValuesAndParamPlaceholders,
-	SCORE_TABLE_COLUMNS,
 	sleep,
 	sortWsScores
 } from "../shared.js";
@@ -177,7 +177,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
 		const dedupedScores = dedupeTopScoresByUser(mapScores);
 		const convertedScores = dedupedScores.map(score =>
-			convertApiScore(score, /* positions set later in recalculateScorePositionsForMap */ -1, false)
+			convertApiScore(score, /* positions set later in upsertBeatmapScores > recalculateScorePositionsForMap */ -1, false)
 		);
 		await withDbClientTransaction(async client => {
 			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
@@ -289,7 +289,7 @@ async function upsertBeatmapScores(
 	);
 
 	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }]);
-	await updateBeatmapScoresRetrievalDate(beatmapId, rulesetId, "last_scores_scrape");
+	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update");
 }
 
 // TODO return beaten score details to show cool live data

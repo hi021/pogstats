@@ -3,9 +3,8 @@
 // use this regex to check for maps with newlines in their tags that break this import
 // just replace all instances with blank
 
-import { dbPool } from "../db.js";
+import { BEATMAP_TABLE_COLUMNS, dbPool } from "../db.js";
 import { DB_BEATMAPS_TABLE } from "../env.js";
-import { BEATMAP_TABLE_COLUMNS } from "../shared.js";
 import { readFileByLine } from "./shared.js";
 
 const INPUT_COLUMNS: Readonly<Array<keyof ApiBeatmapDbBeatmap>> = Object.freeze([

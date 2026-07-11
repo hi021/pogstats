@@ -34,8 +34,7 @@ type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
 
 // ------------------------------------------
 
-////// Final table schema for pog!stats could be smaller!
-////// differences betweeen pekkie schema
+////// differences between pekkie schema
 //     total_score - INTEGER instead of BIGINT
 //     total_score_without_mods - INTEGER instead of BIGINT
 //     pp - REAL instead of DOUBLE PRECISION
@@ -49,7 +48,7 @@ type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
 interface BeatmapScoreFull {
 	position: number; // meta, not from API, 0 means score is MIA (from potentially restricted player)
 	isScraped: boolean; // meta, not from API - whether it came from /beatmaps/{id}/scores (scrape_scores script)
-	retrievedAt: Date; // meta, not from API
+	retrievedAt: Date; // meta, not from API; can be sligtly off from the date in beatmap_ruleset_update_dates table
 	isLazer: boolean; // meta, not from API (true only if build_id is present)
 	isPerma: boolean; // meta, whether highest possible total_score on map
 	id: number;

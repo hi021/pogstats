@@ -1,60 +1,7 @@
+import { BEATMAP_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db.js";
+
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
-
-export const SCORE_TABLE_COLUMNS = Object.freeze([
-	"position",
-	"is_scraped",
-	"retrieved_at",
-	"is_lazer",
-	"is_perma",
-	"id",
-	"user_id",
-	"ruleset_id",
-	"beatmap_id",
-	"grade",
-	"accuracy",
-	"max_combo",
-	"total_score",
-	"classic_total_score",
-	"total_score_without_mods",
-	"is_perfect_combo",
-	"pp",
-	"ended_at",
-	"data"
-]);
-
-export const PLAYER_TABLE_COLUMNS = Object.freeze([
-	"id",
-	"username",
-	"country_code",
-	"is_active",
-	"team_id",
-	"cover_url",
-	"retrieved_at",
-	"is_from_osu_api",
-	"is_mia"
-]);
-
-export const BEATMAP_TABLE_COLUMNS = Object.freeze([
-	"id",
-	"beatmapset_id",
-	"status",
-	"artist",
-	"title",
-	"version",
-	"creator",
-	"creator_id",
-	"ruleset_id",
-	"approved_date",
-	"star_rating",
-	"total_length",
-	"bpm",
-	"cs",
-	"od",
-	"ar",
-	"hp",
-	"packs"
-]);
 
 // TODO calculate is_perma here?
 export function convertApiScore(

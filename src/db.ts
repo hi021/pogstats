@@ -15,10 +15,70 @@ import {
 } from "./env.js";
 import { unnestObjectsIntoArrays } from "./shared.js";
 
+export const SCORE_TABLE_COLUMNS = Object.freeze([
+	"position",
+	"is_scraped",
+	"retrieved_at",
+	"is_lazer",
+	"is_perma",
+	"id",
+	"user_id",
+	"ruleset_id",
+	"beatmap_id",
+	"grade",
+	"accuracy",
+	"max_combo",
+	"total_score",
+	"classic_total_score",
+	"total_score_without_mods",
+	"is_perfect_combo",
+	"pp",
+	"ended_at",
+	"data"
+]);
+
+export const PLAYER_TABLE_COLUMNS = Object.freeze([
+	"id",
+	"username",
+	"country_code",
+	"is_active",
+	"team_id",
+	"cover_url",
+	"retrieved_at",
+	"is_from_osu_api",
+	"is_mia"
+]);
+
+export const BEATMAP_TABLE_COLUMNS = Object.freeze([
+	"id",
+	"beatmapset_id",
+	"status",
+	"artist",
+	"title",
+	"version",
+	"creator",
+	"creator_id",
+	"ruleset_id",
+	"approved_date",
+	"star_rating",
+	"total_length",
+	"bpm",
+	"cs",
+	"od",
+	"ar",
+	"hp",
+	"packs"
+]);
+
+export const BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS = Object.freeze([
+	"beatmap_id",
+	"ruleset_id",
+	"last_scores_scrape",
+	"last_scores_update"
+]);
+
 // TODO make sure this is respected in every script? I assume you have to make them use the dbPool here
-
 // TODO I dont think this SHIT works
-
 // pg returns BIGINTs as strings since numbers over 2^53 (9+E15) lose precision when stored as doubles
 // ignoring this concern here, since score ids are in the billions and ranked score is in the trillions
 // osu! api just returns normal numbers anyway
@@ -111,12 +171,15 @@ export async function getLastScoreId() {
 }
 
 export async function updateBeatmapScoresRetrievalDate(
+	client: ClientBase,
 	beatmapId: number,
 	rulesetId: number,
 	column: "last_scores_scrape" | "last_scores_update" = "last_scores_update"
 ) {
-	await dbPool.query(
-		`UPDATE ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} SET ${column} = NOW() WHERE beatmap_id = $1 AND ruleset_id = $2`,
+	await client.query(`
+		INSERT INTO ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} (${BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS.slice(0,2).join(", ")}, ${column})
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (beatmap_id, ruleset_id) DO UPDATE SET ${column} = EXCLUDED.${column}`,
 		[beatmapId, rulesetId]
 	);
 }
