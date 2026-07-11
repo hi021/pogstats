@@ -9,10 +9,12 @@ export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
 export const BEATMAP_DB_BASE_URL = "https://osu.respektive.pw";
 
+export const USER_AGENT = "pog!stats (+https://github.com/hi021/pogstats)"
 export const DEFAULT_HEADERS = {
 	Accept: "application/json",
 	"Content-Type": "application/json",
-	"X-API-Version": OSU_API_VERSION
+	"X-API-Version": OSU_API_VERSION,
+	"User-Agent": USER_AGENT
 };
 
 // I am the GOD of ajvascript

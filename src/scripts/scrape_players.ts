@@ -12,7 +12,7 @@ import {
 	withDbClientTransaction
 } from "../db.js";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
-import { PLAYER_TABLE_COLUMNS, splitIntoBatches, unnestObjectsIntoArrays, parseArgs } from "../shared.js";
+import { parseArgs, PLAYER_TABLE_COLUMNS, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, getMinDate, rateLimit } from "./shared.js";
 

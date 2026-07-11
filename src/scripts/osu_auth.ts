@@ -1,5 +1,5 @@
 import { OSU_CLIENT_ID, OSU_CLIENT_SECRET } from "../env.js";
-import { AUTH_ENDPOINT, buildRandomString, USER_AUTH_ENDPOINT } from "./shared.js";
+import { AUTH_ENDPOINT, buildRandomString, USER_AGENT, USER_AUTH_ENDPOINT } from "./shared.js";
 
 export async function getOAuthToken(grantType = "client_credentials", code?: string) {
 	if (!OSU_CLIENT_ID || !OSU_CLIENT_SECRET)
@@ -10,7 +10,8 @@ export async function getOAuthToken(grantType = "client_credentials", code?: str
 		method: "POST",
 		headers: {
 			Accept: "application/json",
-			"Content-Type": "application/x-www-form-urlencoded"
+			"Content-Type": "application/x-www-form-urlencoded",
+			"User-Agent": USER_AGENT
 		},
 		body
 	});
