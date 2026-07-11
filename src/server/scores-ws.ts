@@ -148,8 +148,8 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 		);
 	if (!scores?.length) return;
 
-	await fetchMissingBeatmaps(batchCandidateBeatmapIds);
-	await fetchMissingPlayers(batchCandidatePlayerIds);
+	await fetchNewBeatmaps(batchCandidateBeatmapIds);
+	await fetchNewPlayers(batchCandidatePlayerIds);
 
 	const beatenScoresByMaps = await getBeatenScoresByMap(scores);
 	if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
@@ -196,7 +196,7 @@ function isCandidateScore(score: WsScore) {
 	return score.ruleset_id == 0;
 }
 
-async function fetchMissingBeatmaps(beatmapIds: number[]) {
+async function fetchNewBeatmaps(beatmapIds: number[]) {
 	const missingIds = await getInexistentBeatmapIds(beatmapIds);
 	if (missingIds?.length) {
 		if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
@@ -206,7 +206,7 @@ async function fetchMissingBeatmaps(beatmapIds: number[]) {
 	batchCandidateBeatmapIds.length = 0;
 }
 
-async function fetchMissingPlayers(playerIds: number[]) {
+async function fetchNewPlayers(playerIds: number[]) {
 	try {
 		const missingIds = await getInexistentPlayerIds(playerIds);
 		if (missingIds?.length) {

@@ -136,7 +136,7 @@ export function buildPositionThresholdCode(pos: RankingPositionThreshold): Ranki
 }
 
 export function isMissingPlayer(player: Player | MissingPlayer): player is MissingPlayer {
-	return !(player as Player).username && player.isMia;
+	return player.username == "<POGSTATS::UNKNOWN>" && player.countryCode == "XX" && player.isMia;
 }
 
 export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScoreFull[]) {
@@ -166,30 +166,6 @@ export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScor
 		);
 
 		return `(${SCORE_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
-	});
-
-	return { values, paramGroups };
-}
-
-export function preparePlayersTableValuesAndParamPlaceholders(players: Array<Player | MissingPlayer>) {
-	const values: unknown[] = [];
-	const paramGroups = players.map((player, index) => {
-		const offset = index * PLAYER_TABLE_COLUMNS.length;
-		const isMia = isMissingPlayer(player);
-
-		values.push(
-			player.id,
-			isMia ? null : player.username,
-			isMia ? null : player.countryCode,
-			isMia ? null : player.isActive,
-			isMia ? null : player.teamId,
-			isMia ? null : player.coverUrl,
-			player.retrievedAt,
-			player.isFromOsuApi,
-			player.isMia
-		);
-
-		return `(${PLAYER_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
 	return { values, paramGroups };

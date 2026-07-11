@@ -5,6 +5,7 @@
 
 import fs from "fs";
 import { Client } from "pg";
+import { updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
@@ -37,7 +38,6 @@ import {
 	logInfo,
 	rateLimit
 } from "./shared.js";
-import { updateBeatmapScoresRetrievalDate } from "../db.js";
 
 const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {

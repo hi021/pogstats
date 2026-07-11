@@ -9,7 +9,7 @@ export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
 export const BEATMAP_DB_BASE_URL = "https://osu.respektive.pw";
 
-export const USER_AGENT = "pog!stats (+https://github.com/hi021/pogstats)"
+export const USER_AGENT = "pog!stats (+https://github.com/hi021/pogstats)";
 export const DEFAULT_HEADERS = {
 	Accept: "application/json",
 	"Content-Type": "application/json",
@@ -58,7 +58,7 @@ export function convertApiPlayerLookup(
 		countryCode: player.country_code,
 		isActive: player.is_active,
 		teamId: player.team?.id,
-		coverUrl: player.cover?.url, // TODO: verify the difference between url and custom_url
+		coverUrl: player.cover?.url,
 		retrievedAt,
 		isFromOsuApi,
 		isMia

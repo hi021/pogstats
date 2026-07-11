@@ -90,7 +90,7 @@ interface Player {
 	// TODO?: maybe poggers stats, e.g. peak/lowest for each ranking type, etc.
 }
 
-type MissingPlayer = Pick<Player, "id" | "retrievedAt" | "isFromOsuApi" | "isMia"> & { isMia: true };
+type MissingPlayer = Player & { username: "<POGSTATS::UNKNOWN>"; countryCode: "XX"; isMia: true };
 
 type PlayerInRanking = Pick<Player, "id" | "username" | "countryCode" | "teamId" | "coverUrl"> & {
 	pogBadges?: PogBadge[];

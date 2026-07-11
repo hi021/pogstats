@@ -16,7 +16,6 @@ import { parseArgs, PLAYER_TABLE_COLUMNS, splitIntoBatches, unnestObjectsIntoArr
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, getMinDate, rateLimit } from "./shared.js";
 
-const INSERT_BATCH_SIZE = 12500;
 const PLAYER_BATCH_SIZE = 50;
 const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {
@@ -79,7 +78,7 @@ function convertPlayers(players: ApiUserLookup[], retrievedAt?: Date): Player[] 
 	return convertedPlayers;
 }
 
-function buildMiaPlayer(id: number, retrievedAt: Date): Player {
+function buildMiaPlayer(id: number, retrievedAt: Date): MissingPlayer {
 	return {
 		id,
 		countryCode: "XX",
@@ -103,18 +102,14 @@ async function createTempPlayersTable(client: ClientBase) {
 			retrieved_at		TIMESTAMPTZ NOT NULL,
 			is_from_osu_api	BOOLEAN NOT NULL,
 			is_mia				 	BOOLEAN DEFAULT FALSE
-		) ON COMMIT DELETE ROWS`);
-	await client.query("TRUNCATE scrape_players_tmp");
+		)`);
+	await client.query("TRUNCATE TABLE scrape_players_tmp");
 }
 
-async function insertPlayerBatch(
-	client: ClientBase,
-	batch: Array<Player | MissingPlayer>,
-	exemplaryPlayer: Player | MissingPlayer
-) {
+async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Player>, exemplaryPlayer: Player) {
 	const arrays = unnestObjectsIntoArrays(
-		batch as Array<Record<string, unknown>>,
-		exemplaryPlayer as Record<string, unknown>
+		batch as unknown as Array<Record<string, unknown>>,
+		exemplaryPlayer as unknown as Record<string, unknown>
 	);
 
 	await client.query(
@@ -146,6 +141,16 @@ async function insertPlayerBatch(
 	);
 }
 
+async function insertPlayerBatch(client: ClientBase) {
+	await client.query(`
+	INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
+		SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
+		FROM scrape_players_tmp tmp
+		LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
+	ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}
+	`);
+}
+
 export async function scrapePlayers(ids?: number[]) {
 	try {
 		const playerIdBatches = ids
@@ -154,27 +159,36 @@ export async function scrapePlayers(ids?: number[]) {
 		if (!playerIdBatches) return;
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
-		const playerMap = new Map<number, Player>();
 		const miaPlayers = new Map<number, Date>();
+		let scrapedPlayerCount = 0;
 		let exemplaryPlayer: Player;
 
 		for (const batch of playerIdBatches) {
 			try {
 				// TODO: use respektive's osu-score-rank-api and osu! api only as a fallback to save some calls
+				const retrievedAt = new Date();
+				lastFetchTimestamp = retrievedAt.getTime();
 				console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
 				const apiPlayers = await lookupPlayers(headers, batch.ids);
 
-				console.log(`[scrape_players] Processing player batch #${batch.batch_no}`);
-				const retrievedAt = new Date();
+				console.log(`[scrape_players] Processing and inserting player batch #${batch.batch_no}`);
 				const convertedPlayers = convertPlayers(apiPlayers, retrievedAt);
-				exemplaryPlayer = convertedPlayers[0];
+				exemplaryPlayer = convertedPlayers[0] ?? buildMiaPlayer(0, retrievedAt);
+				const players: Player[] = [];
 
-				for (const id of batch.ids) {
-					const player = convertedPlayers.find(p => p.id == id); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
-					if (!player) miaPlayers.set(id, retrievedAt);
-					else if (!exemplaryPlayer) exemplaryPlayer = buildMiaPlayer(id, retrievedAt);
-					playerMap.set(id, player ?? buildMiaPlayer(id, retrievedAt));
+				for (const playerId of batch.ids) {
+					const player = convertedPlayers.find(p => p.id == playerId); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
+					if (!player) miaPlayers.set(playerId, retrievedAt);
+					players.push(player ?? buildMiaPlayer(playerId, retrievedAt));
 				}
+
+				scrapedPlayerCount += players.length;
+				await withDbClientTransaction(async client => {
+					await createTempPlayersTable(client);
+					await insertPlayerBatchIntoTmpTable(client, players, exemplaryPlayer);
+					await insertPlayerBatch(client);
+				});
+				players.length = 0;
 
 				await rateLimit(
 					{
@@ -184,36 +198,20 @@ export async function scrapePlayers(ids?: number[]) {
 					SCRAPE_PLAYER_DELAY_MS
 				);
 			} catch (e) {
-				console.error(`[scrape_players] Failed to scrape and process batch #${batch.batch_no}:\n`, e);
+				console.error(`[scrape_players] Failed to scrape, process, and insert batch #${batch.batch_no}:\n`, e);
 				break;
 			}
 		}
 
-		// TODO: insert players into the database straight away to avoid problems with huge batches of new players from scores-ws!!
-		const players = [...playerMap.values()];
-		const miaPlayerIds = [...miaPlayers.keys()];
-		await withDbClientTransaction(async client => {
-			await createTempPlayersTable(client);
-
-			for (let i = 0; i < players.length; i += INSERT_BATCH_SIZE) {
-				const batch = players.slice(i, i + INSERT_BATCH_SIZE);
-				await insertPlayerBatch(client, batch, exemplaryPlayer);
-			}
-
-			await client.query(`
-				INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
-					SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
-					FROM scrape_players_tmp tmp
-					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id 
-				ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}
-				`);
-		});
-
-		console.log(`[scrape_players] Finished inserting ${playerMap.size} players into the database`);
-		if (miaPlayerIds.length)
-			console.log(`[scrape_players] Player(s) with ID(s) ${miaPlayerIds} not in the API response, marking all as MIA`);
+		console.log(`[scrape_players] Finished saving ${scrapedPlayerCount} players`);
 
 		await withDbClientTransaction(async client => {
+			const miaPlayerIds = [...miaPlayers.keys()];
+			if (miaPlayerIds.length)
+				console.log(
+					`[scrape_players] Player(s) with ID(s) ${miaPlayerIds} not in the API response, marking all as MIA`
+				);
+
 			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0);
 			await insertNewMiaPlayers(client, miaPlayers);
 
