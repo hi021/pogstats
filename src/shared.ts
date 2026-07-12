@@ -1,6 +1,7 @@
 import { BEATMAP_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
 
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
+export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko", "fruits", "mania"]);
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
 
 export function convertApiScore(
@@ -60,17 +61,21 @@ export function convertDatabaseScore(dbScore: Record<string, unknown>): BeatmapS
 	};
 }
 
-export function getRulesetName(id: RulesetId): Ruleset {
-	switch (id) {
-		case 0:
-			return "osu";
-		case 1:
-			return "taiko";
-		case 2:
-			return "fruits";
-		case 3:
-			return "mania";
+export function getRulesetId(rulesetName: Ruleset): RulesetId | undefined {
+	switch (rulesetName?.toLowerCase()) {
+		case "osu":
+			return 0;
+		case "taiko":
+			return 1;
+		case "fruits":
+			return 2;
+		case "mania":
+			return 3;
 	}
+}
+
+export function getRulesetName(id: RulesetId) {
+	return RULESET_NAMES[id];
 }
 
 export function buildPositionThresholdName(pos: RankingPositionThreshold): RankingPositionThresholdName {
@@ -79,6 +84,16 @@ export function buildPositionThresholdName(pos: RankingPositionThreshold): Ranki
 
 export function buildPositionThresholdCode(pos: RankingPositionThreshold): RankingPositionThresholdCode {
 	return `top${pos}`;
+}
+
+export function parsePositionThresholdFromCode(
+	code: RankingPositionThresholdCode
+): RankingPositionThreshold | undefined {
+	if (!code?.startsWith("top")) return;
+	const posString = code.slice(3);
+	const pos = parseInt(posString, 10);
+	if (isNaN(pos) || !isFinite(pos) || pos > 100 || pos < 1) return;
+	return pos as RankingPositionThreshold; // TODO: could maybe validate whether it's a valid threshold
 }
 
 export function isMissingPlayer(player: Player | MissingPlayer): player is MissingPlayer {

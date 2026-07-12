@@ -1,1 +1,51 @@
-export const API_BASE_URL = "/api/v1/";
+import Router from "@koa/router";
+import { DefaultContext, DefaultState, Middleware } from "koa";
+import { getPlayerIdByIdOrName, getRankingForPlayer } from "../db-api.js";
+import { withDbClient } from "../db-generic.js";
+import { getRulesetId } from "../shared.js";
+
+export const API_BASE_URL = "/api/v2/";
+const API_PLAYER_BASE_URL = "player/:idOrName";
+
+export const router = new Router({ prefix: API_BASE_URL });
+
+export const errorHandlerMiddleware: Middleware = async (ctx, next) => {
+	try {
+		await next();
+	} catch (e: any) {
+		ctx.status = e.status || e.statusCode || 500;
+    ctx.message = e.message || ctx.message;
+		// ctx.body = {
+		//   error: ctx.status < 500 ? e.message : 'Internal Server Error',
+		// };
+		ctx.app.emit("error", e, ctx);
+	}
+};
+
+// {playerId: number}
+const playerIdByIdOrNameMiddleware: Middleware<DefaultState, DefaultContext, any> = async (ctx, next) => {
+	const playerId = await withDbClient(async client => {
+		return await getPlayerIdByIdOrName(client, ctx.params.idOrName);
+	});
+	if (!playerId) ctx.throw(400, "User not found");
+
+	ctx.state.playerId = playerId;
+
+	await next();
+};
+
+//// PLAYER ROUTES
+router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
+
+router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next) => {
+	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
+	if (rulesetId == null) ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
+
+	await withDbClient(async client => {
+		const ranking = await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date);
+    if(!ranking) ctx.throw(400, "Ranking not found")
+
+		ctx.headers["content-type"] = "application/json";
+		ctx.body = ranking;
+	});
+});
