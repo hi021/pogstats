@@ -1,4 +1,4 @@
-import { BEATMAP_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db.js";
+import { BEATMAP_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
 
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);

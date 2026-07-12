@@ -1,5 +1,5 @@
-import { PoolClient, QueryResult } from "pg";
-import { dbPool } from "../db.js";
+import { ClientBase, QueryResult } from "pg";
+import { withDbClientTransaction } from "../db-generic.js";
 import { DB_PLAYER_POG_BADGES_TABLE, DB_PLAYERS_TABLE, DB_POG_BADGES_TABLE } from "../env.js";
 
 type ProtoPogBadge = PogBadge & { playerIds: number[] };
@@ -14,9 +14,7 @@ const POG_BADGES: Readonly<ProtoPogBadge[]> = Object.freeze([
 	{ id: 6, name: "poge", imgUrl: "/badges/pognerchamp.png", playerIds: [14697237] }
 ]);
 
-let client: PoolClient;
-
-async function createTables() {
+async function createTables(client: ClientBase) {
 	console.log(`Attempting to create ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables`);
 
 	await client.query(`
@@ -41,7 +39,7 @@ async function createTables() {
 	console.log(`Created ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables if didn't exist`);
 }
 
-async function populateTables() {
+async function populateTables(client: ClientBase) {
 	console.log(`Populating ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables with initial values`);
 	console.log(
 		"Warning! This WILL FAIL when first initializing the database, as there are no players yet (pog_badges_user_fk), don't worry :)"
@@ -76,13 +74,12 @@ async function populateTables() {
 
 async function main() {
 	try {
-		client = await dbPool.connect();
-		await createTables();
-		await populateTables();
+		await withDbClientTransaction(async client => {
+			await createTables(client);
+			await populateTables(client);
+		});
 	} catch (e) {
 		console.error("Error creating tables:\n", e);
-	} finally {
-		client.release();
 	}
 }
 

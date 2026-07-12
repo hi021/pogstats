@@ -1,5 +1,5 @@
-import { PoolClient } from "pg";
-import { dbPool } from "../db.js";
+import { ClientBase } from "pg";
+import { withDbClientTransaction } from "../db-generic.js";
 import { DB_RANKING_TYPES_TABLE } from "../env.js";
 import {
 	buildPositionThresholdCode,
@@ -22,8 +22,6 @@ const PROTO_RANKING_TYPES: Readonly<ProtoRankingType[]> = Object.freeze([
 	{ nameTemplate: "%t% ranked score", codeTemplate: "%t%-ranked-score" },
 	{ nameTemplate: "%t% SS count", codeTemplate: "%t%-ss" }
 ]);
-
-let client: PoolClient;
 
 function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 	const baseIdMultiplier = 100;
@@ -59,7 +57,7 @@ function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 	return rankingTypes;
 }
 
-async function createRankingTypesTable() {
+async function createRankingTypesTable(client: ClientBase) {
 	console.log(`Attempting to create ${DB_RANKING_TYPES_TABLE} table`);
 
 	await client.query(`
@@ -77,7 +75,7 @@ async function createRankingTypesTable() {
 	console.log(`Created ${DB_RANKING_TYPES_TABLE} table if didn't exist`);
 }
 
-async function populateRankingTypesTable() {
+async function populateRankingTypesTable(client: ClientBase) {
 	console.log(`Populating ${DB_RANKING_TYPES_TABLE} table with values`);
 	const rankingTypes = buildRankingTypes(PROTO_RANKING_TYPES);
 
@@ -99,13 +97,12 @@ async function populateRankingTypesTable() {
 
 async function main() {
 	try {
-		client = await dbPool.connect();
-		await createRankingTypesTable();
-		await populateRankingTypesTable();
+		await withDbClientTransaction(async client => {
+			await createRankingTypesTable(client);
+			await populateRankingTypesTable(client);
+		});
 	} catch (error) {
 		console.error("Error creating ranking tables:\n", error);
-	} finally {
-		client.release();
 	}
 }
 

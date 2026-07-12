@@ -1,17 +1,13 @@
 import prom from "prom-client";
 import Koa from "koa";
 
-// use esnext (es2026) and typescript 6 syntax
-// go easy on the comments
-// try to limit the amount of external dependencies
-
 // 1. public API request duration metric
-// measure how long a given inbound API request takes over time (for pog-ws.ts and pog-api.ts)
-// labels: route, status_code, origin
+// measure how long a given inbound API request takes over time (for pog-ws.ts and pog-api.ts; possibly using koa-response-time)
+// labels: route, status_code, origin (either based on the IP or user-agent)
 
 // 2. database query duration metric
 // measure how long a given db query takes over time
-// labels: query, source (either pog-api, pog-ws, or script name, e.g. 'scrape_players')
+// labels: query (name, probably from the function calling it), source (either pog-api, pog-ws, or script name, e.g. 'scrape_players')
 
 // 3. outbound API request duration metric
 // measure how long a given outbound API request takes over time
@@ -22,6 +18,10 @@ import Koa from "koa";
 // labels: is_candidate
 
 // 5. error log that lets the app show custom error messages on grafana
+
+// use esnext (es2026) and typescript 6 syntax
+// go easy on the comments
+// try to limit the amount of external dependencies
 
 // exported helper prometheus observer functions
 // use reusable Koa middleware where possible

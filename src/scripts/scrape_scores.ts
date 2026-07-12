@@ -5,7 +5,8 @@
 
 import fs from "fs";
 import { Client } from "pg";
-import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL, updateBeatmapScoresRetrievalDate } from "../db.js";
+import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL } from "../db-generic.js";
+import { updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,

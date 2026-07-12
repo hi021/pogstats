@@ -3,7 +3,8 @@
 // use this regex to check for maps with newlines in their tags that break this import
 // just replace all instances with blank
 
-import { BEATMAP_TABLE_COLUMNS, dbPool } from "../db.js";
+import { ClientBase } from "pg";
+import { BEATMAP_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import { DB_BEATMAPS_TABLE } from "../env.js";
 import { readFileByLine } from "./shared.js";
 
@@ -147,11 +148,11 @@ function buildBeatmapArrays(batch: Beatmap[]) {
 	};
 }
 
-async function insertBeatmapBatch(batch: Beatmap[]) {
+async function insertBeatmapBatch(client: ClientBase, batch: Beatmap[]) {
 	const arrays = buildBeatmapArrays(batch);
 
 	// TODO DO UPDATE instead of DO NOTHING based on cli flag
-	await dbPool.query(
+	await client.query(
 		`
     INSERT INTO ${DB_BEATMAPS_TABLE} (${BEATMAP_TABLE_COLUMNS.join(", ")})
     SELECT *
@@ -203,16 +204,18 @@ async function main() {
 
 	// TODO custom path via flag, option to truncate, option to skip 1st header row
 	console.log("Reading osu! beatmap database dump...");
-	await readFileByLine("../../data/osu-beatmap-db-dump.csv", async (row, rowNo) => {
+	await readFileByLine("../../data/osu-beatmap-db-dump.csv", async (row, _) => {
 		beatmaps.push(convertRowToBeatmap(row));
 	});
 	console.log(`Read ${beatmaps.length} beatmaps from the dump.`);
 
-	for (let i = 0; i < beatmaps.length; i += BATCH_SIZE) {
-		const batch = beatmaps.slice(i, i + BATCH_SIZE);
-		await insertBeatmapBatch(batch);
-		console.log(`Inserted ${i + batch.length} / ${beatmaps.length} beatmaps`);
-	}
+	await withDbClientTransaction(async client => {
+		for (let i = 0; i < beatmaps.length; i += BATCH_SIZE) {
+			const batch = beatmaps.slice(i, i + BATCH_SIZE);
+			await insertBeatmapBatch(client, batch);
+			console.log(`Inserted ${i + batch.length} / ${beatmaps.length} beatmaps`);
+		}
+	});
 
 	console.log("Beatmap import done :)");
 }

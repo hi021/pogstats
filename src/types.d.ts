@@ -74,6 +74,12 @@ interface BeatmapScoreAdditionalData {
 	// could also include undocumented object - current_user_attributes: { pin?: unknown } from the API, but seems useless
 }
 
+interface ProvenScoresPerRulesetBeatmap {
+	beatmap_id: number;
+	ruleset_id: RulesetId;
+	candidate_ids: number[];
+}
+
 // ------------------------------------------
 
 interface Player {

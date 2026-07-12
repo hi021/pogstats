@@ -1,14 +1,16 @@
 import { ClientBase, QueryResult } from "pg";
 import {
 	buildUpdateCoalesceAssignmentsString,
-	dbPool,
+	PLAYER_TABLE_COLUMNS,
+	withDbClient,
+	withDbClientTransaction
+} from "../db-generic.js";
+import {
 	findNoLongerMiaPlayerIds,
 	insertNewMiaPlayers,
 	insertNoLongerMiaPlayers,
-	PLAYER_TABLE_COLUMNS,
 	recalculateScorePositionsForMapIds,
-	setAllPlayerScoresPosition,
-	withDbClientTransaction
+	setAllPlayerScoresPosition
 } from "../db.js";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
 import { parseArgs, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
@@ -30,35 +32,37 @@ const MAX_RETRIEVED_AT = getMinDate(parsedFlags.minDate);
 let lastFetchTimestamp = 0;
 
 async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch[] | null> {
-	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
-	const idBatches: QueryResult<IdBatch> = await dbPool.query(
-		`
-		WITH numbered AS (
-			SELECT
+	return await withDbClient(async client => {
+		const params = maxRetrievedAt ? [maxRetrievedAt] : [];
+		const idBatches: QueryResult<IdBatch> = await client.query(
+			`
+			WITH numbered AS (
+				SELECT
 				s.user_id,
 				ROW_NUMBER() OVER (ORDER BY s.user_id) AS rn
-			FROM ${DB_SCORES_TABLE} s
-			LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
-			WHERE s.position <= 104
-			${maxRetrievedAt ? `AND (p.retrieved_at IS NULL OR p.retrieved_at < $1)` : ""}
-			GROUP BY s.user_id
-		),
-		batched AS (
-			SELECT
-				((rn - 1) / ${PLAYER_BATCH_SIZE}) + 1 AS batch_no,
-				ARRAY_AGG(user_id ORDER BY rn) AS ids
-			FROM numbered
-			GROUP BY batch_no
-		)
-		SELECT * FROM batched ORDER BY batch_no`,
-		params
-	);
+				FROM ${DB_SCORES_TABLE} s
+				LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
+				WHERE s.position <= 104
+				${maxRetrievedAt ? `AND (p.retrieved_at IS NULL OR p.retrieved_at < $1)` : ""}
+				GROUP BY s.user_id
+				),
+				batched AS (
+					SELECT
+					((rn - 1) / ${PLAYER_BATCH_SIZE}) + 1 AS batch_no,
+					ARRAY_AGG(user_id ORDER BY rn) AS ids
+					FROM numbered
+					GROUP BY batch_no
+					)
+					SELECT * FROM batched ORDER BY batch_no`,
+			params
+		);
 
-	const idCount = idBatches.rowCount
-		? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
-		: 0;
-	console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
-	return idCount ? idBatches.rows : null;
+		const idCount = idBatches.rowCount
+			? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
+			: 0;
+		console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
+		return idCount ? idBatches.rows : null;
+	});
 }
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {

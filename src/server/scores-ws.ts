@@ -1,19 +1,17 @@
 import { assert } from "console";
 import https from "https";
-import { PoolClient, QueryResult } from "pg";
+import { ClientBase, QueryResult } from "pg";
 import WebSocket from "ws";
+import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
 	acquireBeatmapAdvisoryLock,
 	convertToBeatenScoreParamObject,
-	dbPool,
 	getInexistentBeatmapIds,
 	getInexistentPlayerIds,
 	getLastScoreId,
 	recalculateScorePositionsForMaps,
 	saveLastScoreId,
-	SCORE_TABLE_COLUMNS,
-	updateBeatmapScoresRetrievalDate,
-	withDbClientTransaction
+	updateBeatmapScoresRetrievalDate
 } from "../db.js";
 import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
@@ -148,11 +146,16 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 		);
 	if (!scores?.length) return;
 
-	await fetchNewBeatmaps(batchCandidateBeatmapIds);
-	await fetchNewPlayers(batchCandidatePlayerIds);
+	let beatenScoresByMaps: ProvenScoresPerRulesetBeatmap[] = [];
+	await withDbClientTransaction(async client => {
+		await Promise.all([
+			new Promise(r => r(fetchNewBeatmaps(client, batchCandidateBeatmapIds))),
+			new Promise(r => r(fetchNewPlayers(client, batchCandidatePlayerIds)))
+		]);
 
-	const beatenScoresByMaps = await getBeatenScoresByMap(scores);
-	if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
+		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
+		if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
+	});
 
 	let totalProvenScoreCount = 0;
 	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: RulesetId; scores: WsScore[] }>();
@@ -174,21 +177,17 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 
 	if (VERBOSE) console.log(`Found ${totalProvenScoreCount} beaten top 100 score(s)`);
 
-	for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
-		const dedupedScores = dedupeTopScoresByUser(mapScores);
-		const convertedScores = dedupedScores.map(score =>
-			convertApiScore(
-				score,
-				/* positions set later in upsertBeatmapScores > recalculateScorePositionsForMap */ -1,
-				false
-			)
-		);
-		await withDbClientTransaction(async client => {
+	await withDbClientTransaction(async client => {
+		for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
+			const dedupedScores = dedupeTopScoresByUser(mapScores);
+			const convertedScores = dedupedScores.map(score =>
+				convertApiScore(score, /* positions set later in upsertBeatmapScores */ -1, false)
+			);
 			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
-		});
-	}
+		}
 
-	saveLastScoreId(batchLowestScoreId);
+		saveLastScoreId(batchLowestScoreId);
+	});
 	batchLowestScoreId = Infinity;
 	batchTotalScoreCount = 0;
 	scores.length = 0;
@@ -200,8 +199,8 @@ function isCandidateScore(score: WsScore) {
 	return score.ruleset_id == 0;
 }
 
-async function fetchNewBeatmaps(beatmapIds: number[]) {
-	const missingIds = await getInexistentBeatmapIds(beatmapIds);
+async function fetchNewBeatmaps(client: ClientBase, beatmapIds: number[]) {
+	const missingIds = await getInexistentBeatmapIds(client, beatmapIds);
 	if (missingIds?.length) {
 		if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
 		// TODO
@@ -210,9 +209,9 @@ async function fetchNewBeatmaps(beatmapIds: number[]) {
 	batchCandidateBeatmapIds.length = 0;
 }
 
-async function fetchNewPlayers(playerIds: number[]) {
+async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
 	try {
-		const missingIds = await getInexistentPlayerIds(playerIds);
+		const missingIds = await getInexistentPlayerIds(client, playerIds);
 		if (missingIds?.length) {
 			if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
 			await scrapePlayers(missingIds);
@@ -235,8 +234,8 @@ function dedupeTopScoresByUser(scores: WsScore[]) {
 }
 
 // Single temp table prevents concurrency (processing multiple beatmaps at once) I think
-async function createTempScoresTable(client: PoolClient) {
-	// this omits is_perma since it'll get calculated on insertion into the actual table
+async function createTempScoresTable(client: ClientBase) {
+	// Omits is_perma since it'll get calculated on insertion into the actual table
 	await client.query(`
 		CREATE TEMPORARY TABLE IF NOT EXISTS ws_scores_tmp (
       position      						SMALLINT NOT NULL,
@@ -256,13 +255,13 @@ async function createTempScoresTable(client: PoolClient) {
       is_perfect_combo    			BOOLEAN,
       pp                 				REAL,
       ended_at            			TIMESTAMPTZ NOT NULL,
-      data               			 	JSONB NOT NULL DEFAULT '{}'::jsonb,
+      data               			 	JSONB NOT NULL DEFAULT '{}'::jsonb
 		) ON COMMIT DELETE ROWS`);
 	await client.query("TRUNCATE ws_scores_tmp");
 }
 
 async function upsertBeatmapScores(
-	client: PoolClient,
+	client: ClientBase,
 	beatmapId: number,
 	rulesetId: RulesetId,
 	provenScores: BeatmapScoreFull[]
@@ -297,13 +296,9 @@ async function upsertBeatmapScores(
 }
 
 // TODO return beaten score details to show cool live data
-async function getBeatenScoresByMap(scores: WsScore[]) {
+async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const paramObj = convertToBeatenScoreParamObject(scores);
-	const scoreList: QueryResult<{
-		beatmap_id: number;
-		ruleset_id: RulesetId;
-		candidate_ids: number[];
-	}> = await dbPool.query(
+	const scoreList: QueryResult<ProvenScoresPerRulesetBeatmap> = await client.query(
 		`WITH candidates AS (
 				SELECT
 					candidate_id,

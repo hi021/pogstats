@@ -1,5 +1,5 @@
-import { PoolClient } from "pg";
-import { dbPool } from "../db.js";
+import { ClientBase, PoolClient } from "pg";
+import { withDbClientTransaction } from "../db-generic.js";
 import { DB_CONFIG_TABLE } from "../env.js";
 import { parseArgs } from "../shared.js";
 
@@ -43,7 +43,7 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 
 let client: PoolClient;
 
-async function createConfigTable() {
+async function createConfigTable(client: ClientBase) {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);
 
 	await client.query(`
@@ -57,7 +57,7 @@ async function createConfigTable() {
 	console.log(`Created ${DB_CONFIG_TABLE} table if didn't exist`);
 }
 
-async function populateConfigTable() {
+async function populateConfigTable(client: ClientBase) {
 	console.log(`Populating ${DB_CONFIG_TABLE} table with initial values`);
 
 	const promises = new Array<Promise<void>>(INITIAL_CONFIG.length);
@@ -81,19 +81,18 @@ async function main() {
 	const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
 	try {
-		client = await dbPool.connect();
-		await createConfigTable();
+		await withDbClientTransaction(async client => {
+			await createConfigTable(client);
 
-		if (parsedFlags.reset) {
-			console.log(`Truncating ${DB_CONFIG_TABLE} table`);
-			await client.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
-		}
+			if (parsedFlags.reset) {
+				console.log(`Truncating ${DB_CONFIG_TABLE} table`);
+				await client.query(`TRUNCATE TABLE ${DB_CONFIG_TABLE}`);
+			}
 
-		await populateConfigTable();
-	} catch (error) {
-		console.error("Error creating config table:", error);
-	} finally {
-		client.release();
+			await populateConfigTable(client);
+		});
+	} catch (e) {
+		console.error("Error creating config table:\n", e);
 	}
 }
 
