@@ -14,22 +14,25 @@ import Koa from "koa";
 // labels: route, status_code, source (either pog-api, pog-ws, or script name, e.g. 'scrape_players')
 
 // 4. scores-ws.ts score count over time metric
-// count how many total scores come in per batch and how many of them get filtered out
-// labels: is_candidate
+// count how many total scores come in per batch and how many of them are proven to be in top 100 for the map (returned from getBeatenScoresByMap)
+// labels: is_proven (boolean)
 
-// 5. error log that lets the app show custom error messages on grafana
+// 5. scores-ws.ts missing player and beatmap over time metric
+// count how many missingIds are found in fetchNewBeatmaps and fetchNewPlayers
+
+// 6. error log that lets the app show custom error messages on grafana
 
 // use esnext (es2026) and typescript 6 syntax
 // go easy on the comments
 // try to limit the amount of external dependencies
 
 // exported helper prometheus observer functions
-// use reusable Koa middleware where possible
+// use reusable and maintainable Koa middleware and functions where possible
 
-// register default resource usage metrics
+// register default nodejs resource usage metrics
 // register custom metrics
 
-// expose /metrics using koa
+// expose /metrics using koa (or koa-router)
 // configurable port via .env and env.ts
 
 // explain how a grafana dashboard could be created to visualize this prometheus data

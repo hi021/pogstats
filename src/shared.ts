@@ -90,10 +90,22 @@ export function parsePositionThresholdFromCode(
 	code: RankingPositionThresholdCode
 ): RankingPositionThreshold | undefined {
 	if (!code?.startsWith("top")) return;
+
 	const posString = code.slice(3);
 	const pos = parseInt(posString, 10);
 	if (isNaN(pos) || !isFinite(pos) || pos > 100 || pos < 1) return;
+
 	return pos as RankingPositionThreshold; // TODO: could maybe validate whether it's a valid threshold
+}
+
+export function parsePositionThresholdAndRankingType(rankingCode?: string) {
+	rankingCode = rankingCode ?? "";
+	const positionThresholdString = rankingCode.split("-")[0] as RankingPositionThresholdCode;
+	const positionThreshold = parsePositionThresholdFromCode(positionThresholdString);
+	if (!positionThreshold) return;
+
+	const rankingType = rankingCode.slice(positionThresholdString.length);
+	return { positionThreshold, rankingType };
 }
 
 export function isMissingPlayer(player: Player | MissingPlayer): player is MissingPlayer {

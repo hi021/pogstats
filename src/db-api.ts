@@ -1,6 +1,6 @@
 import { ClientBase, QueryResult } from "pg";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
-import { parsePositionThresholdFromCode } from "./shared.js";
+import { parsePositionThresholdAndRankingType } from "./shared.js";
 
 export async function getPlayerIdByIdOrName(client: ClientBase, idOrName: string | number) {
 	if (!idOrName) return null;
@@ -21,7 +21,8 @@ export async function getPlayerIdByLowercaseName(client: ClientBase, name: strin
 	return (result?.rows?.[0]?.id ?? null) as number | null;
 }
 
-// TODO: move to redis, validates if id is a real number and the player exists in the database
+// TODO: move to redis
+// validates if id is a real number and the player exists in the database
 export async function getPlayerIdById(client: ClientBase, id: string | number) {
 	try {
 		const result: QueryResult<{ id: number }> = await client.query(`SELECT id FROM ${DB_PLAYERS_TABLE} WHERE id = $1`, [
@@ -36,37 +37,23 @@ export async function getPlayerIdById(client: ClientBase, id: string | number) {
 // TODO: move to redis
 export async function getRankingId(client: ClientBase, rulesetId: RulesetId, code: string) {}
 
-export async function getRankingForPlayer(
-	client: ClientBase,
-	rankingCode: string,
-	playerId: number,
-	date?: Date | string
-) {
+export async function getRankingForPlayer(client: ClientBase, rankingCode: string, playerId: number, date?: string) {
 	if (!date) return getLiveRankingForPlayer(client, rankingCode, playerId); // ...or check if date is today
 }
 
 export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: string, playerId: number) {
-	// TODO move to separate method
-	rankingCode = rankingCode ?? "";
-	// const splitRankingCode = rankingCode.split("-");
-	const positionThresholdString = rankingCode.split("-")[0] as RankingPositionThresholdCode;
-	const positionThreshold = parsePositionThresholdFromCode(positionThresholdString);
-  console.log(positionThreshold);
-  console.log(rankingCode.slice(positionThresholdString.length))
-	if (!positionThreshold) return;
+	const parsedRanking = parsePositionThresholdAndRankingType(rankingCode);
+	if (!parsedRanking) return;
 
-	switch (rankingCode.slice(positionThresholdString.length)) {
+	switch (parsedRanking.rankingType) {
 		case "":
-			return getLiveCountRankingForPlayer(client, positionThreshold, playerId);
+			return getLiveCountRankingForPlayer(client, playerId);
+		case "-pp":
+			return;
 	}
 }
 
-export async function getLiveCountRankingForPlayer(
-	client: ClientBase,
-	positionThreshold: RankingPositionThreshold,
-	playerId: number
-) {
-  console.log("rr")
+export async function getLiveCountRankingForPlayer(client: ClientBase, playerId: number) {
 	const result: QueryResult<{
 		top_1: number;
 		top_8: number;

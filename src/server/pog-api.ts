@@ -14,19 +14,13 @@ export const errorHandlerMiddleware: Middleware = async (ctx, next) => {
 		await next();
 	} catch (e: any) {
 		ctx.status = e.status || e.statusCode || 500;
-    ctx.message = e.message || ctx.message;
-		// ctx.body = {
-		//   error: ctx.status < 500 ? e.message : 'Internal Server Error',
-		// };
+		ctx.message = e.message || ctx.message;
 		ctx.app.emit("error", e, ctx);
 	}
 };
 
-// {playerId: number}
 const playerIdByIdOrNameMiddleware: Middleware<DefaultState, DefaultContext, any> = async (ctx, next) => {
-	const playerId = await withDbClient(async client => {
-		return await getPlayerIdByIdOrName(client, ctx.params.idOrName);
-	});
+	const playerId = await withDbClient(async client => await getPlayerIdByIdOrName(client, ctx.params.idOrName));
 	if (!playerId) ctx.throw(400, "User not found");
 
 	ctx.state.playerId = playerId;
@@ -41,11 +35,11 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next)
 	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
 	if (rulesetId == null) ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
 
-	await withDbClient(async client => {
-		const ranking = await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date);
-    if(!ranking) ctx.throw(400, "Ranking not found")
+	const ranking = await withDbClient(
+		async client => await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date)
+	);
+	if (!ranking) ctx.throw(400, "Invalid ranking");
 
-		ctx.headers["content-type"] = "application/json";
-		ctx.body = ranking;
-	});
+	ctx.headers["content-type"] = "application/json";
+	ctx.body = ranking;
 });
