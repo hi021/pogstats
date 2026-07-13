@@ -282,3 +282,14 @@ export function unnestObjectsIntoArrays<T extends Record<string, unknown>>(objs:
 
 	return result;
 }
+
+export function getErrorMessage(e: unknown) {
+	if (typeof e == "string") return e;
+	if (Error.isError(e)) return e.message || "unknown_error";
+
+	try {
+		return JSON.stringify(e);
+	} catch {
+		return "unknown_error";
+	}
+}

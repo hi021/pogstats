@@ -1,7 +1,8 @@
 import http from "http";
 import Koa from "koa";
-import { DEV_ENV, SERVER_PORT } from "../env.js";
-import { FlagDefinitions, parseArgs } from "../shared.js";
+import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
+import { metricsMiddleware, recordErrorLog, requestMetricsMiddleware } from "../metrics.js";
+import { FlagDefinitions, getErrorMessage, parseArgs } from "../shared.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
 import { BASE_POG_WS_URL, onConnect, onUpgrade, socketDebugMessageEndpoint, wss } from "./pog-ws.js";
 import { scoresWs, scoresWsOnClose, scoresWsOnError, scoresWsOnMessage, scoresWsOnOpen } from "./scores-ws.js";
@@ -24,10 +25,13 @@ export const server = http.createServer(app.callback());
 
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
+app.use(metricsMiddleware);
+app.use(requestMetricsMiddleware);
 app.use(errorHandlerMiddleware);
 app.use(socketDebugMessageEndpoint);
 app.use(router.routes()).use(router.allowedMethods());
 app.on("error", (e, ctx) => {
+	recordErrorLog("server", getErrorMessage(e));
 	console.error("Server error:\n", ctx.url, e);
 });
 
@@ -47,3 +51,12 @@ server.listen(SERVER_PORT, () => {
 	console.log(`Server running on http://localhost:${SERVER_PORT}`);
 	console.log(`WebSocket listening on ws://localhost:${SERVER_PORT}${BASE_POG_WS_URL}`);
 });
+
+if (METRICS_PORT && METRICS_PORT != SERVER_PORT) {
+	const metricsApp = new Koa();
+	metricsApp.use(metricsMiddleware);
+	const metricsServer = http.createServer(metricsApp.callback());
+	metricsServer.listen(METRICS_PORT, () =>
+		console.log(`Metrics endpoint running on http://localhost:${METRICS_PORT}/metrics`)
+	);
+}

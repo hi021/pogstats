@@ -13,6 +13,7 @@ import {
 	setAllPlayerScoresPosition
 } from "../db.js";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
+import { timedFetch } from "../metrics.js";
 import { parseArgs, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, getMinDate, rateLimit } from "./shared.js";
@@ -66,7 +67,8 @@ async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch
 }
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {
-	const res = await fetch(buildUserLookupUrl(playerIds), { headers });
+	const url = buildUserLookupUrl(playerIds);
+	const res = await timedFetch(url, { headers }, "scrape_players", url.toString());
 	if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
 	const players = (await res.json()) as { users: ApiUserLookup[] };

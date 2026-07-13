@@ -20,9 +20,11 @@ import {
 	SCORE_SCRAPE_LOG_PATH,
 	SCRAPE_SCORE_DELAY_MS
 } from "../env.js";
+import { recordErrorLog, timedFetch } from "../metrics.js";
 import {
 	convertApiScore,
 	convertDatabaseScore,
+	getErrorMessage,
 	parseArgs,
 	prepareScoresTableValuesAndParamPlaceholders,
 	sortScores
@@ -150,7 +152,8 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 	try {
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processing beatmap`);
 
-		const response = await fetch(buildBeatmapScoresUrl(beatmapId), { headers });
+		const url = buildBeatmapScoresUrl(beatmapId);
+		const response = await timedFetch(url, { headers }, "scrape_scores", url.toString());
 		if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
 		const data = (await response.json()) as ApiBeatmapScore;
@@ -159,6 +162,7 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processed ${convertedScores.length} scores`);
 	} catch (e) {
+		recordErrorLog("scrape_scores", getErrorMessage(e));
 		logError(errorLogStream, `[${beatmapId}][#${rowNo}] - Processing failed`, e);
 	}
 }

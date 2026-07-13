@@ -30,6 +30,9 @@ export const DB_PLAYER_MIA_HISTORY_TABLE = process.env.DB_PLAYER_MIA_HISTORY_TAB
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;
 
+const parsedMetricsPort = Number(process.env.METRICS_PORT);
+export const METRICS_PORT = Number.isFinite(parsedMetricsPort) ? parsedMetricsPort : SERVER_PORT;
+
 export const DEV_ENV = process.env.DEV_ENV?.toLowerCase() === "true";
 export const VERBOSE = process.env.VERBOSE?.toLowerCase() === "true";
 

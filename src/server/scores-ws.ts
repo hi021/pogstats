@@ -14,9 +14,11 @@ import {
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
 import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import { recordErrorLog, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
 	convertApiScore,
+	getErrorMessage,
 	ParsedFlags,
 	prepareScoresTableValuesAndParamPlaceholders,
 	sleep,
@@ -176,6 +178,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	}
 
 	if (VERBOSE) console.log(`Found ${totalProvenScoreCount} beaten top 100 score(s)`);
+	recordScoreBatchCounts(batchTotalScoreCount, totalProvenScoreCount);
 
 	await withDbClientTransaction(async client => {
 		for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
@@ -203,6 +206,7 @@ async function fetchNewBeatmaps(client: ClientBase, beatmapIds: number[]) {
 	const missingIds = await getInexistentBeatmapIds(client, beatmapIds);
 	if (missingIds?.length) {
 		if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
+		recordMissingEntity("beatmap", missingIds.length);
 		// TODO
 	}
 
@@ -214,11 +218,13 @@ async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
 		const missingIds = await getInexistentPlayerIds(client, playerIds);
 		if (missingIds?.length) {
 			if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
+			recordMissingEntity("player", missingIds.length);
 			await scrapePlayers(missingIds);
 		}
 
 		batchCandidatePlayerIds.length = 0;
 	} catch (e) {
+		recordErrorLog("scores_ws", getErrorMessage(e));
 		console.error("failed to get missing players:\n", e);
 	}
 }

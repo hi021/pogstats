@@ -1,20 +1,26 @@
 import { OSU_CLIENT_ID, OSU_CLIENT_SECRET } from "../env.js";
 import { AUTH_ENDPOINT, buildRandomString, USER_AGENT, USER_AUTH_ENDPOINT } from "./shared.js";
+import { timedFetch } from "../metrics.js";
 
 export async function getOAuthToken(grantType = "client_credentials", code?: string) {
 	if (!OSU_CLIENT_ID || !OSU_CLIENT_SECRET)
 		throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET must be set in the environment variables.");
 
 	const body = `client_id=${OSU_CLIENT_ID}&client_secret=${OSU_CLIENT_SECRET}&grant_type=${grantType}&scope=public${code ? `&code=${code}` : ""}`;
-	const response = await fetch(AUTH_ENDPOINT, {
-		method: "POST",
-		headers: {
-			Accept: "application/json",
-			"Content-Type": "application/x-www-form-urlencoded",
-			"User-Agent": USER_AGENT
+	const response = await timedFetch(
+		AUTH_ENDPOINT,
+		{
+			method: "POST",
+			headers: {
+				Accept: "application/json",
+				"Content-Type": "application/x-www-form-urlencoded",
+				"User-Agent": USER_AGENT
+			},
+			body
 		},
-		body
-	});
+		"osu_auth",
+		"auth_token"
+	);
 	if (!response.ok) throw new Error(`Failed to get osu! OAuth token: ${response.status} ${response.statusText}`);
 
 	const data = await response.json();
@@ -37,12 +43,12 @@ export async function getUserOAuthCode(scopes: OsuAuthScope[], responseType = "c
 	url.searchParams.set("response_type", responseType);
 	url.searchParams.set("client_id", OSU_CLIENT_ID);
 
-	const response = await fetch(url, {
-		method: "GET",
-		headers: {
-			Accept: "application/json"
-		}
-	});
+	const response = await timedFetch(
+		url.toString(),
+		{ method: "GET", headers: { Accept: "application/json" } },
+		"osu_auth",
+		"auth_code"
+	);
 	if (!response.ok) throw new Error(`Failed to get osu! user OAuth code: ${response.status} ${response.statusText}`);
 
 	const data = await response.json();
