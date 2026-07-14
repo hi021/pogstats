@@ -68,7 +68,7 @@ async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {
 	const url = buildUserLookupUrl(playerIds);
-	const res = await timedFetch(url, { headers }, "scrape_players", url.toString());
+	const res = await timedFetch(url, { headers }, "scrape_players", url.hostname);
 	if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
 	const players = (await res.json()) as { users: ApiUserLookup[] };

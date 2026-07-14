@@ -153,7 +153,7 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processing beatmap`);
 
 		const url = buildBeatmapScoresUrl(beatmapId);
-		const response = await timedFetch(url, { headers }, "scrape_scores", url.toString());
+		const response = await timedFetch(url, { headers }, "scrape_scores", url.hostname);
 		if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
 		const data = (await response.json()) as ApiBeatmapScore;

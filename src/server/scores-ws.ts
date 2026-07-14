@@ -5,7 +5,6 @@ import WebSocket from "ws";
 import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
 	acquireBeatmapAdvisoryLock,
-	convertToBeatenScoreParamObject,
 	getInexistentBeatmapIds,
 	getInexistentPlayerIds,
 	getLastScoreId,
@@ -13,7 +12,7 @@ import {
 	saveLastScoreId,
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
-import { DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
 import { recordErrorLog, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
@@ -22,7 +21,8 @@ import {
 	ParsedFlags,
 	prepareScoresTableValuesAndParamPlaceholders,
 	sleep,
-	sortWsScores
+	sortWsScores,
+	unnestObjectsIntoArrays
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
 
@@ -31,7 +31,6 @@ const SCORES_WS_PING_INTERVAL = 30000;
 const SCORES_WS_RECONNECTION_INTERVAL = 10000;
 
 const batchCandidateScores = new Array<WsScore>();
-const batchCandidatePlayerIds = new Array<number>();
 const batchCandidateBeatmapIds = new Array<number>();
 let sessionBatchCount = 0;
 let batchTotalScoreCount = 0;
@@ -114,7 +113,6 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 		if (!isCandidateScore(score)) return;
 		batchLowestScoreId = score.id < batchLowestScoreId ? score.id : batchLowestScoreId;
 		batchCandidateScores.push(score);
-		batchCandidatePlayerIds.push(score.user_id);
 		batchCandidateBeatmapIds.push(score.beatmap_id);
 	} catch (e) {
 		console.error("failed to parse scores-ws message as JSON:\n", e);
@@ -150,12 +148,19 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 
 	let beatenScoresByMaps: ProvenScoresPerRulesetBeatmap[] = [];
 	await withDbClientTransaction(async client => {
+		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
 		await Promise.all([
 			new Promise(r => r(fetchNewBeatmaps(client, batchCandidateBeatmapIds))),
-			new Promise(r => r(fetchNewPlayers(client, batchCandidatePlayerIds)))
+			new Promise(r =>
+				r(
+					fetchNewPlayers(
+						client,
+						beatenScoresByMaps.flatMap(p => p.proven_user_ids)
+					)
+				)
+			)
 		]);
 
-		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
 		if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
 	});
 
@@ -164,10 +169,8 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	for (const beatenScoresByMap of beatenScoresByMaps) {
 		const beatmapId = beatenScoresByMap.beatmap_id;
 		const rulesetId = beatenScoresByMap.ruleset_id;
-		const provenScoreIds = new Set(beatenScoresByMap.candidate_ids.map(id => Number(id)));
-		// TODO?: profile this and try to sort in the db
+		const provenScoreIds = new Set(beatenScoresByMap.proven_ids.map(id => Number(id)));
 		const provenScores = scores.filter(score => provenScoreIds.has(score.id)).sort(sortWsScores);
-		assert(provenScoreIds.size === provenScores.length);
 		totalProvenScoreCount += provenScores.length;
 
 		const key = `${beatmapId}:${rulesetId}`;
@@ -221,8 +224,6 @@ async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
 			recordMissingEntity("player", missingIds.length);
 			await scrapePlayers(missingIds);
 		}
-
-		batchCandidatePlayerIds.length = 0;
 	} catch (e) {
 		recordErrorLog("scores_ws", getErrorMessage(e));
 		console.error("failed to get missing players:\n", e);
@@ -278,7 +279,7 @@ async function upsertBeatmapScores(
 
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(provenScores);
 	await client.query(
-		`INSERT INTO ws_scores_tmp (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
+		`INSERT INTO ws_scores_tmp (${SCORE_TABLE_COLUMNS.join(",")}) VALUES ${paramGroups.join(",")}`,
 		values
 	);
 
@@ -293,17 +294,36 @@ async function upsertBeatmapScores(
 	);
 
 	await client.query(
-		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")})
-		 SELECT ${SCORE_TABLE_COLUMNS.join(", ")} FROM ws_scores_tmp`
+		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(",")})
+		 SELECT ${SCORE_TABLE_COLUMNS.join(",")} FROM ws_scores_tmp`
 	);
 
 	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }]);
 	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update");
+
+	// TODO get beaten scores for every threshold?
+	const beatenScoreInfo: QueryResult<BeatenScoreInfo> = await client.query(
+		`SELECT s.position,
+		 s.grade,
+		 provenPlr.username AS proven_username,
+		 provenPlr.country_code AS proven_country,
+		 b.artist,
+		 b.title,
+		 b.version,
+		 (b.approved_date > NOW() - INTERVAL '3 DAYS') AS is_beatmap_new 
+		 FROM ${DB_SCORES_TABLE} s
+			JOIN ${DB_PLAYERS_TABLE} provenPlr ON provenPlr.id = s.user_id
+			JOIN ${DB_BEATMAPS_TABLE} b ON b.id = s.beatmap_id
+		 WHERE s.id = ANY($1::BIGINT[])`,
+		[provenScores.map(p => p.id)]
+	);
+
+	console.log("beatenScoreInfo", beatenScoreInfo.rows);
+	return beatenScoreInfo.rows;
 }
 
-// TODO return beaten score details to show cool live data
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
-	const paramObj = convertToBeatenScoreParamObject(scores);
+	const arrays = unnestObjectsIntoArrays(scores);
 	const scoreList: QueryResult<ProvenScoresPerRulesetBeatmap> = await client.query(
 		`WITH candidates AS (
 				SELECT
@@ -312,13 +332,14 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 					candidate_beatmap_id,
 					candidate_user_id,
 					candidate_score
-				FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+				FROM UNNEST($1::BIGINT[], $2::SMALLINT[], $3::BIGINT[], $4::INT[], $5::BIGINT[])
 				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
 		),
 		proven_scores AS (
 			SELECT DISTINCT
 				c.candidate_beatmap_id,
 				c.candidate_ruleset_id,
+				c.candidate_user_id,
 				c.candidate_id
 			FROM candidates c
 			WHERE EXISTS (
@@ -341,10 +362,11 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 		SELECT
 			candidate_beatmap_id AS beatmap_id,
 			candidate_ruleset_id AS ruleset_id,
-			array_agg(candidate_id) AS candidate_ids
+			array_agg(candidate_user_id) AS proven_user_ids,
+			array_agg(candidate_id) AS proven_ids
 		FROM proven_scores
 		GROUP BY candidate_beatmap_id, candidate_ruleset_id`,
-		[paramObj.ids, paramObj.rulesets, paramObj.beatmaps, paramObj.users, paramObj.totalScores]
+		[arrays.id, arrays.ruleset_id, arrays.beatmap_id, arrays.user_id, arrays.total_score]
 	);
 
 	return scoreList.rows;

@@ -193,28 +193,3 @@ export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayerIds:
 		[miaPlayerIds]
 	);
 }
-
-type BeatenScoreParams = {
-	ids: number[];
-	rulesets: number[];
-	beatmaps: number[];
-	users: number[];
-	totalScores: number[];
-};
-export function convertToBeatenScoreParamObject(scores: WsScore[]) {
-	const ids = new Array<number>(scores.length);
-	const rulesets = new Array<number>(scores.length);
-	const beatmaps = new Array<number>(scores.length);
-	const users = new Array<number>(scores.length);
-	const totalScores = new Array<number>(scores.length);
-
-	for (let i = 0; i < scores.length; ++i) {
-		const score = scores[i];
-		ids[i] = score.id;
-		rulesets[i] = score.ruleset_id;
-		beatmaps[i] = score.beatmap_id;
-		users[i] = score.user_id;
-		totalScores[i] = score.total_score;
-	}
-	return { ids, rulesets, beatmaps, users, totalScores } as BeatenScoreParams;
-}

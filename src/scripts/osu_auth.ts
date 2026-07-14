@@ -1,6 +1,6 @@
 import { OSU_CLIENT_ID, OSU_CLIENT_SECRET } from "../env.js";
-import { AUTH_ENDPOINT, buildRandomString, USER_AGENT, USER_AUTH_ENDPOINT } from "./shared.js";
 import { timedFetch } from "../metrics.js";
+import { AUTH_ENDPOINT, buildRandomString, USER_AGENT, USER_AUTH_ENDPOINT } from "./shared.js";
 
 export async function getOAuthToken(grantType = "client_credentials", code?: string) {
 	if (!OSU_CLIENT_ID || !OSU_CLIENT_SECRET)
@@ -19,7 +19,7 @@ export async function getOAuthToken(grantType = "client_credentials", code?: str
 			body
 		},
 		"osu_auth",
-		"auth_token"
+		"osu_auth_token"
 	);
 	if (!response.ok) throw new Error(`Failed to get osu! OAuth token: ${response.status} ${response.statusText}`);
 
@@ -45,9 +45,9 @@ export async function getUserOAuthCode(scopes: OsuAuthScope[], responseType = "c
 
 	const response = await timedFetch(
 		url.toString(),
-		{ method: "GET", headers: { Accept: "application/json" } },
+		{ method: "GET", headers: { Accept: "application/json", "User-Agent": USER_AGENT } },
 		"osu_auth",
-		"auth_code"
+		"osu_auth_code"
 	);
 	if (!response.ok) throw new Error(`Failed to get osu! user OAuth code: ${response.status} ${response.statusText}`);
 

@@ -3,7 +3,7 @@ import type { ClientBase, QueryResult } from "pg";
 import prom from "prom-client";
 
 const metricsRegistry = new prom.Registry();
-prom.collectDefaultMetrics({ register: metricsRegistry, prefix: "pogstats_" });
+prom.collectDefaultMetrics({ register: metricsRegistry, prefix: "pogstats_", eventLoopMonitoringPrecision: 25 });
 
 const httpRequestDuration = new prom.Histogram({
 	name: "pogstats_http_request_duration_ms",
@@ -40,7 +40,7 @@ const scoreBatchCount = new prom.Histogram({
 	name: "pogstats_score_batch_count",
 	help: "Counts of score batches and proven score counts from scores-ws",
 	labelNames: ["type"] as const,
-	buckets: [1, 50, 250, 500, 1000, 2000, 5000, 50000, 100000],
+	buckets: [1, 5, 15, 250, 1000, 1500, 2000, 37500, 100000],
 	registers: [metricsRegistry]
 });
 
@@ -102,9 +102,9 @@ export async function timedFetch(
 	let statusCode = "error";
 
 	try {
-		const response = await fetch(request, init);
-		statusCode = String(response.status);
-		return response;
+		const res = await fetch(request, init);
+		statusCode = String(res.status);
+		return res;
 	} finally {
 		const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
 		outboundRequestDuration

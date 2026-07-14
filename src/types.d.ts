@@ -77,7 +77,19 @@ interface BeatmapScoreAdditionalData {
 interface ProvenScoresPerRulesetBeatmap {
 	beatmap_id: number;
 	ruleset_id: RulesetId;
-	candidate_ids: number[];
+	proven_user_ids: number[];
+	proven_ids: number[];
+}
+
+interface BeatenScoreInfo {
+	position: number;
+	grade: ScoreRank;
+	proven_username: string;
+	proven_country: string;
+	artist: string;
+	title: string;
+	version: string;
+	is_beatmap_new: boolean;
 }
 
 // ------------------------------------------
@@ -162,6 +174,8 @@ interface Beatmap {
 
 // ------------------------------------------
 
+// TODO?: make every ranking a view and just store a reference to them here
+// this would also allow for high resolution rank history for all rankings (like historical player snipes but for rank changes instead?)
 interface RankingType {
 	id: number;
 	rulesetId: number;
@@ -187,6 +201,18 @@ interface DataSource {
 	id: number;
 	name: string;
 	comment: string;
+}
+
+// TODO DDL
+interface HistoricalPlayerSnipes {
+	userId: number;
+	scoreId: number;
+	snipedBy: number; // user id
+	snipedWith: number; // score id
+	beatmapId: number;
+	rulesetId: RulesetId;
+	positionThreshold: RankingPositionThreshold;
+	date: Date; // will be the same as snipedBy.endedAt but important if using timescaledb
 }
 
 // ------------------------------------------
