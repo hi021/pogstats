@@ -66,6 +66,16 @@ async function createScoreTables() {
 		COMMENT ON COLUMN ${DB_SCORES_TABLE}.position 	IS 'Meta (not from the API): 1-based position of the score on the beatmap';
 		COMMENT ON COLUMN ${DB_SCORES_TABLE}.data 			IS 'mods, maximum_statistics, statistics columns from the API as JSONB';`);
 
+	// TODO: verify performance, maybe add JSONB GIN, score, pp, grade after verifying ranking queries
+	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
+	// ? MIA scores index? (position, user_id) WHERE position = 0?
+	await client.query(
+		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);
+				 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 			ON ${DB_SCORES_TABLE} (user_id, position);
+				 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
+				 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
+	);
+
 	await client.query(`
 		CREATE TABLE IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (
 			user_id 						INTEGER NOT NULL,
@@ -102,16 +112,6 @@ async function createScoreTables() {
 			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_scrape IS 'Meta: time of the last score scraper run over this map';
 			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_update IS 'Meta: time of the last update for the map from scores-ws';
 			`);
-
-	// TODO: verify performance, maybe add JSONB GIN, score, pp, grade after verifying ranking queries
-	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
-	// ? MIA scores index? (position, user_id) WHERE position = 0?
-	await client.query(
-		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);
-     CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 			ON ${DB_SCORES_TABLE} (user_id, position);
-     CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
-		 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
-	);
 
 	console.log(
 		`Created ${DB_SCORES_TABLE}, ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}, and ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} tables if didn't exist`

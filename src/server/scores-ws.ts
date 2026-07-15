@@ -321,7 +321,7 @@ async function upsertBeatmapScores(
 	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }]);
 
 	const insertedIds = provenScores.map(score => score.id);
-	const insertedScores: QueryResult<ScoreNode> = await client.query(
+	const insertedScores: QueryResult<ScoreBasicData> = await client.query(
 		`SELECT s.id,
 						s.user_id AS "userId",
 						s.total_score AS "totalScore",
@@ -336,15 +336,7 @@ async function upsertBeatmapScores(
 		[insertedIds]
 	);
 
-	// TODO move to types.d.ts as Pick<>
-	interface ScoreNode extends SortableBeatmapScore {
-		userId: number;
-		grade: ScoreRank;
-		username: string;
-		countryCode: string;
-	}
-
-	const currentScores: ScoreNode[] = [...existingScores.rows];
+	const currentScores: ScoreBasicData[] = [...existingScores.rows];
 	const beatenScoresMap = new Map<number, BeatenScoreData[]>();
 	const snipes: HistoricalPlayerSnipes[] = [];
 
@@ -420,47 +412,47 @@ async function upsertBeatmapScores(
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores);
 	const scoreList: QueryResult<ProvenScoresPerRulesetBeatmap> = await client.query(
-		`WITH candidates AS (
-				SELECT
-					candidate_id,
-					candidate_ruleset_id,
-					candidate_beatmap_id,
-					candidate_user_id,
-					candidate_score
-				FROM UNNEST($1::BIGINT[], $2::SMALLINT[], $3::BIGINT[], $4::INT[], $5::BIGINT[])
-				AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-		),
-		proven_scores AS (
-			SELECT DISTINCT
-				c.candidate_beatmap_id,
-				c.candidate_ruleset_id,
-				c.candidate_user_id,
-				c.candidate_id
-			FROM candidates c
-			WHERE EXISTS (
-				SELECT 1
-				FROM scores s
-				WHERE s.beatmap_id = c.candidate_beatmap_id
-					AND s.ruleset_id = c.candidate_ruleset_id
-					AND s.position BETWEEN 1 AND 100
-					AND s.total_score < c.candidate_score
-			)
-			AND NOT EXISTS (
-				SELECT 1
-				FROM scores s2
-				WHERE s2.beatmap_id = c.candidate_beatmap_id
-					AND s2.ruleset_id = c.candidate_ruleset_id
-					AND s2.user_id = c.candidate_user_id
-					AND s2.total_score >= c.candidate_score
-			)
+		`
+		WITH candidates AS (
+			SELECT
+				candidate_id,
+				candidate_ruleset_id,
+				candidate_beatmap_id,
+				candidate_user_id,
+				candidate_score
+			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+					 AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
 		)
 		SELECT
-			candidate_beatmap_id AS beatmap_id,
-			candidate_ruleset_id AS ruleset_id,
-			array_agg(candidate_user_id) AS proven_user_ids,
-			array_agg(candidate_id) AS proven_ids
-		FROM proven_scores
-		GROUP BY candidate_beatmap_id, candidate_ruleset_id`,
+			c.candidate_beatmap_id AS beatmap_id,
+			c.candidate_ruleset_id AS ruleset_id,
+			array_agg(c.candidate_user_id) AS proven_user_ids,
+			array_agg(c.candidate_id) AS proven_ids
+		FROM candidates c
+		LEFT JOIN LATERAL (
+			SELECT
+				COUNT(*) AS score_count,
+				MAX(position) AS max_position,
+				MIN(total_score) FILTER (WHERE position BETWEEN 1 AND 100) AS min_top100_score
+			FROM ${DB_SCORES_TABLE} s
+			WHERE s.beatmap_id = c.candidate_beatmap_id
+				AND s.ruleset_id = c.candidate_ruleset_id
+		) s_agg ON true
+		LEFT JOIN LATERAL (
+			SELECT total_score AS user_best_score
+			FROM ${DB_SCORES_TABLE} s2
+			WHERE s2.beatmap_id = c.candidate_beatmap_id
+				AND s2.ruleset_id = c.candidate_ruleset_id
+				AND s2.user_id = c.candidate_user_id
+		) u_agg ON true
+		WHERE NOT (
+			u_agg.user_best_score IS NOT NULL AND u_agg.user_best_score >= c.candidate_score
+		) AND (
+			s_agg.score_count = 0 OR
+			(s_agg.max_position IS NOT NULL AND s_agg.max_position < 100) OR
+			(s_agg.min_top100_score IS NOT NULL AND s_agg.min_top100_score < c.candidate_score)
+		)
+		GROUP BY c.candidate_beatmap_id, c.candidate_ruleset_id`,
 		[arrays.id, arrays.ruleset_id, arrays.beatmap_id, arrays.user_id, arrays.total_score]
 	);
 

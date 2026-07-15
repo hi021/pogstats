@@ -199,7 +199,7 @@ export function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditio
 	return JSON.stringify(additionalData);
 }
 
-export function sortScores(a: SortableBeatmapScore, b: SortableBeatmapScore) {
+export function sortScores(a: ScoreSortData, b: ScoreSortData) {
 	if (a.totalScore != b.totalScore) return b.totalScore - a.totalScore;
 	if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
 	return a.id - b.id;

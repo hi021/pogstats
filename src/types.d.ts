@@ -45,13 +45,13 @@ type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
 // 		 lazer - renamed to is_lazer
 //     + 3 other meta columns: is_scraped, retrieved_at, position, is_perma
 
-interface SortableBeatmapScore {
+interface ScoreSortData {
 	id: number;
 	totalScore: number;
 	endedAt: Date;
 }
 
-interface BeatmapScoreFull extends SortableBeatmapScore {
+interface BeatmapScoreFull extends ScoreSortData {
 	position: number; // meta, not from API, 0 means score is MIA (from potentially restricted player)
 	isScraped: boolean; // meta, not from API - whether it came from /beatmaps/{id}/scores (scrape_scores script)
 	retrievedAt: Date; // meta, not from API; can be sligtly off from the date in beatmap_ruleset_update_dates table
@@ -69,6 +69,10 @@ interface BeatmapScoreFull extends SortableBeatmapScore {
 	pp?: number;
 	data: BeatmapScoreAdditionalData;
 }
+
+type ScoreBasicData = ScoreSortData &
+	Pick<BeatmapScoreFull, "userId" | "grade"> &
+	Pick<Player, "username" | "countryCode">;
 
 interface BeatmapScoreAdditionalData {
 	mods: ApiMod[];
