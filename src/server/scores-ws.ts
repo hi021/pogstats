@@ -1,4 +1,3 @@
-import { assert } from "console";
 import https from "https";
 import { ClientBase, QueryResult } from "pg";
 import WebSocket from "ws";
@@ -8,6 +7,7 @@ import {
 	getInexistentBeatmapIds,
 	getInexistentPlayerIds,
 	getLastScoreId,
+	insertHistoricalPlayerSnipes,
 	recalculateScorePositionsForMaps,
 	saveLastScoreId,
 	updateBeatmapScoresRetrievalDate
@@ -20,7 +20,9 @@ import {
 	getErrorMessage,
 	ParsedFlags,
 	prepareScoresTableValuesAndParamPlaceholders,
+	RANKING_POS_THRESHOLDS,
 	sleep,
+	sortScores,
 	sortWsScores,
 	unnestObjectsIntoArrays
 } from "../shared.js";
@@ -275,8 +277,26 @@ async function upsertBeatmapScores(
 ) {
 	if (!provenScores?.length) return;
 	await acquireBeatmapAdvisoryLock(client, beatmapId, rulesetId);
-	await createTempScoresTable(client);
+	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update");
 
+	const existingScores = await client.query(
+		`SELECT s.id,
+						s.user_id AS "userId",
+						s.total_score AS "totalScore",
+						s.ended_at AS "endedAt",
+						s.grade,
+						p.username,
+						p.country_code AS "countryCode"
+		 FROM ${DB_SCORES_TABLE} s
+		 	JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
+		 WHERE s.beatmap_id = $1
+		  AND s.ruleset_id = $2
+		  AND s.position BETWEEN 1 AND 100
+		 ORDER BY s.position ASC`,
+		[beatmapId, rulesetId]
+	);
+
+	await createTempScoresTable(client);
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(provenScores);
 	await client.query(
 		`INSERT INTO ws_scores_tmp (${SCORE_TABLE_COLUMNS.join(",")}) VALUES ${paramGroups.join(",")}`,
@@ -299,27 +319,102 @@ async function upsertBeatmapScores(
 	);
 
 	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }]);
-	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update");
 
-	// TODO get beaten scores for every threshold?
-	const beatenScoreInfo: QueryResult<BeatenScoreInfo> = await client.query(
-		`SELECT s.position,
+	const insertedIds = provenScores.map(score => score.id);
+	const insertedScores: QueryResult<ScoreNode> = await client.query(
+		`SELECT s.id,
+						s.user_id AS "userId",
+						s.total_score AS "totalScore",
+						s.ended_at AS "endedAt",
+						s.grade,
+						p.username,
+						p.country_code AS "countryCode"
+		FROM ${DB_SCORES_TABLE} s
+			JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
+		WHERE s.id = ANY($1::BIGINT[])
+		ORDER BY s.ended_at ASC, s.id ASC`,
+		[insertedIds]
+	);
+
+	// TODO move to types.d.ts as Pick<>
+	interface ScoreNode extends SortableBeatmapScore {
+		userId: number;
+		grade: ScoreRank;
+		username: string;
+		countryCode: string;
+	}
+
+	const currentScores: ScoreNode[] = [...existingScores.rows];
+	const beatenScoresMap = new Map<number, BeatenScoreData[]>();
+	const snipes: HistoricalPlayerSnipes[] = [];
+
+	// TODO: I'd like this to be within postgres temporary tables, but idk no perf issues for now
+	for (const newScore of insertedScores.rows) {
+		const insertIndex = currentScores.findIndex(existingScore => sortScores(newScore, existingScore) < 0);
+		const insertPosition = insertIndex == -1 ? currentScores.length : insertIndex;
+
+		for (let victimIndex = insertPosition; victimIndex < currentScores.length; victimIndex++) {
+			const oldPosition = (victimIndex + 1) as RankingPositionThreshold;
+			if (!RANKING_POS_THRESHOLDS.includes(oldPosition)) continue;
+
+			const victim = currentScores[victimIndex];
+			if (victim.userId == newScore.userId) continue;
+
+			const threshold = oldPosition;
+			const beatenScore: BeatenScoreData = {
+				position_threshold: threshold,
+				score_id: victim.id,
+				user_id: victim.userId,
+				username: victim.username,
+				country: victim.countryCode
+			};
+
+			const existingBeaten = beatenScoresMap.get(newScore.id);
+			existingBeaten ? existingBeaten.push(beatenScore) : beatenScoresMap.set(newScore.id, [beatenScore]);
+
+			snipes.push({
+				userId: victim.userId,
+				scoreId: victim.id,
+				snipedBy: newScore.userId,
+				snipedWith: newScore.id,
+				beatmapId,
+				rulesetId,
+				positionThreshold: threshold,
+				date: newScore.endedAt
+			});
+		}
+
+		currentScores.splice(insertPosition, 0, newScore);
+	}
+
+	await insertHistoricalPlayerSnipes(client, snipes);
+
+	const beatingScores: QueryResult<BeatingScoreData> = await client.query(
+		`SELECT s.id AS score_id,
+		 s.position,
 		 s.grade,
+		 provenPlr.id AS proven_user_id,
 		 provenPlr.username AS proven_username,
 		 provenPlr.country_code AS proven_country,
 		 b.artist,
 		 b.title,
 		 b.version,
-		 (b.approved_date > NOW() - INTERVAL '3 DAYS') AS is_beatmap_new 
+		 (b.approved_date > NOW() - INTERVAL '3 DAYS') AS is_beatmap_new
 		 FROM ${DB_SCORES_TABLE} s
 			JOIN ${DB_PLAYERS_TABLE} provenPlr ON provenPlr.id = s.user_id
 			JOIN ${DB_BEATMAPS_TABLE} b ON b.id = s.beatmap_id
-		 WHERE s.id = ANY($1::BIGINT[])`,
-		[provenScores.map(p => p.id)]
+		 WHERE s.id = ANY($1::BIGINT[])
+		 ORDER BY s.ended_at ASC`,
+		[insertedIds]
 	);
 
-	console.log("beatenScoreInfo", beatenScoreInfo.rows);
-	return beatenScoreInfo.rows;
+	const result: BeatingScoreData[] = beatingScores.rows.map(row => ({
+		...row,
+		beaten_scores: beatenScoresMap.get(Number(row.score_id)) ?? []
+	}));
+
+	console.log("beatenScoreInfo", result); // TODO DEBUG
+	return result;
 }
 
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {

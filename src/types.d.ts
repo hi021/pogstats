@@ -45,25 +45,28 @@ type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
 // 		 lazer - renamed to is_lazer
 //     + 3 other meta columns: is_scraped, retrieved_at, position, is_perma
 
-interface BeatmapScoreFull {
+interface SortableBeatmapScore {
+	id: number;
+	totalScore: number;
+	endedAt: Date;
+}
+
+interface BeatmapScoreFull extends SortableBeatmapScore {
 	position: number; // meta, not from API, 0 means score is MIA (from potentially restricted player)
 	isScraped: boolean; // meta, not from API - whether it came from /beatmaps/{id}/scores (scrape_scores script)
 	retrievedAt: Date; // meta, not from API; can be sligtly off from the date in beatmap_ruleset_update_dates table
 	isLazer: boolean; // meta, not from API (true only if build_id is present)
 	isPerma: boolean; // meta, whether highest possible total_score on map
-	id: number;
 	userId: number;
 	rulesetId: number;
 	beatmapId: number;
 	grade: ScoreRank;
 	accuracy: number; // 0-1
 	maxCombo: number;
-	totalScore: number;
 	classicTotalScore?: number; // seems to always be present
 	totalScoreWithoutMods?: number;
 	isPerfectCombo: boolean;
 	pp?: number;
-	endedAt: Date;
 	data: BeatmapScoreAdditionalData;
 }
 
@@ -81,15 +84,27 @@ interface ProvenScoresPerRulesetBeatmap {
 	proven_ids: number[];
 }
 
-interface BeatenScoreInfo {
+interface BeatenScoreData {
+	position_threshold: RankingPositionThreshold;
+	score_id: number;
+	user_id: number;
+	username: string;
+	country: string;
+}
+
+interface BeatingScoreData {
+	score_id: number;
 	position: number;
 	grade: ScoreRank;
+	proven_user_id: number;
 	proven_username: string;
 	proven_country: string;
+	beatmap_id: string;
 	artist: string;
 	title: string;
 	version: string;
 	is_beatmap_new: boolean;
+	beaten_scores: BeatenScoreData[];
 }
 
 // ------------------------------------------

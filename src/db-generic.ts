@@ -1,19 +1,5 @@
-import { ClientBase, Pool, PoolClient, QueryResult, types } from "pg";
-import {
-	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
-	DB_BEATMAPS_TABLE,
-	DB_CONFIG_TABLE,
-	DB_HOST,
-	DB_NAME,
-	DB_PASSWORD,
-	DB_PLAYER_MIA_HISTORY_TABLE,
-	DB_PLAYERS_TABLE,
-	DB_PORT,
-	DB_SCORES_TABLE,
-	DB_USER,
-	DEV_ENV
-} from "./env.js";
-import { unnestObjectsIntoArrays } from "./shared.js";
+import { Pool, PoolClient, types } from "pg";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEV_ENV } from "./env.js";
 
 export const SCORE_TABLE_COLUMNS_ALL = Object.freeze([
 	"position",
@@ -89,6 +75,17 @@ export const BEATMAP_TABLE_COLUMNS = Object.freeze([
 	"ar",
 	"hp",
 	"packs"
+]);
+
+export const HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS = Object.freeze([
+	"user_id",
+	"score_id",
+	"sniped_by",
+	"sniped_with",
+	"beatmap_id",
+	"ruleset_id",
+	"position_threshold",
+	"date"
 ]);
 
 export const BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS = Object.freeze([

@@ -1,4 +1,4 @@
-import { BEATMAP_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
+import { BEATMAP_TABLE_COLUMNS, HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
 
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko", "fruits", "mania"]);
@@ -174,11 +174,32 @@ export function prepareBeatmapTableValuesAndParamPlaceholders(beatmaps: Beatmap[
 	return { values, paramGroups };
 }
 
+export function preparePlayerSnipesTableValuesAndParamPlaceholders(snipes: HistoricalPlayerSnipes[]) {
+	const values: unknown[] = [];
+	const paramGroups = snipes.map((snipe, index) => {
+		const offset = index * HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS.length;
+		values.push(
+			snipe.userId,
+			snipe.scoreId,
+			snipe.snipedBy,
+			snipe.snipedWith,
+			snipe.beatmapId,
+			snipe.rulesetId,
+			snipe.positionThreshold,
+			snipe.date
+		);
+
+		return `(${HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
+	});
+
+	return { values, paramGroups };
+}
+
 export function convertAdditionalDataToJsonb(additionalData: BeatmapScoreAdditionalData) {
 	return JSON.stringify(additionalData);
 }
 
-export function sortScores(a: BeatmapScoreFull, b: BeatmapScoreFull) {
+export function sortScores(a: SortableBeatmapScore, b: SortableBeatmapScore) {
 	if (a.totalScore != b.totalScore) return b.totalScore - a.totalScore;
 	if (a.endedAt.getTime() != b.endedAt.getTime()) return a.endedAt.getTime() - b.endedAt.getTime();
 	return a.id - b.id;

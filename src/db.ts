@@ -1,14 +1,19 @@
-import { ClientBase, PoolClient, QueryResult } from "pg";
+import { ClientBase, QueryResult } from "pg";
+import {
+	BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS,
+	HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS,
+	withDbClient
+} from "./db-generic.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
 	DB_CONFIG_TABLE,
+	DB_HISTORICAL_PLAYER_SNIPES_TABLE,
 	DB_PLAYER_MIA_HISTORY_TABLE,
 	DB_PLAYERS_TABLE,
 	DB_SCORES_TABLE
 } from "./env.js";
-import { unnestObjectsIntoArrays } from "./shared.js";
-import { BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS, withDbClient } from "./db-generic.js";
+import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 
 export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number) {
 	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
@@ -71,6 +76,17 @@ export async function getInexistentBeatmapIds(client: ClientBase, beatmapIds: nu
 			[beatmapIds]
 		)
 	).rows.map(r => r.id) as number[];
+}
+
+export async function insertHistoricalPlayerSnipes(client: ClientBase, snipes: HistoricalPlayerSnipes[]) {
+	if (!snipes?.length) return;
+
+	const { values, paramGroups } = preparePlayerSnipesTableValuesAndParamPlaceholders(snipes);
+	await client.query(
+		`INSERT INTO ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (${HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS.join(",")})
+		 VALUES ${paramGroups.join(", ")}`,
+		values
+	);
 }
 
 export async function recalculateScorePositionsForMaps(client: ClientBase, beatmaps: BeatmapRuleset[]) {
