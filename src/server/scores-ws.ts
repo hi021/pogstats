@@ -12,7 +12,7 @@ import {
 	saveLastScoreId,
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
-import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import { DB_BEATMAP_RULESET_UPDATE_DATES_TABLE, DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
 import { recordErrorLog, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
@@ -151,19 +151,11 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	let beatenScoresByMaps: ProvenScoresPerRulesetBeatmap[] = [];
 	await withDbClientTransaction(async client => {
 		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
+		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids)
 		await Promise.all([
 			new Promise(r => r(fetchNewBeatmaps(client, batchCandidateBeatmapIds))),
-			new Promise(r =>
-				r(
-					fetchNewPlayers(
-						client,
-						beatenScoresByMaps.flatMap(p => p.proven_user_ids)
-					)
-				)
-			)
+			new Promise(r => r(fetchNewPlayers(client, provenUserIds)))
 		]);
-
-		if (VERBOSE) console.log("beatenScoresByMaps:\n", beatenScoresByMaps); // TODO debug only
 	});
 
 	let totalProvenScoreCount = 0;
@@ -342,16 +334,17 @@ async function upsertBeatmapScores(
 
 	// TODO: I'd like this to be within postgres temporary tables, but idk no perf issues for now
 	for (const newScore of insertedScores.rows) {
+		const existingUserScoreIndex = currentScores.findIndex(s => s.userId == newScore.userId);
+		if(existingUserScoreIndex != -1) currentScores.splice(existingUserScoreIndex, 1);
+
 		const insertIndex = currentScores.findIndex(existingScore => sortScores(newScore, existingScore) < 0);
 		const insertPosition = insertIndex == -1 ? currentScores.length : insertIndex;
 
-		for (let victimIndex = insertPosition; victimIndex < currentScores.length; victimIndex++) {
+		for (let victimIndex = insertPosition; victimIndex < (existingUserScoreIndex == -1 ? currentScores.length : existingUserScoreIndex); victimIndex++) {
 			const oldPosition = (victimIndex + 1) as RankingPositionThreshold;
 			if (!RANKING_POS_THRESHOLDS.includes(oldPosition)) continue;
 
 			const victim = currentScores[victimIndex];
-			if (victim.userId == newScore.userId) continue;
-
 			const threshold = oldPosition;
 			const beatenScore: BeatenScoreData = {
 				position_threshold: threshold,
@@ -405,10 +398,13 @@ async function upsertBeatmapScores(
 		beaten_scores: beatenScoresMap.get(Number(row.score_id)) ?? []
 	}));
 
-	console.log("beatenScoreInfo", result); // TODO DEBUG
 	return result;
 }
 
+// TODO
+// WARNING: the DB_BEATMAP_RULESET_UPDATE_DATES_TABLE join is only necessary for the first main score scrape!! remove it later or new maps will never be populated
+// duct tape solution but it's bed time
+// TODO
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores);
 	const scoreList: QueryResult<ProvenScoresPerRulesetBeatmap> = await client.query(
@@ -422,13 +418,21 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 				candidate_score
 			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
 					 AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
+		),
+		filtered_candidates AS (
+			SELECT c.*
+			FROM candidates c
+			JOIN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} u
+				ON u.beatmap_id = c.candidate_beatmap_id
+				AND u.ruleset_id = c.candidate_ruleset_id
+				AND u.last_scores_scrape IS NOT NULL
 		)
 		SELECT
 			c.candidate_beatmap_id AS beatmap_id,
 			c.candidate_ruleset_id AS ruleset_id,
 			array_agg(c.candidate_user_id) AS proven_user_ids,
 			array_agg(c.candidate_id) AS proven_ids
-		FROM candidates c
+		FROM filtered_candidates c
 		LEFT JOIN LATERAL (
 			SELECT
 				COUNT(*) AS score_count,
