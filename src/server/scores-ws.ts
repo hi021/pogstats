@@ -12,7 +12,14 @@ import {
 	saveLastScoreId,
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
-import { DB_BEATMAP_RULESET_UPDATE_DATES_TABLE, DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import {
+	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
+	DB_BEATMAPS_TABLE,
+	DB_PLAYERS_TABLE,
+	DB_SCORES_TABLE,
+	DEV_ENV,
+	VERBOSE
+} from "../env.js";
 import { recordErrorLog, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
@@ -151,7 +158,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	let beatenScoresByMaps: ProvenScoresPerRulesetBeatmap[] = [];
 	await withDbClientTransaction(async client => {
 		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
-		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids)
+		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
 		await Promise.all([
 			new Promise(r => r(fetchNewBeatmaps(client, batchCandidateBeatmapIds))),
 			new Promise(r => r(fetchNewPlayers(client, provenUserIds)))
@@ -335,12 +342,16 @@ async function upsertBeatmapScores(
 	// TODO: I'd like this to be within postgres temporary tables, but idk no perf issues for now
 	for (const newScore of insertedScores.rows) {
 		const existingUserScoreIndex = currentScores.findIndex(s => s.userId == newScore.userId);
-		if(existingUserScoreIndex != -1) currentScores.splice(existingUserScoreIndex, 1);
+		if (existingUserScoreIndex != -1) currentScores.splice(existingUserScoreIndex, 1);
 
 		const insertIndex = currentScores.findIndex(existingScore => sortScores(newScore, existingScore) < 0);
 		const insertPosition = insertIndex == -1 ? currentScores.length : insertIndex;
 
-		for (let victimIndex = insertPosition; victimIndex < (existingUserScoreIndex == -1 ? currentScores.length : existingUserScoreIndex); victimIndex++) {
+		for (
+			let victimIndex = insertPosition;
+			victimIndex < (existingUserScoreIndex == -1 ? currentScores.length : existingUserScoreIndex);
+			victimIndex++
+		) {
 			const oldPosition = (victimIndex + 1) as RankingPositionThreshold;
 			if (!RANKING_POS_THRESHOLDS.includes(oldPosition)) continue;
 

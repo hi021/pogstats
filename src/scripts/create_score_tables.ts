@@ -78,6 +78,7 @@ async function createScoreTables() {
 
 	await client.query(`
 		CREATE TABLE IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (
+			id 									INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 			user_id 						INTEGER NOT NULL,
 			score_id 						BIGINT NOT NULL,
 			sniped_by 					INTEGER NOT NULL,

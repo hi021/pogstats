@@ -83,6 +83,8 @@ function convertPlayers(players: ApiUserLookup[], retrievedAt?: Date): Player[] 
 	return convertedPlayers;
 }
 
+// Covers an edge case where a player is marked MIA the first time they are fetched
+// should not happen after the first full scrape
 function buildMiaPlayer(id: number, retrievedAt: Date): MissingPlayer {
 	return {
 		id,

@@ -4,8 +4,8 @@
 // Includes peppy-pleasing rate limiting (SCRAPE_SCORE_DELAY_MS) and saves logs to SCORE_SCRAPE_LOG_PATH and SCORE_SCRAPE_ERROR_LOG_PATH
 
 import fs from "fs";
-import { Client } from "pg";
-import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL } from "../db-generic.js";
+import { Client, ClientBase } from "pg";
+import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import { updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
@@ -64,7 +64,7 @@ let errorLogStream: fs.WriteStream;
 let lastFetchTimestamp = 0;
 
 // takes in 100 scores from the same beatmap, converted from endpoint
-async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreFull[]) {
+async function mergeSingleBeatmapScoresIntoExisting(client: ClientBase, scrapedScores: BeatmapScoreFull[]) {
 	if (!scrapedScores?.length) return;
 
 	const beatmapId = scrapedScores[0].beatmapId;
@@ -122,22 +122,16 @@ async function mergeSingleBeatmapScoresIntoExisting(scrapedScores: BeatmapScoreF
 	const finalScores = [...mergedById.values()].sort(sortScores);
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(finalScores);
 
-	await client.query("BEGIN");
-	try {
-		await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1 AND ruleset_id = $2`, [
-			beatmapId,
-			rulesetId
-		]);
-		await client.query(
-			`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
-			values
-		);
-		await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_scrape");
-		await client.query("COMMIT");
-	} catch (error) {
-		await client.query("ROLLBACK");
-		throw error;
-	}
+	await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1 AND ruleset_id = $2`, [
+		beatmapId,
+		rulesetId
+	]);
+	await client.query(
+		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
+		values
+	);
+
+	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_scrape");
 }
 
 async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<string, string>) {
@@ -153,12 +147,12 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processing beatmap`);
 
 		const url = buildBeatmapScoresUrl(beatmapId);
-		const response = await timedFetch(url, { headers }, "scrape_scores", url.hostname);
-		if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+		const res = await timedFetch(url, { headers }, "scrape_scores", url.hostname);
+		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
-		const data = (await response.json()) as ApiBeatmapScore;
+		const data = (await res.json()) as ApiBeatmapScore;
 		const convertedScores = data.scores.map((score, index) => convertApiScore(score, index + 1));
-		await mergeSingleBeatmapScoresIntoExisting(convertedScores);
+		await withDbClientTransaction(async client => await mergeSingleBeatmapScoresIntoExisting(client, convertedScores));
 
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processed ${convertedScores.length} scores`);
 	} catch (e) {
@@ -168,7 +162,7 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 }
 
 // TODO: only osu!standard for now, change if implementing modes
-async function getBeatmapIds(maxRetrievedAt?: Date): Promise<number[]> {
+async function getBeatmapIds(client: ClientBase, maxRetrievedAt?: Date): Promise<number[]> {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
 		await client.query(
@@ -190,20 +184,16 @@ async function scrapeScores() {
 	try {
 		infoLogStream = createLogStream(SCORE_SCRAPE_LOG_PATH);
 		errorLogStream = createLogStream(SCORE_SCRAPE_ERROR_LOG_PATH);
+		if (!SKIP_DUMP_BEFORE_SCRAPE)
+			withDbClient(
+				async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream)
+			);
 
-		client = new Client({
-			host: DB_HOST,
-			port: DB_PORT,
-			user: DB_USER,
-			password: DB_PASSWORD,
-			database: DB_NAME
-		});
-
-		await client.connect();
-		if (!SKIP_DUMP_BEFORE_SCRAPE) await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream);
-
+		let beatmapIds: number[] = [];
 		const headers = buildHeadersWithAuth(await getOAuthToken());
-		const beatmapIds = await getBeatmapIds(ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE);
+		await withDbClient(
+			async client => (beatmapIds = await getBeatmapIds(client, ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE))
+		);
 		logInfo(infoLogStream, `Found ${beatmapIds.length} beatmap IDs to process`);
 
 		for (let i = 0; i < beatmapIds.length; i++) await handleBeatmap(beatmapIds[i], i + 1, headers);
@@ -211,7 +201,6 @@ async function scrapeScores() {
 		// TODO graceful shutdown handling to ensure logs are flushed and DB connection is closed even if the process is killed mid-run
 		logInfo(infoLogStream, "Finished processing all beatmaps");
 	} finally {
-		await client.end();
 		infoLogStream.end();
 		errorLogStream.end();
 	}

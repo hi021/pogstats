@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { Client } from "pg";
+import { Client, ClientBase } from "pg";
 import readline from "readline";
 import { OSU_API_VERSION, VERBOSE } from "../env.js";
 
@@ -145,7 +145,7 @@ function csvEscape(value: unknown): string {
 export async function dumpTableToCsv(
 	tableName: string,
 	columns: readonly string[],
-	client: Client,
+	client: ClientBase,
 	infoLogStream?: fs.WriteStream,
 	customQuery?: string,
 	resultPath = "../../data"

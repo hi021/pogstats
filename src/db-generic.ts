@@ -77,6 +77,18 @@ export const BEATMAP_TABLE_COLUMNS = Object.freeze([
 	"packs"
 ]);
 
+export const HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS_ALL = Object.freeze([
+	"id",
+	"user_id",
+	"score_id",
+	"sniped_by",
+	"sniped_with",
+	"beatmap_id",
+	"ruleset_id",
+	"position_threshold",
+	"date"
+]);
+
 export const HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS = Object.freeze([
 	"user_id",
 	"score_id",
@@ -100,7 +112,7 @@ export const BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS = Object.freeze([
 // pg returns BIGINTs as strings since numbers over 2^53 (9+E15) lose precision when stored as doubles
 // ignoring this concern here, since score ids are in the billions and ranked score is in the trillions
 // osu! api just returns normal numbers anyway
-types.setTypeParser(20 /* TypeId.INT8 - BIGINT - enums suck, this wouldn't transpile */, val =>
+types.setTypeParser(20 /* = TypeId.INT8 (BIGINT) - enums suck, this wouldn't transpile */, val =>
 	val == null ? null : Number(val)
 );
 
