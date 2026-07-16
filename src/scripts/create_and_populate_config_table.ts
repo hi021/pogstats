@@ -60,20 +60,12 @@ async function createConfigTable(client: ClientBase) {
 async function populateConfigTable(client: ClientBase) {
 	console.log(`Populating ${DB_CONFIG_TABLE} table with initial values`);
 
-	const promises = new Array<Promise<void>>(INITIAL_CONFIG.length);
-
-	for (const config of INITIAL_CONFIG) {
-		promises.push(
-			(async () => {
-				await client.query(
-					`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
-					[config.key, config.valueInt, config.valueText, config.valueJson ? JSON.stringify(config.valueJson) : null]
-				);
-			})()
+	for (const config of INITIAL_CONFIG)
+		await client.query(
+			`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
+			[config.key, config.valueInt, config.valueText, config.valueJson ? JSON.stringify(config.valueJson) : null]
 		);
-	}
 
-	await Promise.all(promises);
 	console.log(`Populated ${DB_CONFIG_TABLE} table with initial values`);
 }
 

@@ -62,15 +62,15 @@ async function createRankingTypesTable(client: ClientBase) {
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_RANKING_TYPES_TABLE} (
-      id SMALLINT PRIMARY KEY,
-			ruleset_id SMALLINT NOT NULL,
-			position_threshold SMALLINT NOT NULL,
-			name TEXT NOT NULL,
-			code TEXT NOT NULL
+      id 									SMALLINT PRIMARY KEY,
+			ruleset_id 					SMALLINT NOT NULL,
+			position_threshold 	SMALLINT NOT NULL,
+			name 								TEXT NOT NULL,
+			code 								TEXT NOT NULL
     )`);
 	await client.query(`
-		CREATE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_position_threshold ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, position_threshold);
-		CREATE UNIQUE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_code_idx ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, code);`);
+		CREATE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_position_threshold 	ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, position_threshold);
+		CREATE UNIQUE INDEX IF NOT EXISTS ${DB_RANKING_TYPES_TABLE}_ruleset_id_code_idx 		ON ${DB_RANKING_TYPES_TABLE}(ruleset_id, code);`);
 
 	console.log(`Created ${DB_RANKING_TYPES_TABLE} table if didn't exist`);
 }
@@ -79,19 +79,12 @@ async function populateRankingTypesTable(client: ClientBase) {
 	console.log(`Populating ${DB_RANKING_TYPES_TABLE} table with values`);
 	const rankingTypes = buildRankingTypes(PROTO_RANKING_TYPES);
 
-	const promises = new Array<Promise<void>>(rankingTypes.length);
-	for (const rankingType of rankingTypes) {
-		promises.push(
-			(async () => {
-				await client.query(
-					`INSERT INTO ${DB_RANKING_TYPES_TABLE} (id, ruleset_id, position_threshold, name, code) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
-					[rankingType.id, rankingType.rulesetId, rankingType.positionThreshold, rankingType.name, rankingType.code]
-				);
-			})()
+	for (const rankingType of rankingTypes)
+		await client.query(
+			`INSERT INTO ${DB_RANKING_TYPES_TABLE} (id, ruleset_id, position_threshold, name, code) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
+			[rankingType.id, rankingType.rulesetId, rankingType.positionThreshold, rankingType.name, rankingType.code]
 		);
-	}
 
-	await Promise.all(promises);
 	console.log(`Populated ${DB_RANKING_TYPES_TABLE} table with values`);
 }
 
