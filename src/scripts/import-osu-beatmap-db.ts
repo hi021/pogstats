@@ -6,6 +6,7 @@
 import { ClientBase } from "pg";
 import { BEATMAP_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import { DB_BEATMAPS_TABLE } from "../env.js";
+import { queryWithTiming } from "../metrics.js";
 import { readFileByLine } from "./shared.js";
 
 const INPUT_COLUMNS: Readonly<Array<keyof ApiBeatmapDbBeatmap>> = Object.freeze([
@@ -152,7 +153,10 @@ async function insertBeatmapBatch(client: ClientBase, batch: Beatmap[]) {
 	const arrays = buildBeatmapArrays(batch);
 
 	// TODO DO UPDATE instead of DO NOTHING based on cli flag
-	await client.query(
+	await queryWithTiming(
+		client,
+		"insertBeatmapBatch",
+		"import_beatmap",
 		`
     INSERT INTO ${DB_BEATMAPS_TABLE} (${BEATMAP_TABLE_COLUMNS.join(", ")})
     SELECT *

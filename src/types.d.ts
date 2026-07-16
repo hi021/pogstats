@@ -36,6 +36,7 @@ type ActionSource =
 	| "scrape_players"
 	| "scrape_scores"
 	| "scrape_beatmaps"
+	| "import_beatmap"
 	| "pog_api_v2"
 	| "pog_ws"
 	| "scores_ws"

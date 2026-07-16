@@ -71,7 +71,7 @@ export async function queryWithTiming<T extends QueryResultRow>(
 	queryName: string,
 	source: ActionSource,
 	query: string,
-	values: unknown[]
+	values: unknown[] = []
 ) {
 	const timer = dbQueryDuration.startTimer({
 		query: normalizeLabel(queryName),

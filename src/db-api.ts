@@ -1,7 +1,7 @@
 import { ClientBase, QueryResult } from "pg";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
+import { queryWithTiming } from "./metrics.js";
 import { parsePositionThresholdAndRankingType } from "./shared.js";
-import { queryWithTiming, timeDbQuery } from "./metrics.js";
 
 export async function getPlayerIdByIdOrName(client: ClientBase, idOrName: string | number) {
 	if (!idOrName) return null;

@@ -1,4 +1,4 @@
-import { ClientBase, QueryResult } from "pg";
+import { ClientBase } from "pg";
 import {
 	buildUpdateCoalesceAssignmentsString,
 	PLAYER_TABLE_COLUMNS,
@@ -13,7 +13,7 @@ import {
 	setAllPlayerScoresPosition
 } from "../db.js";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../env.js";
-import { timedFetch } from "../metrics.js";
+import { queryWithTiming, timedFetch } from "../metrics.js";
 import { parseArgs, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, getMinDate, rateLimit } from "./shared.js";
@@ -35,26 +35,29 @@ let lastFetchTimestamp = 0;
 async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch[] | null> {
 	return await withDbClient(async client => {
 		const params = maxRetrievedAt ? [maxRetrievedAt] : [];
-		const idBatches: QueryResult<IdBatch> = await client.query(
+		const idBatches = await queryWithTiming<IdBatch>(
+			client,
+			"getRankingPlayerIdBatches",
+			"scrape_players",
 			`
 			WITH numbered AS (
 				SELECT
 				s.user_id,
 				ROW_NUMBER() OVER (ORDER BY s.user_id) AS rn
 				FROM ${DB_SCORES_TABLE} s
-				LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
+					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
 				WHERE s.position <= 104
 				${maxRetrievedAt ? `AND (p.retrieved_at IS NULL OR p.retrieved_at < $1)` : ""}
 				GROUP BY s.user_id
-				),
-				batched AS (
-					SELECT
-					((rn - 1) / ${PLAYER_BATCH_SIZE}) + 1 AS batch_no,
-					ARRAY_AGG(user_id ORDER BY rn) AS ids
-					FROM numbered
-					GROUP BY batch_no
-					)
-					SELECT * FROM batched ORDER BY batch_no`,
+			),
+			batched AS (
+				SELECT
+				((rn - 1) / ${PLAYER_BATCH_SIZE}) + 1 AS batch_no,
+				ARRAY_AGG(user_id ORDER BY rn) AS ids
+				FROM numbered
+				GROUP BY batch_no
+			)
+			SELECT * FROM batched ORDER BY batch_no`,
 			params
 		);
 
@@ -98,7 +101,11 @@ function buildMiaPlayer(id: number, retrievedAt: Date): MissingPlayer {
 }
 
 async function createTempPlayersTable(client: ClientBase) {
-	await client.query(`
+	await queryWithTiming(
+		client,
+		"createTempPlayersTable",
+		"scrape_players",
+		`
 		CREATE TEMPORARY TABLE IF NOT EXISTS scrape_players_tmp (
 			id 							INTEGER PRIMARY KEY,
 			username				TEXT NOT NULL,
@@ -108,9 +115,11 @@ async function createTempPlayersTable(client: ClientBase) {
 			cover_url				TEXT,
 			retrieved_at		TIMESTAMPTZ NOT NULL,
 			is_from_osu_api	BOOLEAN NOT NULL,
-			is_mia				 	BOOLEAN DEFAULT FALSE
-		)`);
-	await client.query("TRUNCATE TABLE scrape_players_tmp");
+			is_mia			 		BOOLEAN DEFAULT FALSE
+		);
+
+		TRUNCATE TABLE scrape_players_tmp;`
+	);
 }
 
 async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Player>, exemplaryPlayer: Player) {
@@ -119,7 +128,10 @@ async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Pl
 		exemplaryPlayer as unknown as Record<string, unknown>
 	);
 
-	await client.query(
+	await queryWithTiming(
+		client,
+		"insertPlayerBatchIntoTmpTable",
+		"scrape_players",
 		`
 		INSERT INTO scrape_players_tmp (${PLAYER_TABLE_COLUMNS.join(", ")})
 		SELECT *
@@ -149,13 +161,17 @@ async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Pl
 }
 
 async function insertPlayerBatch(client: ClientBase) {
-	await client.query(`
-	INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
-		SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
-		FROM scrape_players_tmp tmp
-		LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
-	ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}
-	`);
+	await queryWithTiming(
+		client,
+		"insertPlayerBatch",
+		"scrape_players",
+		`
+		INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
+			SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
+			FROM scrape_players_tmp tmp
+			LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
+		ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}`
+	);
 }
 
 export async function scrapePlayers(ids?: number[]) {
@@ -220,15 +236,15 @@ export async function scrapePlayers(ids?: number[]) {
 				);
 
 			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0, "scrape_players");
-			await insertNewMiaPlayers(client, miaPlayers);
+			await insertNewMiaPlayers(client, miaPlayers, "scrape_players");
 
-			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client);
+			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client, "scrape_players");
 			if (nonMiaPlayerIds.length)
 				console.log(`[scrape_players] Player(s) with ID(s) ${nonMiaPlayerIds} are no longer MIA`);
 			else if (!miaPlayerIds.length) return;
 
 			const nonMiaBeatmaps = await setAllPlayerScoresPosition(client, nonMiaPlayerIds, 100, "scrape_players");
-			await insertNoLongerMiaPlayers(client, nonMiaPlayerIds);
+			await insertNoLongerMiaPlayers(client, nonMiaPlayerIds, "scrape_players");
 
 			// TODO send event to pog-ws to notify about MIA and non MIA changes
 

@@ -4,7 +4,7 @@
 // Includes peppy-pleasing rate limiting (SCRAPE_SCORE_DELAY_MS) and saves logs to SCORE_SCRAPE_LOG_PATH and SCORE_SCRAPE_ERROR_LOG_PATH
 
 import fs from "fs";
-import { Client, ClientBase } from "pg";
+import { ClientBase } from "pg";
 import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import { updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
@@ -15,7 +15,7 @@ import {
 	SCORE_SCRAPE_LOG_PATH,
 	SCRAPE_SCORE_DELAY_MS
 } from "../env.js";
-import { timedFetch } from "../metrics.js";
+import { queryWithTiming, timedFetch } from "../metrics.js";
 import {
 	convertApiScore,
 	convertDatabaseScore,
@@ -52,7 +52,6 @@ const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta
 const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = getMinDate(parsedFlags.minDate);
 const SKIP_DUMP_BEFORE_SCRAPE = Boolean(parsedFlags.skipDump);
 
-let client: Client;
 let infoLogStream: fs.WriteStream;
 let errorLogStream: fs.WriteStream;
 let lastFetchTimestamp = 0;
@@ -63,7 +62,10 @@ async function mergeSingleBeatmapScoresIntoExisting(client: ClientBase, scrapedS
 
 	const beatmapId = scrapedScores[0].beatmapId;
 	const rulesetId = scrapedScores[0].rulesetId;
-	const existingResult = await client.query(
+	const existingResult = await queryWithTiming(
+		client,
+		"mergeSingleBeatmapScoresIntoExisting_get_existing",
+		"scrape_scores",
 		`SELECT * from ${DB_SCORES_TABLE} where beatmap_id = $1 and ruleset_id = $2`,
 		[beatmapId, rulesetId]
 	);
@@ -116,16 +118,22 @@ async function mergeSingleBeatmapScoresIntoExisting(client: ClientBase, scrapedS
 	const finalScores = [...mergedById.values()].sort(sortScores);
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(finalScores);
 
-	await client.query(`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1 AND ruleset_id = $2`, [
-		beatmapId,
-		rulesetId
-	]);
-	await client.query(
+	await queryWithTiming(
+		client,
+		"mergeSingleBeatmapScoresIntoExisting_delete_scores",
+		"scrape_scores",
+		`DELETE FROM ${DB_SCORES_TABLE} WHERE beatmap_id = $1 AND ruleset_id = $2`,
+		[beatmapId, rulesetId]
+	);
+	await queryWithTiming(
+		client,
+		"mergeSingleBeatmapScoresIntoExisting_insert_scores",
+		"scrape_scores",
 		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(", ")}) VALUES ${paramGroups.join(", ")}`,
 		values
 	);
 
-	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_scrape");
+	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_scrape", "scrape_scores");
 }
 
 async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<string, string>) {
@@ -158,7 +166,10 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 async function getBeatmapIds(client: ClientBase, maxRetrievedAt?: Date): Promise<number[]> {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
-		await client.query(
+		await queryWithTiming(
+			client,
+			"getBeatmapIds",
+			"scrape_scores",
 			`
 			SELECT b.id
 			FROM ${DB_BEATMAPS_TABLE} b

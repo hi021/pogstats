@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { Client, ClientBase } from "pg";
+import { ClientBase } from "pg";
 import readline from "readline";
 import { OSU_API_VERSION, VERBOSE } from "../env.js";
 

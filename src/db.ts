@@ -1,4 +1,4 @@
-import { ClientBase, QueryResult } from "pg";
+import { ClientBase } from "pg";
 import {
 	BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS,
 	HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS,
@@ -13,29 +13,44 @@ import {
 	DB_PLAYERS_TABLE,
 	DB_SCORES_TABLE
 } from "./env.js";
-import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 import { queryWithTiming } from "./metrics.js";
+import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 
 export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number) {
 	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
 }
 
-export async function acquireBeatmapAdvisoryLock(client: ClientBase, beatmapId: number, rulesetId: number) {
+export async function acquireBeatmapAdvisoryLock(
+	client: ClientBase,
+	beatmapId: number,
+	rulesetId: number,
+	source: ActionSource = "unknown"
+) {
 	const lockKey = buildBeatmapAdvisoryLockKey(beatmapId, rulesetId);
-	await client.query("SELECT pg_advisory_xact_lock($1)", [lockKey]);
+	await queryWithTiming(client, "acquireBeatmapAdvisoryLock", source, "SELECT pg_advisory_xact_lock($1)", [lockKey]);
 }
 
 // Saving the lowest score id from given batch just to be safe for now - probably unnecessary, as the ids seem to be ordered
-export async function saveLastScoreId(scoreId: number) {
+export async function saveLastScoreId(scoreId: number, source: ActionSource = "unknown") {
 	if (isNaN(scoreId) || !isFinite(scoreId)) return;
 	await withDbClient(client =>
-		client.query(`UPDATE ${DB_CONFIG_TABLE} SET value_text = '${scoreId}' WHERE key = 'last_ws_score_id'`)
+		queryWithTiming(
+			client,
+			"saveLastScoreId",
+			source,
+			`UPDATE ${DB_CONFIG_TABLE} SET value_text = '${scoreId}' WHERE key = 'last_ws_score_id'`
+		)
 	);
 }
 
-export async function getLastScoreId() {
+export async function getLastScoreId(source: ActionSource = "unknown") {
 	const result = await withDbClient(client =>
-		client.query(`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`)
+		queryWithTiming(
+			client,
+			"getLastScoreId",
+			source,
+			`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`
+		)
 	);
 	return Number(result.rows?.[0]?.value_text || 0);
 }
@@ -44,9 +59,13 @@ export async function updateBeatmapScoresRetrievalDate(
 	client: ClientBase,
 	beatmapId: number,
 	rulesetId: number,
-	column: "last_scores_scrape" | "last_scores_update" = "last_scores_update"
+	column: "last_scores_scrape" | "last_scores_update" = "last_scores_update",
+	source: ActionSource = "unknown"
 ) {
-	await client.query(
+	await queryWithTiming(
+		client,
+		"updateBeatmapScoresRetrievalDate",
+		source,
 		`
 		INSERT INTO ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} (${BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS.slice(0, 2).join(", ")}, ${column})
 		VALUES ($1, $2, NOW())
@@ -55,9 +74,16 @@ export async function updateBeatmapScoresRetrievalDate(
 	);
 }
 
-export async function getInexistentPlayerIds(client: ClientBase, playerIds: number[]) {
+export async function getInexistentPlayerIds(
+	client: ClientBase,
+	playerIds: number[],
+	source: ActionSource = "unknown"
+) {
 	return (
-		await client.query(
+		await queryWithTiming(
+			client,
+			"getInexistentPlayerIds",
+			source,
 			`WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
 			SELECT i.id FROM input_ids i
 			LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
@@ -67,9 +93,16 @@ export async function getInexistentPlayerIds(client: ClientBase, playerIds: numb
 	).rows.map(r => r.id) as number[];
 }
 
-export async function getInexistentBeatmapIds(client: ClientBase, beatmapIds: number[]) {
+export async function getInexistentBeatmapIds(
+	client: ClientBase,
+	beatmapIds: number[],
+	source: ActionSource = "unknown"
+) {
 	return (
-		await client.query(
+		await queryWithTiming(
+			client,
+			"getInexistentBeatmapIds",
+			source,
 			`WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
 			SELECT i.id FROM input_ids i
 			LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
@@ -79,11 +112,18 @@ export async function getInexistentBeatmapIds(client: ClientBase, beatmapIds: nu
 	).rows.map(r => r.id) as number[];
 }
 
-export async function insertHistoricalPlayerSnipes(client: ClientBase, snipes: HistoricalPlayerSnipes[]) {
+export async function insertHistoricalPlayerSnipes(
+	client: ClientBase,
+	snipes: HistoricalPlayerSnipes[],
+	source: ActionSource = "unknown"
+) {
 	if (!snipes?.length) return;
 
 	const { values, paramGroups } = preparePlayerSnipesTableValuesAndParamPlaceholders(snipes);
-	await client.query(
+	await queryWithTiming(
+		client,
+		"insertHistoricalPlayerSnipes",
+		source,
 		`INSERT INTO ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (${HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS.join(",")})
 		 VALUES ${paramGroups.join(", ")}`,
 		values
@@ -143,15 +183,22 @@ export async function recalculateScorePositionsForMapIds(
 	);
 }
 
-// export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[]) {
-// 	const beatmaps: QueryResult<BeatmapRuleset> = await client.query(
-// 		`
-// 			SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
-// 			WHERE user_id = ANY($1::INTEGER[])`,
-// 		[playerIds]
-// 	);
-// 	return beatmaps.rows;
-// }
+export async function getBeatmapIdsWithPlayerScores(
+	client: ClientBase,
+	playerIds: number[],
+	source: ActionSource = "unknown"
+) {
+	const beatmaps = await queryWithTiming<BeatmapRuleset>(
+		client,
+		"getBeatmapIdsWithPlayerScores",
+		source,
+		`
+			SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
+			WHERE user_id = ANY($1::INTEGER[])`,
+		[playerIds]
+	);
+	return beatmaps.rows;
+}
 
 export async function setAllPlayerScoresPosition(
 	client: ClientBase,
@@ -167,7 +214,7 @@ export async function setAllPlayerScoresPosition(
 		source,
 		`
 		UPDATE ${DB_SCORES_TABLE} s
-		SET position = $1
+			SET position = $1
 		WHERE s.user_id = ANY($2::INTEGER[])
 		RETURNING s.beatmap_id, s.ruleset_id`,
 		[position, playerIds]
@@ -175,16 +222,25 @@ export async function setAllPlayerScoresPosition(
 	return result.rows;
 }
 
-export async function findNoLongerMiaPlayerIds(client: ClientBase) {
-	const result: QueryResult<{ id: number }> = await client.query(`
+export async function findNoLongerMiaPlayerIds(client: ClientBase, source: ActionSource = "unknown") {
+	const result = await queryWithTiming<{ id: number }>(
+		client,
+		"findNoLongerMiaPlayerIds",
+		source,
+		`
 		SELECT p.id FROM ${DB_PLAYERS_TABLE} p
-		JOIN ${DB_PLAYER_MIA_HISTORY_TABLE} h ON h.user_id = p.id AND h.end_date IS NULL
-		WHERE p.is_mia = false`);
+			JOIN ${DB_PLAYER_MIA_HISTORY_TABLE} h ON h.user_id = p.id AND h.end_date IS NULL
+		WHERE p.is_mia = false`
+	);
 
 	return result.rows.map(row => row.id);
 }
 
-export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>) {
+export async function insertNewMiaPlayers(
+	client: ClientBase,
+	miaPlayers: Map<number, Date>,
+	source: ActionSource = "unknown"
+) {
 	if (!miaPlayers?.size) return;
 
 	const paramGroups = [];
@@ -196,7 +252,10 @@ export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<nu
 		values.push(userId, startDate);
 	}
 
-	await client.query(
+	await queryWithTiming(
+		client,
+		"insertNewMiaPlayers",
+		source,
 		`
 		WITH input(user_id, start_date) AS (
       VALUES ${paramGroups.join(",")}
@@ -214,13 +273,20 @@ export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<nu
 	);
 }
 
-export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayerIds: number[]) {
+export async function insertNoLongerMiaPlayers(
+	client: ClientBase,
+	miaPlayerIds: number[],
+	source: ActionSource = "unknown"
+) {
 	if (!miaPlayerIds?.length) return;
 
-	await client.query(
+	await queryWithTiming(
+		client,
+		"insertNoLongerMiaPlayers",
+		source,
 		`
     UPDATE ${DB_PLAYER_MIA_HISTORY_TABLE} h
-    SET end_date = NOW()
+    	SET end_date = NOW()
     WHERE h.user_id = ANY($1::INTEGER[])
       AND h.end_date IS NULL`,
 		[miaPlayerIds]

@@ -1,5 +1,5 @@
 import https from "https";
-import { ClientBase, QueryResult } from "pg";
+import { ClientBase } from "pg";
 import WebSocket from "ws";
 import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
@@ -20,7 +20,7 @@ import {
 	DEV_ENV,
 	VERBOSE
 } from "../env.js";
-import { recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
+import { queryWithTiming, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
 	convertApiScore,
@@ -242,7 +242,11 @@ function dedupeTopScoresByUser(scores: WsScore[]) {
 // Single temp table prevents concurrency (processing multiple beatmaps at once) I think
 async function createTempScoresTable(client: ClientBase) {
 	// Omits is_perma since it'll get calculated on insertion into the actual table
-	await client.query(`
+	await queryWithTiming(
+		client,
+		"createTempScoresTable",
+		"scores_ws",
+		`
 		CREATE TEMPORARY TABLE IF NOT EXISTS ws_scores_tmp (
       position      						SMALLINT NOT NULL,
       is_scraped      					BOOLEAN NOT NULL,
@@ -262,8 +266,10 @@ async function createTempScoresTable(client: ClientBase) {
       pp                 				REAL,
       ended_at            			TIMESTAMPTZ NOT NULL,
       data               			 	JSONB NOT NULL DEFAULT '{}'::jsonb
-		) ON COMMIT DELETE ROWS`);
-	await client.query("TRUNCATE ws_scores_tmp");
+		) ON COMMIT DELETE ROWS;
+
+		TRUNCATE ws_scores_tmp;`
+	);
 }
 
 async function upsertBeatmapScores(
@@ -273,10 +279,13 @@ async function upsertBeatmapScores(
 	provenScores: BeatmapScoreFull[]
 ) {
 	if (!provenScores?.length) return;
-	await acquireBeatmapAdvisoryLock(client, beatmapId, rulesetId);
-	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update");
+	await acquireBeatmapAdvisoryLock(client, beatmapId, rulesetId, "scores_ws");
+	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update", "scores_ws");
 
-	const existingScores = await client.query(
+	const existingScores = await queryWithTiming<ScoreBasicData>(
+		client,
+		"upsertBeatmapScores_get_existing_scores",
+		"scores_ws",
 		`SELECT s.id,
 						s.user_id AS "userId",
 						s.total_score AS "totalScore",
@@ -295,12 +304,18 @@ async function upsertBeatmapScores(
 
 	await createTempScoresTable(client);
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(provenScores);
-	await client.query(
+	await queryWithTiming(
+		client,
+		"upsertBeatmapScores_insert_new_scores_into_tmp",
+		"scores_ws",
 		`INSERT INTO ws_scores_tmp (${SCORE_TABLE_COLUMNS.join(",")}) VALUES ${paramGroups.join(",")}`,
 		values
 	);
 
-	await client.query(
+	await queryWithTiming(
+		client,
+		"upsertBeatmapScores_delete_beaten_user_hiscores",
+		"scores_ws",
 		`DELETE FROM ${DB_SCORES_TABLE} s
 		 USING ws_scores_tmp t
 		 WHERE s.beatmap_id = $1
@@ -310,7 +325,10 @@ async function upsertBeatmapScores(
 		[beatmapId, rulesetId]
 	);
 
-	await client.query(
+	await queryWithTiming(
+		client,
+		"upsertBeatmapScores_insert_new_scores",
+		"scores_ws",
 		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(",")})
 		 SELECT ${SCORE_TABLE_COLUMNS.join(",")} FROM ws_scores_tmp`
 	);
@@ -318,7 +336,10 @@ async function upsertBeatmapScores(
 	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }], "scores_ws");
 
 	const insertedIds = provenScores.map(score => score.id);
-	const insertedScores: QueryResult<ScoreBasicData> = await client.query(
+	const insertedScores = await queryWithTiming<ScoreBasicData>(
+		client,
+		"upsertBeatmapScores_get_inserted_scores",
+		"scores_ws",
 		`SELECT s.id,
 						s.user_id AS "userId",
 						s.total_score AS "totalScore",
@@ -381,9 +402,12 @@ async function upsertBeatmapScores(
 		currentScores.splice(insertPosition, 0, newScore);
 	}
 
-	await insertHistoricalPlayerSnipes(client, snipes);
+	await insertHistoricalPlayerSnipes(client, snipes, "scores_ws");
 
-	const beatingScores: QueryResult<BeatingScoreData> = await client.query(
+	const beatingScores = await queryWithTiming<BeatingScoreData>(
+		client,
+		"upsertBeatmapScores_get_beating_scores",
+		"scores_ws",
 		`SELECT s.id AS score_id,
 		 s.position,
 		 s.grade,
@@ -416,7 +440,10 @@ async function upsertBeatmapScores(
 // TODO
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores);
-	const scoreList: QueryResult<ProvenScoresPerRulesetBeatmap> = await client.query(
+	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
+		client,
+		"getBeatenScoresByMap",
+		"scores_ws",
 		`
 		WITH candidates AS (
 			SELECT
