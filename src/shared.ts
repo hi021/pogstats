@@ -1,4 +1,8 @@
-import { BEATMAP_TABLE_COLUMNS, HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
+import {
+	BEATMAP_TABLE_COLUMNS_ALL,
+	HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS,
+	SCORE_TABLE_COLUMNS
+} from "./db-generic.js";
 
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko", "fruits", "mania"]);
@@ -146,7 +150,7 @@ export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScor
 export function prepareBeatmapTableValuesAndParamPlaceholders(beatmaps: Beatmap[]) {
 	const values: unknown[] = [];
 	const paramGroups = beatmaps.map((beatmap, index) => {
-		const offset = index * BEATMAP_TABLE_COLUMNS.length;
+		const offset = index * BEATMAP_TABLE_COLUMNS_ALL.length;
 		values.push(
 			beatmap.id,
 			beatmap.beatmapsetId,
@@ -168,7 +172,7 @@ export function prepareBeatmapTableValuesAndParamPlaceholders(beatmaps: Beatmap[
 			beatmap.packs
 		);
 
-		return `(${BEATMAP_TABLE_COLUMNS.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
+		return `(${BEATMAP_TABLE_COLUMNS_ALL.map((_, columnIndex) => `$${offset + columnIndex + 1}`).join(", ")})`;
 	});
 
 	return { values, paramGroups };

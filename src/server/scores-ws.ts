@@ -21,6 +21,7 @@ import {
 	VERBOSE
 } from "../env.js";
 import { queryWithTiming, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
+import { scrapeBeatmaps } from "../scripts/scrape_beatmaps.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
 	convertApiScore,
@@ -206,14 +207,18 @@ function isCandidateScore(score: WsScore) {
 }
 
 async function fetchNewBeatmaps(client: ClientBase, beatmapIds: number[]) {
-	const missingIds = await getInexistentBeatmapIds(client, beatmapIds);
-	if (missingIds?.length) {
-		if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
-		recordMissingEntity("beatmap", missingIds.length);
-		// TODO
-	}
+	try {
+		const missingIds = await getInexistentBeatmapIds(client, beatmapIds);
+		if (missingIds?.length) {
+			if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
+			recordMissingEntity("beatmap", missingIds.length);
+			await scrapeBeatmaps(missingIds);
+		}
 
-	batchCandidateBeatmapIds.length = 0;
+		batchCandidateBeatmapIds.length = 0;
+	} catch (e) {
+		console.error("failed to fetch missing beatmaps:\n", e);
+	}
 }
 
 async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
@@ -225,7 +230,7 @@ async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
 			await scrapePlayers(missingIds);
 		}
 	} catch (e) {
-		console.error("failed to get missing players:\n", e);
+		console.error("failed to fetch missing players:\n", e);
 	}
 }
 

@@ -8,6 +8,7 @@ export const AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/token";
 export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
 export const API_BASE_URL = "https://osu.ppy.sh/api/v2";
 export const BEATMAP_DB_BASE_URL = "https://osu.respektive.pw";
+export const BEATMAP_DB_BEATMAP_FETCH_URL = `${BEATMAP_DB_BASE_URL}/b`;
 
 export const USER_AGENT = "pog!stats (+https://github.com/hi021/pogstats)";
 export const DEFAULT_HEADERS = {
@@ -65,6 +66,30 @@ export function convertApiPlayerLookup(
 	};
 }
 
+export function convertApiBeatmap(map: ApiBeatmapDbBeatmap, retrievedAt: Date): Beatmap {
+	return {
+		id: map.beatmap_id,
+		beatmapsetId: map.beatmapset_id,
+		status: map.approved,
+		artist: map.artist,
+		title: map.title,
+		version: map.version,
+		creator: map.creator,
+		creatorId: map.creator_id,
+		rulesetId: map.mode,
+		approvedDate: new Date(map.approved_date),
+		starRating: map.star_rating,
+		totalLength: map.total_length,
+		bpm: map.bpm,
+		cs: map.cs,
+		od: map.od,
+		ar: map.ar,
+		hp: map.hp,
+		packs: map.packs,
+		updatedAt: retrievedAt
+	};
+}
+
 export type TimestampAccessor = {
 	get: () => number;
 	set: (value: number) => void;
@@ -102,6 +127,10 @@ export const buildUserLookupUrl = (userIds: Array<number | string>) => {
 	const url = new URL(`${API_BASE_URL}/users/lookup`);
 	for (const userId of userIds) url.searchParams.append("ids[]", String(userId));
 	return url;
+};
+
+export const buildBeatmapDbUrl = (beatmapIds: Array<number | string>) => {
+	return new URL(`${BEATMAP_DB_BEATMAP_FETCH_URL}/${beatmapIds.join(",")}`);
 };
 
 export async function readFileByLine(filePath: string, lineCallback: (line: string, rowNo: number) => Promise<void>) {

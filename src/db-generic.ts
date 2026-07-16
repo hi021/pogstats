@@ -1,6 +1,7 @@
 import { Pool, PoolClient, types } from "pg";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEV_ENV } from "./env.js";
 
+// TODO: build from SCORE_TABLE_COLUMNS
 export const SCORE_TABLE_COLUMNS_ALL = Object.freeze([
 	"position",
 	"is_scraped",
@@ -57,6 +58,27 @@ export const PLAYER_TABLE_COLUMNS = Object.freeze([
 ]);
 
 export const BEATMAP_TABLE_COLUMNS = Object.freeze([
+	"beatmapset_id",
+	"status",
+	"artist",
+	"title",
+	"version",
+	"creator",
+	"creator_id",
+	"ruleset_id",
+	"approved_date",
+	"star_rating",
+	"total_length",
+	"bpm",
+	"cs",
+	"od",
+	"ar",
+	"hp",
+	"packs",
+	"updated_at"
+]);
+
+export const BEATMAP_TABLE_COLUMNS_ALL = Object.freeze([
 	"id",
 	"beatmapset_id",
 	"status",
@@ -74,7 +96,8 @@ export const BEATMAP_TABLE_COLUMNS = Object.freeze([
 	"od",
 	"ar",
 	"hp",
-	"packs"
+	"packs",
+	"updated_at"
 ]);
 
 export const HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS_ALL = Object.freeze([
@@ -122,7 +145,7 @@ export const dbPool = new Pool({
 	user: DB_USER,
 	password: DB_PASSWORD,
 	database: DB_NAME,
-	min: 1,
+	min: 2,
 	connectionTimeoutMillis: 20000,
 	allowExitOnIdle: DEV_ENV
 });

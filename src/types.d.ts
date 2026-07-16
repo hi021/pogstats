@@ -200,6 +200,7 @@ interface Beatmap {
 	ar: number;
 	hp: number;
 	packs: string; // comma-separated, e.g. "R92,S255,T49", TODO: separate junction table if needed for queries
+	updatedAt: Date; // meta
 }
 
 // ------------------------------------------

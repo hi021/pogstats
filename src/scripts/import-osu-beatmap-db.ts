@@ -3,10 +3,9 @@
 // use this regex to check for maps with newlines in their tags that break this import
 // just replace all instances with blank
 
-import { ClientBase } from "pg";
-import { BEATMAP_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
+import { withDbClientTransaction } from "../db-generic.js";
+import { upsertBeatmapBatch } from "../db.js";
 import { DB_BEATMAPS_TABLE } from "../env.js";
-import { queryWithTiming } from "../metrics.js";
 import { readFileByLine } from "./shared.js";
 
 const INPUT_COLUMNS: Readonly<Array<keyof ApiBeatmapDbBeatmap>> = Object.freeze([
@@ -60,7 +59,7 @@ const INPUT_COLUMNS: Readonly<Array<keyof ApiBeatmapDbBeatmap>> = Object.freeze(
 ] as const);
 
 const OUTPUT_COLUMNS: Readonly<
-	Record<keyof Beatmap, { column: keyof ApiBeatmapDbBeatmap; type: "number" | "string" | "date" }>
+	Record<keyof Omit<Beatmap, "updatedAt">, { column: keyof ApiBeatmapDbBeatmap; type: "number" | "string" | "date" }>
 > = Object.freeze({
 	id: { column: "beatmap_id", type: "number" },
 	beatmapsetId: { column: "beatmapset_id", type: "number" },
@@ -96,9 +95,9 @@ const SEPARATOR = "\t";
 const NULL_CHAR = "\\N";
 const BATCH_SIZE = 15500;
 
-function convertRowToBeatmap(row: string) {
+function convertRowToBeatmap(row: string, updatedAt: Date) {
 	const columns = row.split(SEPARATOR);
-	const beatmap: Partial<Beatmap> = {};
+	const beatmap: Partial<Beatmap> = { updatedAt };
 
 	for (const [key, { column, type }] of Object.entries(OUTPUT_COLUMNS)) {
 		const index = INPUT_COLUMN_INDEX_BY_NAME[column];
@@ -126,97 +125,23 @@ function convertRowToBeatmap(row: string) {
 	return beatmap as Beatmap;
 }
 
-function buildBeatmapArrays(batch: Beatmap[]) {
-	return {
-		ids: batch.map(b => b.id),
-		beatmapsetIds: batch.map(b => b.beatmapsetId),
-		statuses: batch.map(b => b.status),
-		artists: batch.map(b => b.artist),
-		titles: batch.map(b => b.title),
-		versions: batch.map(b => b.version),
-		creators: batch.map(b => b.creator),
-		creatorIds: batch.map(b => b.creatorId),
-		rulesetIds: batch.map(b => b.rulesetId),
-		approvedDates: batch.map(b => b.approvedDate),
-		starRatings: batch.map(b => b.starRating),
-		totalLengths: batch.map(b => b.totalLength),
-		bpms: batch.map(b => b.bpm),
-		css: batch.map(b => b.cs),
-		ods: batch.map(b => b.od),
-		ars: batch.map(b => b.ar),
-		hps: batch.map(b => b.hp),
-		packs: batch.map(b => b.packs)
-	};
-}
-
-async function insertBeatmapBatch(client: ClientBase, batch: Beatmap[]) {
-	const arrays = buildBeatmapArrays(batch);
-
-	// TODO DO UPDATE instead of DO NOTHING based on cli flag
-	await queryWithTiming(
-		client,
-		"insertBeatmapBatch",
-		"import_beatmap",
-		`
-    INSERT INTO ${DB_BEATMAPS_TABLE} (${BEATMAP_TABLE_COLUMNS.join(", ")})
-    SELECT *
-    FROM UNNEST(
-      $1::INTEGER[],
-      $2::INTEGER[],
-      $3::SMALLINT[],
-      $4::TEXT[],
-      $5::TEXT[],
-      $6::TEXT[],
-      $7::TEXT[],
-      $8::INTEGER[],
-      $9::SMALLINT[],
-      $10::TIMESTAMPTZ[],
-      $11::REAL[],
-      $12::SMALLINT[],
-      $13::REAL[],
-      $14::REAL[],
-      $15::REAL[],
-      $16::REAL[],
-      $17::REAL[],
-      $18::TEXT[]
-    ) ON CONFLICT (id) DO NOTHING`,
-		[
-			arrays.ids,
-			arrays.beatmapsetIds,
-			arrays.statuses,
-			arrays.artists,
-			arrays.titles,
-			arrays.versions,
-			arrays.creators,
-			arrays.creatorIds,
-			arrays.rulesetIds,
-			arrays.approvedDates,
-			arrays.starRatings,
-			arrays.totalLengths,
-			arrays.bpms,
-			arrays.css,
-			arrays.ods,
-			arrays.ars,
-			arrays.hps,
-			arrays.packs
-		]
-	);
-}
-
 async function main() {
 	const beatmaps: Beatmap[] = [];
 
+	// TODO: the import seems to have the approved dates set 2h too early... not a huge deal, should be fixed with re-scraping....
+
 	// TODO custom path via flag, option to truncate, option to skip 1st header row
 	console.log("Reading osu! beatmap database dump...");
+	const now = new Date();
 	await readFileByLine("../../data/osu-beatmap-db-dump.csv", async (row, _) => {
-		beatmaps.push(convertRowToBeatmap(row));
+		beatmaps.push(convertRowToBeatmap(row, now));
 	});
 	console.log(`Read ${beatmaps.length} beatmaps from the dump.`);
 
 	await withDbClientTransaction(async client => {
 		for (let i = 0; i < beatmaps.length; i += BATCH_SIZE) {
 			const batch = beatmaps.slice(i, i + BATCH_SIZE);
-			await insertBeatmapBatch(client, batch);
+			await upsertBeatmapBatch(client, batch, DB_BEATMAPS_TABLE, "import_beatmap");
 			console.log(`Inserted ${i + batch.length} / ${beatmaps.length} beatmaps`);
 		}
 	});

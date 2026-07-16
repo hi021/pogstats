@@ -310,3 +310,10 @@ interface ApiBeatmapDbBeatmap {
 	eyup_star_rating: number;
 	max_score_fullmod: number; // useless stable scoring
 }
+
+interface ApiBeatmapDbResponseObject {
+	beatmap: ApiBeatmapDbBeatmap;
+	difficulty: Record<string, Record<string, unknown>>; // irrelevant
+}
+
+type ApiBeatmapDbResponse = ApiBeatmapDbResponseObject | ApiBeatmapDbResponseObject[]; // array only if providing multiple ids

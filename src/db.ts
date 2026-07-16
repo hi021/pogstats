@@ -1,6 +1,9 @@
 import { ClientBase } from "pg";
 import {
 	BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS,
+	BEATMAP_TABLE_COLUMNS,
+	BEATMAP_TABLE_COLUMNS_ALL,
+	buildUpdateAssignmentsString,
 	HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS,
 	withDbClient
 } from "./db-generic.js";
@@ -290,5 +293,67 @@ export async function insertNoLongerMiaPlayers(
     WHERE h.user_id = ANY($1::INTEGER[])
       AND h.end_date IS NULL`,
 		[miaPlayerIds]
+	);
+}
+
+export async function upsertBeatmapBatch(
+	client: ClientBase,
+	batch: Beatmap[],
+	table: string,
+	source: ActionSource = "unknown"
+) {
+	const arrays = unnestObjectsIntoArrays(batch as unknown as Array<Record<string, unknown>>) as {
+		[K in keyof Beatmap]: Array<Beatmap[K]>;
+	};
+
+	await queryWithTiming(
+		client,
+		"upsertBeatmapBatch",
+		source,
+		`
+		INSERT INTO ${table} (${BEATMAP_TABLE_COLUMNS_ALL.join(", ")})
+		SELECT *
+		FROM UNNEST(
+			$1::INTEGER[],
+			$2::INTEGER[],
+			$3::SMALLINT[],
+			$4::TEXT[],
+			$5::TEXT[],
+			$6::TEXT[],
+			$7::TEXT[],
+			$8::INTEGER[],
+			$9::SMALLINT[],
+			$10::TIMESTAMPTZ[],
+			$11::REAL[],
+			$12::SMALLINT[],
+			$13::REAL[],
+			$14::REAL[],
+			$15::REAL[],
+			$16::REAL[],
+			$17::REAL[],
+			$18::TEXT[],
+			$19::TIMESTAMPTZ[]
+		) ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(BEATMAP_TABLE_COLUMNS)}`,
+		[
+			arrays.id,
+			arrays.beatmapsetId,
+			arrays.status,
+			arrays.artist,
+			arrays.title,
+			arrays.version,
+			arrays.creator,
+			arrays.creatorId,
+			arrays.rulesetId,
+			arrays.approvedDate,
+			arrays.starRating,
+			arrays.totalLength,
+			arrays.bpm,
+			arrays.cs,
+			arrays.od,
+			arrays.ar,
+			arrays.hp,
+			arrays.packs,
+			arrays.updatedAt
+		]
 	);
 }

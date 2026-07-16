@@ -32,9 +32,11 @@ async function createTables() {
 			od 							REAL NOT NULL,
 			ar 							REAL NOT NULL,
 			hp 							REAL NOT NULL,
-			packs 					TEXT NOT NULL DEFAULT ''
+			packs 					TEXT NOT NULL DEFAULT '',
+			updated_at			TIMESTAMPTZ
 		)`);
 
+	// status_idx probably unnecessary since all maps are 1,2,4?
 	await client.query(`
 			CREATE INDEX IF NOT EXISTS ${DB_BEATMAPS_TABLE}_status_idx 							ON ${DB_BEATMAPS_TABLE} (status) WHERE status IN (1, 2, 4);
 			CREATE INDEX IF NOT EXISTS ${DB_BEATMAPS_TABLE}_approved_date_brin_idx 	ON ${DB_BEATMAPS_TABLE} USING BRIN (approved_date);`);

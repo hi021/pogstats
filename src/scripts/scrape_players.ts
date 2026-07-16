@@ -126,7 +126,7 @@ async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Pl
 	const arrays = unnestObjectsIntoArrays(
 		batch as unknown as Array<Record<string, unknown>>,
 		exemplaryPlayer as unknown as Record<string, unknown>
-	);
+	) as { [K in keyof Player]: Array<Player[K]> };
 
 	await queryWithTiming(
 		client,
