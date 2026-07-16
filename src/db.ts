@@ -14,6 +14,7 @@ import {
 	DB_SCORES_TABLE
 } from "./env.js";
 import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
+import { queryWithTiming } from "./metrics.js";
 
 export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number) {
 	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
@@ -89,19 +90,27 @@ export async function insertHistoricalPlayerSnipes(client: ClientBase, snipes: H
 	);
 }
 
-export async function recalculateScorePositionsForMaps(client: ClientBase, beatmaps: BeatmapRuleset[]) {
+export async function recalculateScorePositionsForMaps(
+	client: ClientBase,
+	beatmaps: BeatmapRuleset[],
+	source: ActionSource = "unknown"
+) {
 	const ids = unnestObjectsIntoArrays(beatmaps);
-	return recalculateScorePositionsForMapIds(client, ids.beatmap_id, ids.ruleset_id);
+	return recalculateScorePositionsForMapIds(client, ids.beatmap_id, ids.ruleset_id, source);
 }
 
 export async function recalculateScorePositionsForMapIds(
 	client: ClientBase,
 	beatmapIds: number[],
-	rulesetIds: RulesetId[]
+	rulesetIds: RulesetId[],
+	source: ActionSource = "unknown"
 ) {
 	if (!beatmapIds?.length || !rulesetIds?.length) return;
 
-	await client.query(
+	await queryWithTiming(
+		client,
+		"recalculateScorePositionsForMapIds",
+		source,
 		`
    	WITH input_raw AS (
       SELECT
@@ -134,20 +143,28 @@ export async function recalculateScorePositionsForMapIds(
 	);
 }
 
-export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[]) {
-	const beatmaps: QueryResult<BeatmapRuleset> = await client.query(
-		`
-			SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
-			WHERE user_id = ANY($1::INTEGER[])`,
-		[playerIds]
-	);
-	return beatmaps.rows;
-}
+// export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[]) {
+// 	const beatmaps: QueryResult<BeatmapRuleset> = await client.query(
+// 		`
+// 			SELECT beatmap_id, ruleset_id FROM ${DB_SCORES_TABLE}
+// 			WHERE user_id = ANY($1::INTEGER[])`,
+// 		[playerIds]
+// 	);
+// 	return beatmaps.rows;
+// }
 
-export async function setAllPlayerScoresPosition(client: ClientBase, playerIds: number[], position = 0) {
+export async function setAllPlayerScoresPosition(
+	client: ClientBase,
+	playerIds: number[],
+	position = 0,
+	source: ActionSource = "unknown"
+) {
 	if (!playerIds?.length) return [];
 
-	const beatmaps: QueryResult<BeatmapRuleset> = await client.query(
+	const result = await queryWithTiming<BeatmapRuleset>(
+		client,
+		"setAllPlayerScoresPosition",
+		source,
 		`
 		UPDATE ${DB_SCORES_TABLE} s
 		SET position = $1
@@ -155,7 +172,7 @@ export async function setAllPlayerScoresPosition(client: ClientBase, playerIds: 
 		RETURNING s.beatmap_id, s.ruleset_id`,
 		[position, playerIds]
 	);
-	return beatmaps.rows;
+	return result.rows;
 }
 
 export async function findNoLongerMiaPlayerIds(client: ClientBase) {

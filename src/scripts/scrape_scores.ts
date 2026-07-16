@@ -10,21 +10,15 @@ import { updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
-	DB_HOST,
-	DB_NAME,
-	DB_PASSWORD,
-	DB_PORT,
 	DB_SCORES_TABLE,
-	DB_USER,
 	SCORE_SCRAPE_ERROR_LOG_PATH,
 	SCORE_SCRAPE_LOG_PATH,
 	SCRAPE_SCORE_DELAY_MS
 } from "../env.js";
-import { recordErrorLog, timedFetch } from "../metrics.js";
+import { timedFetch } from "../metrics.js";
 import {
 	convertApiScore,
 	convertDatabaseScore,
-	getErrorMessage,
 	parseArgs,
 	prepareScoresTableValuesAndParamPlaceholders,
 	sortScores
@@ -147,7 +141,7 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processing beatmap`);
 
 		const url = buildBeatmapScoresUrl(beatmapId);
-		const res = await timedFetch(url, { headers }, "scrape_scores", url.hostname);
+		const res = await timedFetch(url, { headers }, "scrape_scores", url.hostname + url.pathname);
 		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
 		const data = (await res.json()) as ApiBeatmapScore;
@@ -156,7 +150,6 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processed ${convertedScores.length} scores`);
 	} catch (e) {
-		recordErrorLog("scrape_scores", getErrorMessage(e));
 		logError(errorLogStream, `[${beatmapId}][#${rowNo}] - Processing failed`, e);
 	}
 }

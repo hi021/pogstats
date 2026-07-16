@@ -1,15 +1,15 @@
 import http from "http";
 import Koa from "koa";
 import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
-import { metricsMiddleware, recordErrorLog, requestMetricsMiddleware } from "../metrics.js";
-import { FlagDefinitions, getErrorMessage, parseArgs } from "../shared.js";
+import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
+import { FlagDefinitions, parseArgs } from "../shared.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
 import { BASE_POG_WS_URL, onConnect, onUpgrade, socketDebugMessageEndpoint, wss } from "./pog-ws.js";
 import { scoresWs, scoresWsOnClose, scoresWsOnError, scoresWsOnMessage, scoresWsOnOpen } from "./scores-ws.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
-	disableScoresWs: {
-		cli: "--disableScoresWs",
+	noScoresWs: {
+		cli: "--noScoresWs",
 		description: "Does not connect to ushio, useful for hosting only the pog API",
 		takesValue: false
 	},
@@ -25,20 +25,19 @@ export const server = http.createServer(app.callback());
 
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
-app.use(metricsMiddleware);
-app.use(requestMetricsMiddleware);
 app.use(errorHandlerMiddleware);
-app.use(socketDebugMessageEndpoint);
+app.use(metricsMiddleware);
+app.use(requestTimingMiddleware);
+app.use(socketDebugMessageEndpoint); // TODO debug only
 app.use(router.routes()).use(router.allowedMethods());
 app.on("error", (e, ctx) => {
-	recordErrorLog("server", getErrorMessage(e));
 	console.error("Server error:\n", ctx.url, e);
 });
 
 server.on("upgrade", onUpgrade);
 wss.on("connection", onConnect);
 
-if (parsedFlags?.disableScoresWs) {
+if (parsedFlags?.noScoresWs) {
 	console.log("scores-ws disabled by CLI parameter");
 } else {
 	scoresWs.on("open", () => scoresWsOnOpen(parsedFlags));

@@ -20,11 +20,10 @@ import {
 	DEV_ENV,
 	VERBOSE
 } from "../env.js";
-import { recordErrorLog, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
+import { recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
 	convertApiScore,
-	getErrorMessage,
 	ParsedFlags,
 	prepareScoresTableValuesAndParamPlaceholders,
 	RANKING_POS_THRESHOLDS,
@@ -226,7 +225,6 @@ async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
 			await scrapePlayers(missingIds);
 		}
 	} catch (e) {
-		recordErrorLog("scores_ws", getErrorMessage(e));
 		console.error("failed to get missing players:\n", e);
 	}
 }
@@ -317,7 +315,7 @@ async function upsertBeatmapScores(
 		 SELECT ${SCORE_TABLE_COLUMNS.join(",")} FROM ws_scores_tmp`
 	);
 
-	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }]);
+	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }], "scores_ws");
 
 	const insertedIds = provenScores.map(score => score.id);
 	const insertedScores: QueryResult<ScoreBasicData> = await client.query(

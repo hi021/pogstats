@@ -68,7 +68,7 @@ async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch
 
 async function lookupPlayers(headers: Record<string, string>, playerIds: number[]) {
 	const url = buildUserLookupUrl(playerIds);
-	const res = await timedFetch(url, { headers }, "scrape_players", url.hostname);
+	const res = await timedFetch(url, { headers }, "scrape_players", url.hostname + url.pathname);
 	if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
 	const players = (await res.json()) as { users: ApiUserLookup[] };
@@ -219,7 +219,7 @@ export async function scrapePlayers(ids?: number[]) {
 					`[scrape_players] Player(s) with ID(s) ${miaPlayerIds} not in the API response, marking all as MIA`
 				);
 
-			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0);
+			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0, "scrape_players");
 			await insertNewMiaPlayers(client, miaPlayers);
 
 			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client);
@@ -227,7 +227,7 @@ export async function scrapePlayers(ids?: number[]) {
 				console.log(`[scrape_players] Player(s) with ID(s) ${nonMiaPlayerIds} are no longer MIA`);
 			else if (!miaPlayerIds.length) return;
 
-			const nonMiaBeatmaps = await setAllPlayerScoresPosition(client, nonMiaPlayerIds, 100);
+			const nonMiaBeatmaps = await setAllPlayerScoresPosition(client, nonMiaPlayerIds, 100, "scrape_players");
 			await insertNoLongerMiaPlayers(client, nonMiaPlayerIds);
 
 			// TODO send event to pog-ws to notify about MIA and non MIA changes
@@ -241,7 +241,8 @@ export async function scrapePlayers(ids?: number[]) {
 			await recalculateScorePositionsForMapIds(
 				client,
 				[...miaBeatmapsUnnested.beatmap_id, ...nonMiaBeatmapsUnnested.beatmap_id],
-				[...miaBeatmapsUnnested.ruleset_id, ...nonMiaBeatmapsUnnested.ruleset_id]
+				[...miaBeatmapsUnnested.ruleset_id, ...nonMiaBeatmapsUnnested.ruleset_id],
+				"scrape_players"
 			);
 		});
 	} catch (e) {

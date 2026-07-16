@@ -32,6 +32,16 @@ type OsuAuthScope =
 type IdBatch = { batch_no: number; ids: number[] };
 type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
 
+type ActionSource =
+	| "scrape_players"
+	| "scrape_scores"
+	| "scrape_beatmaps"
+	| "pog_api_v2"
+	| "pog_ws"
+	| "scores_ws"
+	| "osu_auth"
+	| "unknown";
+
 // ------------------------------------------
 
 ////// differences between pekkie schema
@@ -209,7 +219,7 @@ interface HistoricalRankingEntry {
 	date: Date;
 	userId: number;
 	position: number;
-	value: number; // e.g. top50 count, total pp, etc.
+	value: number; // top50 count, total pp, etc.
 	previousEntryId: number; // FK to the same table - same rankingId and userId, but earlier date
 	updatedAt: Date;
 	sourceId?: number; // FK to Data Source id
@@ -222,8 +232,8 @@ interface DataSource {
 	comment: string;
 }
 
-// TODO DDL
 interface HistoricalPlayerSnipes {
+	id?: number;
 	userId: number;
 	scoreId: number;
 	snipedBy: number; // user id

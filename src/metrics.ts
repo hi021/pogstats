@@ -1,5 +1,5 @@
 import type { Middleware } from "koa";
-import type { ClientBase, QueryResult } from "pg";
+import type { ClientBase, QueryResult, QueryResultRow } from "pg";
 import prom from "prom-client";
 
 const metricsRegistry = new prom.Registry();
@@ -14,10 +14,10 @@ const httpRequestDuration = new prom.Histogram({
 });
 
 const dbQueryDuration = new prom.Histogram({
-	name: "pogstats_db_query_duration_ms",
-	help: "Duration of database queries in ms",
+	name: "pogstats_db_query_duration_s",
+	help: "Duration of database queries in seconds",
 	labelNames: ["query", "source"] as const,
-	buckets: [1, 3, 10, 25, 50, 100, 250, 500, 1250, 3750, 10000],
+	buckets: [0.001, 0.003, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.25, 3.75, 10],
 	registers: [metricsRegistry]
 });
 
@@ -44,17 +44,6 @@ const scoreBatchCount = new prom.Histogram({
 	registers: [metricsRegistry]
 });
 
-const errorLogCounter = new prom.Counter({
-	name: "pogstats_error_log_total",
-	help: "Count of error messages logged for Grafana",
-	labelNames: ["source", "message"] as const,
-	registers: [metricsRegistry]
-});
-
-export function recordErrorLog(source: string, message: string) {
-	errorLogCounter.labels({ source: normalizeLabel(source), message: safeErrorLabel(message) }).inc();
-}
-
 export function recordMissingEntity(type: "player" | "beatmap", count = 1) {
 	missingEntityCounter.labels({ type }).inc(count);
 }
@@ -64,7 +53,11 @@ export function recordScoreBatchCounts(totalScores: number, provenScores: number
 	scoreBatchCount.labels({ type: "proven" }).observe(provenScores);
 }
 
-export function timeDbQuery<T>(queryName: string, source: string, callback: () => Promise<T>): Promise<T> {
+export function timeDbQuery<T extends Record<string, unknown>>(
+	queryName: string,
+	source: ActionSource,
+	callback: () => Promise<QueryResult<T>>
+) {
 	const timer = dbQueryDuration.startTimer({
 		query: normalizeLabel(queryName),
 		source: normalizeLabel(source)
@@ -73,13 +66,13 @@ export function timeDbQuery<T>(queryName: string, source: string, callback: () =
 	return callback().finally(() => timer());
 }
 
-export async function queryWithTiming<T extends Record<string, unknown> = Record<string, unknown>>(
+export async function queryWithTiming<T extends QueryResultRow>(
 	client: ClientBase,
-	query: string,
-	values: unknown[],
 	queryName: string,
-	source: string
-): Promise<QueryResult<T>> {
+	source: ActionSource,
+	query: string,
+	values: unknown[]
+) {
 	const timer = dbQueryDuration.startTimer({
 		query: normalizeLabel(queryName),
 		source: normalizeLabel(source)
@@ -95,7 +88,7 @@ export async function queryWithTiming<T extends Record<string, unknown> = Record
 export async function timedFetch(
 	request: string | URL,
 	init: RequestInit | undefined,
-	source: string,
+	source: ActionSource,
 	route = "unknown"
 ) {
 	const start = process.hrtime.bigint();
@@ -106,7 +99,7 @@ export async function timedFetch(
 		statusCode = String(res.status);
 		return res;
 	} finally {
-		const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+		const durationMs = Number(process.hrtime.bigint() - start) / 1e9;
 		outboundRequestDuration
 			.labels({
 				route: normalizeLabel(route),
@@ -117,18 +110,16 @@ export async function timedFetch(
 	}
 }
 
-export const requestMetricsMiddleware: Middleware = async (ctx, next) => {
+export const requestTimingMiddleware: Middleware = async (ctx, next) => {
 	const start = process.hrtime.bigint();
 	await next();
 	const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
-	const statusCode = String(ctx.status || 404);
-	const origin = classifyOrigin(ctx.request.headers["user-agent"]);
 
 	httpRequestDuration
 		.labels({
-			route: normalizeLabel(ctx.path, ctx.path),
-			status_code: statusCode,
-			origin
+			route: normalizeLabel(ctx.path),
+			status_code: String(ctx.status || 404),
+			origin: classifyOrigin(ctx.request.headers["user-agent"])
 		})
 		.observe(durationMs);
 };
@@ -159,10 +150,6 @@ function classifyOrigin(userAgent?: string | string[]) {
 
 	const token = ua.split(" ")[0];
 	return normalizeLabel(token);
-}
-
-function safeErrorLabel(message: string) {
-	return normalizeLabel(message.replace(/\s+/g, " "), "unknown_error");
 }
 
 export { metricsRegistry };

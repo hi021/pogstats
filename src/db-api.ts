@@ -1,6 +1,7 @@
 import { ClientBase, QueryResult } from "pg";
 import { DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
 import { parsePositionThresholdAndRankingType } from "./shared.js";
+import { queryWithTiming, timeDbQuery } from "./metrics.js";
 
 export async function getPlayerIdByIdOrName(client: ClientBase, idOrName: string | number) {
 	if (!idOrName) return null;
@@ -54,14 +55,10 @@ export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: s
 }
 
 export async function getLiveCountRankingForPlayer(client: ClientBase, playerId: number) {
-	const result: QueryResult<{
-		top_1: number;
-		top_8: number;
-		top_15: number;
-		top_25: number;
-		top_50: number;
-		top_100: number;
-	}> = await client.query(
+	const result = await queryWithTiming<PlayerLiveCountData>(
+		client,
+		"getLiveCountRankingForPlayer",
+		"pog_api_v2",
 		`
     SELECT 
       COUNT(s.id) FILTER (WHERE s.position <= 1) AS top_1,
@@ -71,8 +68,7 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
       COUNT(s.id) FILTER (WHERE s.position <= 50) AS top_50,
       COUNT(s.id) FILTER (WHERE s.position <= 100) AS top_100
     FROM ${DB_SCORES_TABLE} s
-    WHERE user_id = $1
-    `,
+    WHERE user_id = $1`,
 		[playerId]
 	);
 
