@@ -20,7 +20,7 @@ import {
 	DEV_ENV,
 	VERBOSE
 } from "../env.js";
-import { queryWithTiming, recordMissingEntity, recordScoreBatchCounts } from "../metrics.js";
+import { queryWithTiming, recordMissingEntity, recordScoreBatchCounts, scoreBatchDuration } from "../metrics.js";
 import { scrapeBeatmaps } from "../scripts/scrape_beatmaps.js";
 import { scrapePlayers } from "../scripts/scrape_players.js";
 import {
@@ -41,6 +41,7 @@ const SCORES_WS_RECONNECTION_INTERVAL = 10000;
 
 const batchCandidateScores = new Array<WsScore>();
 const batchCandidateBeatmapIds = new Array<number>();
+let batchTimer: () => number;
 let sessionBatchCount = 0;
 let batchTotalScoreCount = 0;
 let batchLowestScoreId = Infinity; // assumes score ids to be monotonic
@@ -100,13 +101,18 @@ export function scoresWsOnError(e: Error) {
 
 export async function scoresWsOnMessage(event: WebSocket.RawData) {
 	const message = event.toString();
-	if (message === "start-batch") return;
+	if (message === "start-batch") {
+		batchTimer = scoreBatchDuration.startTimer();
+		return;
+	}
 	if (message === "end-batch") {
 		try {
 			++sessionBatchCount;
 			await endAndSaveScoresBatch();
 		} catch (e) {
 			console.error("failed to process scores-ws batch:\n", e);
+		} finally {
+			batchTimer?.();
 		}
 		return;
 	}

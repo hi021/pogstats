@@ -36,6 +36,13 @@ const missingEntityCounter = new prom.Counter({
 	registers: [metricsRegistry]
 });
 
+export const scoreBatchDuration = new prom.Histogram({
+	name: "pogstats_score_batch_duration_s",
+	help: "How long it takes to process a score batch in seconds",
+	buckets: [0.25, 1, 2, 5, 10, 25, 60],
+	registers: [metricsRegistry]
+});
+
 const scoreBatchCount = new prom.Histogram({
 	name: "pogstats_score_batch_count",
 	help: "Counts of score batches and proven score counts from scores-ws",
