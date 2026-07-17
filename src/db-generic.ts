@@ -147,7 +147,7 @@ export const dbPool = new Pool({
 	database: DB_NAME,
 	min: 2,
 	connectionTimeoutMillis: 20000,
-	allowExitOnIdle: DEV_ENV
+	allowExitOnIdle: true
 });
 
 export async function withDbClient<T>(callback: (client: PoolClient) => Promise<T>) {

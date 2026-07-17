@@ -21,7 +21,7 @@ async function createTables(client: ClientBase) {
 
 	// TODO?: figure out if username can be indexed for pg_trgm fuzzy search - gin(username gin_trgm_ops)?
 	await client.query(`
-		CREATE INDEX IF NOT EXISTS ${DB_PLAYERS_TABLE}_country_code_idx ON ${DB_PLAYERS_TABLE} (country_code);`);
+		CREATE INDEX IF NOT EXISTS ${DB_PLAYERS_TABLE}_country_code_idx 			ON ${DB_PLAYERS_TABLE} (country_code);`);
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE} (
@@ -30,15 +30,14 @@ async function createTables(client: ClientBase) {
 			end_date 		TIMESTAMPTZ,
 
 			PRIMARY KEY (user_id, start_date),
-			CONSTRAINT player_mia_history_user_fk FOREIGN KEY (user_id)
-			REFERENCES ${DB_PLAYERS_TABLE} (id)
+			CONSTRAINT player_mia_history_user_fk FOREIGN KEY(user_id) REFERENCES ${DB_PLAYERS_TABLE}(id)
 	)`);
 
 	await client.query(`
-			CREATE INDEX IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE}_user_id_idx ON ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id);
-			CREATE INDEX IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE}_open_idx 		ON ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id) WHERE end_date IS NULL;
-			CREATE INDEX IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE}_latest_idx 	ON ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id, start_date DESC);
-		`);
+		CREATE INDEX IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE}_user_id_idx ON ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id);
+		CREATE INDEX IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE}_open_idx 		ON ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id) WHERE end_date IS NULL;
+		CREATE INDEX IF NOT EXISTS ${DB_PLAYER_MIA_HISTORY_TABLE}_latest_idx 	ON ${DB_PLAYER_MIA_HISTORY_TABLE} (user_id, start_date DESC);
+	`);
 
 	// TODO: it would be cool to store this, but the main /user endpoint has a high cost (high rate limit), using simple /lookup for now
 	// await client.query(`
