@@ -13,6 +13,7 @@ import { BEATMAP_DB_BEATMAP_FETCH_URL, buildBeatmapDbUrl, convertApiBeatmap, DEF
 
 const BEATMAP_BATCH_SIZE = 100;
 
+// TODO: do not fetch qualified (approved = 3) maps since rankings are kept for (1,2,4) only
 async function fetchBeatmaps(headers: Record<string, string>, beatmapIds: number[]) {
 	const url = buildBeatmapDbUrl(beatmapIds);
 	const res = await timedFetch(url, { headers }, "scrape_beatmaps", BEATMAP_DB_BEATMAP_FETCH_URL);

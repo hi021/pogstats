@@ -2,7 +2,8 @@ import type { Middleware } from "koa";
 import type { ClientBase, QueryResult, QueryResultRow } from "pg";
 import prom from "prom-client";
 
-const metricsRegistry = new prom.Registry();
+// TODO: seems like this only registers metrics for the webserver but not score scrape script
+export const metricsRegistry = new prom.Registry();
 prom.collectDefaultMetrics({ register: metricsRegistry, prefix: "pogstats_", eventLoopMonitoringPrecision: 25 });
 
 const httpRequestDuration = new prom.Histogram({
@@ -158,5 +159,3 @@ function classifyOrigin(userAgent?: string | string[]) {
 	const token = ua.split(" ")[0];
 	return normalizeLabel(token);
 }
-
-export { metricsRegistry };

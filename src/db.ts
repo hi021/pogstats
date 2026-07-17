@@ -110,9 +110,9 @@ export async function getInexistentBeatmapIds(
 			"getInexistentBeatmapIds",
 			source,
 			`WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
-			SELECT i.id FROM input_ids i
-			LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
-			WHERE b.id IS NULL`,
+			 SELECT i.id FROM input_ids i
+				LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
+			 WHERE b.id IS NULL`,
 			[beatmapIds]
 		)
 	).rows.map(r => r.id) as number[];

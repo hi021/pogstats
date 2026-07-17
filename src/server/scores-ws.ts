@@ -6,8 +6,6 @@ import {
 	acquireBeatmapAdvisoryLock,
 	fetchNewBeatmaps,
 	fetchNewPlayers,
-	getInexistentBeatmapIds,
-	getInexistentPlayerIds,
 	getLastScoreId,
 	insertHistoricalPlayerSnipes,
 	recalculateScorePositionsForMaps,
@@ -22,9 +20,7 @@ import {
 	DEV_ENV,
 	VERBOSE
 } from "../env.js";
-import { queryWithTiming, recordMissingEntity, recordScoreBatchCounts, scoreBatchDuration } from "../metrics.js";
-import { scrapeBeatmaps } from "../scripts/scrape_beatmaps.js";
-import { scrapePlayers } from "../scripts/scrape_players.js";
+import { queryWithTiming, recordScoreBatchCounts, scoreBatchDuration } from "../metrics.js";
 import {
 	convertApiScore,
 	ParsedFlags,
