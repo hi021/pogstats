@@ -1,23 +1,8 @@
-import { Client } from "pg";
-import {
-	DB_HOST,
-	DB_NAME,
-	DB_PASSWORD,
-	DB_PLAYER_MIA_HISTORY_TABLE,
-	DB_PLAYERS_TABLE,
-	DB_PORT,
-	DB_USER
-} from "../env.js";
+import { ClientBase } from "pg";
+import { withDbClient } from "../db-generic.js";
+import { DB_PLAYER_MIA_HISTORY_TABLE, DB_PLAYERS_TABLE } from "../env.js";
 
-const client = new Client({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
-
-async function createTables() {
+async function createTables(client: ClientBase) {
 	console.log(`Attempting to create ${DB_PLAYERS_TABLE} and ${DB_PLAYER_MIA_HISTORY_TABLE} tables`);
 
 	await client.query(`
@@ -81,12 +66,9 @@ async function createTables() {
 
 async function main() {
 	try {
-		await client.connect();
-		await createTables();
+		await withDbClient(async client => await createTables(client));
 	} catch (e) {
 		console.error("Error creating tables:\n", e);
-	} finally {
-		await client.end();
 	}
 }
 
