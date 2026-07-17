@@ -4,6 +4,8 @@ import WebSocket from "ws";
 import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
 	acquireBeatmapAdvisoryLock,
+	fetchNewBeatmaps,
+	fetchNewPlayers,
 	getInexistentBeatmapIds,
 	getInexistentPlayerIds,
 	getLastScoreId,
@@ -163,12 +165,10 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 
 	let beatenScoresByMaps: ProvenScoresPerRulesetBeatmap[] = [];
 	await withDbClientTransaction(async client => {
+		await fetchNewBeatmaps(client, batchCandidateBeatmapIds, () => (batchCandidateBeatmapIds.length = 0), "scores_ws");
 		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
 		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
-		await Promise.all([
-			new Promise(r => r(fetchNewBeatmaps(client, batchCandidateBeatmapIds))),
-			new Promise(r => r(fetchNewPlayers(client, provenUserIds)))
-		]);
+		await fetchNewPlayers(client, provenUserIds, undefined, "scores_ws");
 	});
 
 	let totalProvenScoreCount = 0;
@@ -208,36 +208,9 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 
 function isCandidateScore(score: WsScore) {
 	// only passed scores are sent anyway, not much to do here
+	// actually this also includes scores from qualified maps that we do not care about...
 	// TODO osu!standard only for now, maybe add other rulesets later
 	return score.ruleset_id == 0;
-}
-
-async function fetchNewBeatmaps(client: ClientBase, beatmapIds: number[]) {
-	try {
-		const missingIds = await getInexistentBeatmapIds(client, beatmapIds);
-		if (missingIds?.length) {
-			if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
-			recordMissingEntity("beatmap", missingIds.length);
-			await scrapeBeatmaps(missingIds);
-		}
-
-		batchCandidateBeatmapIds.length = 0;
-	} catch (e) {
-		console.error("failed to fetch missing beatmaps:\n", e);
-	}
-}
-
-async function fetchNewPlayers(client: ClientBase, playerIds: number[]) {
-	try {
-		const missingIds = await getInexistentPlayerIds(client, playerIds);
-		if (missingIds?.length) {
-			if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
-			recordMissingEntity("player", missingIds.length);
-			await scrapePlayers(missingIds);
-		}
-	} catch (e) {
-		console.error("failed to fetch missing players:\n", e);
-	}
 }
 
 // TODO: Probably want to do it directly in the database in getBeatenScoresByMap() but brain too small
@@ -449,6 +422,8 @@ async function upsertBeatmapScores(
 // WARNING: the DB_BEATMAP_RULESET_UPDATE_DATES_TABLE join is only necessary for the first main score scrape!! remove it later or new maps will never be populated
 // duct tape solution but it's bed time
 // TODO
+
+// This also filters out scores from qualified maps by joining on status IN (1,2,4)
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores);
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
@@ -469,8 +444,11 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 		filtered_candidates AS (
 			SELECT c.*
 			FROM candidates c
+			JOIN ${DB_BEATMAPS_TABLE} b
+				ON b.id = c.candidate_beatmap_id
+				AND b.status IN (1,2,4)
 			JOIN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} u
-				ON u.beatmap_id = c.candidate_beatmap_id
+				ON u.beatmap_id = b.id
 				AND u.ruleset_id = c.candidate_ruleset_id
 				AND u.last_scores_scrape IS NOT NULL
 		)

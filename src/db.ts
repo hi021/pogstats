@@ -14,10 +14,13 @@ import {
 	DB_HISTORICAL_PLAYER_SNIPES_TABLE,
 	DB_PLAYER_MIA_HISTORY_TABLE,
 	DB_PLAYERS_TABLE,
-	DB_SCORES_TABLE
+	DB_SCORES_TABLE,
+	VERBOSE
 } from "./env.js";
-import { queryWithTiming } from "./metrics.js";
+import { queryWithTiming, recordMissingEntity } from "./metrics.js";
 import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
+import { scrapeBeatmaps } from "./scripts/scrape_beatmaps.js";
+import { scrapePlayers } from "./scripts/scrape_players.js";
 
 export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number) {
 	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
@@ -113,6 +116,46 @@ export async function getInexistentBeatmapIds(
 			[beatmapIds]
 		)
 	).rows.map(r => r.id) as number[];
+}
+
+export async function fetchNewBeatmaps(
+	client: ClientBase,
+	beatmapIds: number[],
+	callback?: () => void,
+	source: ActionSource = "unknown"
+) {
+	try {
+		const missingIds = await getInexistentBeatmapIds(client, beatmapIds, source);
+		if (missingIds?.length) {
+			if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
+			recordMissingEntity("beatmap", missingIds.length);
+			await scrapeBeatmaps(missingIds);
+		}
+
+		callback?.();
+	} catch (e) {
+		console.error(`[${source}] failed to fetch missing beatmaps:\n`, e);
+	}
+}
+
+export async function fetchNewPlayers(
+	client: ClientBase,
+	playerIds: number[],
+	callback?: () => void,
+	source: ActionSource = "unknown"
+) {
+	try {
+		const missingIds = await getInexistentPlayerIds(client, playerIds, source);
+		if (missingIds?.length) {
+			if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
+			recordMissingEntity("player", missingIds.length);
+			await scrapePlayers(missingIds);
+		}
+
+		callback?.();
+	} catch (e) {
+		console.error(`[${source}] failed to fetch missing players:\n`, e);
+	}
 }
 
 export async function insertHistoricalPlayerSnipes(

@@ -154,7 +154,10 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 
 		const data = (await res.json()) as ApiBeatmapScore;
 		const convertedScores = data.scores.map((score, index) => convertApiScore(score, index + 1));
-		await withDbClientTransaction(async client => await mergeSingleBeatmapScoresIntoExisting(client, convertedScores));
+		const playerIds = convertedScores.map(s => s.userId);
+		await withDbClientTransaction(async client => {
+			await mergeSingleBeatmapScoresIntoExisting(client, convertedScores);
+		});
 
 		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processed ${convertedScores.length} scores`);
 	} catch (e) {
