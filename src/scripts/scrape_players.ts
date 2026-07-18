@@ -32,6 +32,7 @@ const MAX_RETRIEVED_AT = getMinDate(parsedFlags.minDate);
 
 let lastFetchTimestamp = 0;
 
+// all user ids with a score in the top 104 on any map, prioritizes active users
 async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch[] | null> {
 	return await withDbClient(async client => {
 		const params = maxRetrievedAt ? [maxRetrievedAt] : [];
@@ -43,12 +44,12 @@ async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch
 			WITH numbered AS (
 				SELECT
 				s.user_id,
-				ROW_NUMBER() OVER (ORDER BY s.user_id) AS rn
+				ROW_NUMBER() OVER (ORDER BY p.is_active DESC, s.user_id DESC) AS rn
 				FROM ${DB_SCORES_TABLE} s
 					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
 				WHERE s.position <= 104
 				${maxRetrievedAt ? `AND (p.retrieved_at IS NULL OR p.retrieved_at < $1)` : ""}
-				GROUP BY s.user_id
+				GROUP BY p.is_active, s.user_id
 			),
 			batched AS (
 				SELECT

@@ -108,10 +108,10 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 		try {
 			++sessionBatchCount;
 			await endAndSaveScoresBatch();
-			batchTimer?.({success: "true", batchNo: sessionBatchCount});
+			batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		} catch (e) {
-			console.error(`[Batch #${sessionBatchCount}] failed to proces:\n` , e);
-			batchTimer?.({success: "false", batchNo: sessionBatchCount});
+			console.error(`[Batch #${sessionBatchCount}] failed to proces:\n`, e);
+			batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 		}
 		return;
 	}
