@@ -101,6 +101,7 @@ export async function scrapeBeatmaps(ids?: number[]) {
 
 			console.log(`[scrape_beatmaps] Processing and inserting beatmap batch #${batch.batch_no}`);
 			const convertedBeatmaps = filterAndConvertBeatmaps(apiBeatmaps, updatedAt);
+			if(!convertedBeatmaps.length) continue;
 
 			scrapedCount += convertedBeatmaps.length;
 			await withDbClientTransaction(async client => {
