@@ -1,8 +1,4 @@
-import {
-	BEATMAP_TABLE_COLUMNS_ALL,
-	HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS,
-	SCORE_TABLE_COLUMNS
-} from "./db-generic.js";
+import { BEATMAP_TABLE_COLUMNS_ALL, HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
 
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko", "fruits", "mania"]);
@@ -90,9 +86,7 @@ export function buildPositionThresholdCode(pos: RankingPositionThreshold): Ranki
 	return `top${pos}`;
 }
 
-export function parsePositionThresholdFromCode(
-	code: RankingPositionThresholdCode
-): RankingPositionThreshold | undefined {
+export function parsePositionThresholdFromCode(code: RankingPositionThresholdCode): RankingPositionThreshold | undefined {
 	if (!code?.startsWith("top")) return;
 
 	const posString = code.slice(3);
@@ -257,8 +251,7 @@ export function parseArgs<Defs extends FlagDefinitions>(
 		if (!arg.startsWith("--")) throw new Error(`Unexpected argument: '${arg}'`);
 
 		const [flagName, maybeValue] = arg.slice(2).split("=", 2) as [string, string | undefined];
-		if (!Object.prototype.hasOwnProperty.call(flagDefinitions, flagName))
-			throw new Error(`Unknown flag: --${flagName}`);
+		if (!Object.prototype.hasOwnProperty.call(flagDefinitions, flagName)) throw new Error(`Unknown flag: --${flagName}`);
 
 		const key = flagName as keyof Defs;
 		const def = flagDefinitions[key];

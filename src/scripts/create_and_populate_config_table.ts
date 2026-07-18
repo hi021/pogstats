@@ -63,7 +63,7 @@ async function populateConfigTable(client: ClientBase) {
 	for (const config of INITIAL_CONFIG)
 		await client.query(
 			`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
-			[config.key, config.valueInt, config.valueText, config.valueJson ? JSON.stringify(config.valueJson) : null]
+			[config.key, config.value_int, config.value_text, config.value_json ? JSON.stringify(config.value_json) : null]
 		);
 
 	console.log(`Populated ${DB_CONFIG_TABLE} table with initial values`);

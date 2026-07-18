@@ -26,9 +26,7 @@ export async function getPlayerIdByLowercaseName(client: ClientBase, name: strin
 // validates if id is a real number and the player exists in the database
 export async function getPlayerIdById(client: ClientBase, id: string | number) {
 	try {
-		const result: QueryResult<{ id: number }> = await client.query(`SELECT id FROM ${DB_PLAYERS_TABLE} WHERE id = $1`, [
-			id
-		]);
+		const result: QueryResult<{ id: number }> = await client.query(`SELECT id FROM ${DB_PLAYERS_TABLE} WHERE id = $1`, [id]);
 		return result?.rows?.[0]?.id;
 	} catch (e) {
 		return null; // assume the id wasn't a valid number

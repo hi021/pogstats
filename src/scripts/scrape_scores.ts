@@ -21,7 +21,8 @@ import {
 	convertDatabaseScore,
 	parseArgs,
 	prepareScoresTableValuesAndParamPlaceholders,
-	sortScores
+	sortScores,
+	splitIntoBatches
 } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
 import {
@@ -51,6 +52,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = getMinDate(parsedFlags.minDate);
 const SKIP_DUMP_BEFORE_SCRAPE = Boolean(parsedFlags.skipDump);
+const BEATMAP_BATCH_SIZE = 30000;
 
 let infoLogStream: fs.WriteStream;
 let errorLogStream: fs.WriteStream;
@@ -136,7 +138,7 @@ async function mergeSingleBeatmapScoresIntoExisting(client: ClientBase, scrapedS
 	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_scrape", "scrape_scores");
 }
 
-async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<string, string>) {
+async function handleBeatmap(beatmapId: number, beatmapNo: number, headers: Record<string, string>) {
 	await rateLimit(
 		{
 			get: () => lastFetchTimestamp,
@@ -146,7 +148,7 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 	);
 
 	try {
-		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processing beatmap`);
+		logInfo(infoLogStream, `[${beatmapId}][#${beatmapNo}] - Processing beatmap`);
 
 		const url = buildBeatmapScoresUrl(beatmapId);
 		const res = await timedFetch(url, { headers }, "scrape_scores", url.hostname + url.pathname);
@@ -160,17 +162,17 @@ async function handleBeatmap(beatmapId: number, rowNo: number, headers: Record<s
 			await mergeSingleBeatmapScoresIntoExisting(client, convertedScores);
 		});
 
-		logInfo(infoLogStream, `[${beatmapId}][#${rowNo}] - Processed ${convertedScores.length} scores`);
+		logInfo(infoLogStream, `[${beatmapId}][#${beatmapNo}] - Processed ${convertedScores.length} scores`);
 	} catch (e) {
-		logError(errorLogStream, `[${beatmapId}][#${rowNo}] - Processing failed`, e);
+		logError(errorLogStream, `[${beatmapId}][#${beatmapNo}] - Processing failed`, e);
 	}
 }
 
 // TODO: only osu!standard for now, change if implementing modes
-async function getBeatmapIds(client: ClientBase, maxRetrievedAt?: Date): Promise<number[]> {
+async function getBeatmapIds(client: ClientBase, maxRetrievedAt?: Date) {
 	const params = maxRetrievedAt ? [maxRetrievedAt] : [];
 	return (
-		await queryWithTiming(
+		await queryWithTiming<BeatmapScoreFull>(
 			client,
 			"getBeatmapIds",
 			"scrape_scores",
@@ -193,18 +195,19 @@ async function scrapeScores() {
 		infoLogStream = createLogStream(SCORE_SCRAPE_LOG_PATH);
 		errorLogStream = createLogStream(SCORE_SCRAPE_ERROR_LOG_PATH);
 		if (!SKIP_DUMP_BEFORE_SCRAPE)
-			withDbClient(
-				async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream)
-			);
+			withDbClient(async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream));
 
-		let beatmapIds: number[] = [];
-		const headers = buildHeadersWithAuth(await getOAuthToken());
-		await withDbClient(
-			async client => (beatmapIds = await getBeatmapIds(client, ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE))
-		);
+		const beatmapIds = await withDbClient(async client => await getBeatmapIds(client, ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE));
 		logInfo(infoLogStream, `Found ${beatmapIds.length} beatmap IDs to process`);
 
-		for (let i = 0; i < beatmapIds.length; i++) await handleBeatmap(beatmapIds[i], i + 1, headers);
+		const beatmapBatches = splitIntoBatches(beatmapIds, BEATMAP_BATCH_SIZE);
+		for (const batch of beatmapBatches) {
+			const headers = buildHeadersWithAuth(await getOAuthToken());
+			for (let i = 0; i < batch.ids.length; ++i) {
+				const beatmapNo = (batch.batch_no - 1) * BEATMAP_BATCH_SIZE + i + 1;
+				await handleBeatmap(batch.ids[i], beatmapNo, headers);
+			}
+		}
 
 		// TODO graceful shutdown handling to ensure logs are flushed and DB connection is closed even if the process is killed mid-run
 		logInfo(infoLogStream, "Finished processing all beatmaps");

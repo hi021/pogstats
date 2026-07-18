@@ -14,8 +14,11 @@ export const USER_AGENT = "pog!stats (+https://github.com/hi021/pogstats)";
 export const DEFAULT_HEADERS = {
 	Accept: "application/json",
 	"Content-Type": "application/json",
-	"X-API-Version": OSU_API_VERSION,
 	"User-Agent": USER_AGENT
+};
+export const DEFAULT_OSU_API_HEADERS = {
+	...DEFAULT_HEADERS,
+	"X-API-Version": OSU_API_VERSION
 };
 
 // I am the GOD of ajvascript
@@ -34,7 +37,7 @@ export function buildRandomString() {
 
 export const buildHeadersWithAuth = (token: string) => {
 	return {
-		...DEFAULT_HEADERS,
+		...DEFAULT_OSU_API_HEADERS,
 		Authorization: `Bearer ${token}`
 	};
 };
@@ -47,12 +50,7 @@ export function getMinDate(value: string | undefined) {
 	return date;
 }
 
-export function convertApiPlayerLookup(
-	player: ApiUserLookup,
-	retrievedAt: Date,
-	isFromOsuApi = true,
-	isMia = false
-): Player {
+export function convertApiPlayerLookup(player: ApiUserLookup, retrievedAt: Date, isFromOsuApi = true, isMia = false): Player {
 	return {
 		id: player.id,
 		username: player.username,
@@ -104,10 +102,7 @@ export async function rateLimit(accessor: TimestampAccessor, delayMs: number) {
 	accessor.set(Date.now());
 }
 
-export const buildBeatmapScoresUrl = (
-	beatmapId: number | string,
-	params: BeatmapScoreParams = { mode: "osu", limit: 100 }
-) => {
+export const buildBeatmapScoresUrl = (beatmapId: number | string, params: BeatmapScoreParams = { mode: "osu", limit: 100 }) => {
 	const url = new URL(`${API_BASE_URL}/beatmaps/${beatmapId}/scores`);
 
 	for (const [key, value] of Object.entries(params)) {
@@ -155,12 +150,7 @@ export function logInfo(stream: fs.WriteStream, message: string, timestamp = new
 	stream.write(`${logMessage}\n`);
 }
 
-export function logError(
-	stream: fs.WriteStream,
-	message: string,
-	error?: unknown,
-	timestamp = new Date().toISOString()
-) {
+export function logError(stream: fs.WriteStream, message: string, error?: unknown, timestamp = new Date().toISOString()) {
 	const logMessage = `${timestamp} ${message}\n$${Error.isError(error) ? (error.stack ?? error.message) : String(error)}`;
 	if (VERBOSE) console.error(logMessage);
 	stream.write(`${logMessage}\n`);

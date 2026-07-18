@@ -135,7 +135,7 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 
 async function getCursorScoreId(cursorScoreIdCli?: string) {
 	const parsed = parseCursorScoreId(cursorScoreIdCli);
-	return parsed == null ? await getLastScoreId() : parsed;
+	return parsed == null ? await getLastScoreId("scores_ws") : parsed;
 }
 
 function parseCursorScoreId(cursorScoreIdCli?: string) {
@@ -150,9 +150,7 @@ function parseCursorScoreId(cursorScoreIdCli?: string) {
 }
 
 async function endAndSaveScoresBatch(scores = batchCandidateScores) {
-	console.log(
-		`\n[Batch #${sessionBatchCount}] ${batchTotalScoreCount} scores total | ${scores?.length} candidate scores`
-	);
+	console.log(`\n[Batch #${sessionBatchCount}] ${batchTotalScoreCount} scores total | ${scores?.length} candidate scores`);
 	if (sessionBatchCount <= 1 && initialCursorScoreId && batchLowestScoreId > initialCursorScoreId + 1)
 		console.warn(
 			`POSSIBLE DATA LOSS: Gap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})`
@@ -195,7 +193,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
 		}
 
-		saveLastScoreId(batchLowestScoreId);
+		saveLastScoreId(batchLowestScoreId, "scores_ws");
 	});
 	batchLowestScoreId = Infinity;
 	batchTotalScoreCount = 0;

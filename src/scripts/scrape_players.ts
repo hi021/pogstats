@@ -61,9 +61,7 @@ async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch
 			params
 		);
 
-		const idCount = idBatches.rowCount
-			? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length
-			: 0;
+		const idCount = idBatches.rowCount ? (idBatches.rowCount - 1) * PLAYER_BATCH_SIZE + idBatches.rows.at(-1)!.ids.length : 0;
 		console.log(`[scrape_players] Found ${idCount} player IDs to scrape`);
 		return idCount ? idBatches.rows : null;
 	});
@@ -176,9 +174,7 @@ async function insertPlayerBatch(client: ClientBase) {
 
 export async function scrapePlayers(ids?: number[]) {
 	try {
-		const playerIdBatches = ids
-			? splitIntoBatches(ids, PLAYER_BATCH_SIZE)
-			: await getRankingPlayerIdBatches(MAX_RETRIEVED_AT);
+		const playerIdBatches = ids ? splitIntoBatches(ids, PLAYER_BATCH_SIZE) : await getRankingPlayerIdBatches(MAX_RETRIEVED_AT);
 		if (!playerIdBatches) return;
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
@@ -231,16 +227,13 @@ export async function scrapePlayers(ids?: number[]) {
 		await withDbClientTransaction(async client => {
 			const miaPlayerIds = [...miaPlayers.keys()];
 			if (miaPlayerIds.length)
-				console.log(
-					`[scrape_players] Player(s) with ID(s) ${miaPlayerIds} not in the API response, marking all as MIA`
-				);
+				console.log(`[scrape_players] Player(s) with ID(s) ${miaPlayerIds} not in the API response, marking all as MIA`);
 
 			const miaBeatmaps = await setAllPlayerScoresPosition(client, miaPlayerIds, 0, "scrape_players");
 			await insertNewMiaPlayers(client, miaPlayers, "scrape_players");
 
 			const nonMiaPlayerIds = await findNoLongerMiaPlayerIds(client, "scrape_players");
-			if (nonMiaPlayerIds.length)
-				console.log(`[scrape_players] Player(s) with ID(s) ${nonMiaPlayerIds} are no longer MIA`);
+			if (nonMiaPlayerIds.length) console.log(`[scrape_players] Player(s) with ID(s) ${nonMiaPlayerIds} are no longer MIA`);
 			else if (!miaPlayerIds.length) return;
 
 			const nonMiaBeatmaps = await setAllPlayerScoresPosition(client, nonMiaPlayerIds, 100, "scrape_players");

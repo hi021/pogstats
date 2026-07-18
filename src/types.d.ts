@@ -81,9 +81,7 @@ interface BeatmapScoreFull extends ScoreSortData {
 	data: BeatmapScoreAdditionalData;
 }
 
-type ScoreBasicData = ScoreSortData &
-	Pick<BeatmapScoreFull, "userId" | "grade"> &
-	Pick<Player, "username" | "countryCode">;
+type ScoreBasicData = ScoreSortData & Pick<BeatmapScoreFull, "userId" | "grade"> & Pick<Player, "username" | "countryCode">;
 
 interface BeatmapScoreAdditionalData {
 	mods: ApiMod[];
@@ -250,7 +248,7 @@ interface HistoricalPlayerSnipes {
 
 interface ConfigEntry {
 	key: string;
-	valueInt?: number;
-	valueText?: string;
-	valueJson?: Record<string, unknown>;
+	value_int?: number;
+	value_text?: string;
+	value_json?: Record<string, unknown>;
 }

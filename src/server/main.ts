@@ -55,7 +55,5 @@ if (METRICS_PORT && METRICS_PORT != SERVER_PORT) {
 	const metricsApp = new Koa();
 	metricsApp.use(metricsMiddleware);
 	const metricsServer = http.createServer(metricsApp.callback());
-	metricsServer.listen(METRICS_PORT, () =>
-		console.log(`Metrics endpoint running on http://localhost:${METRICS_PORT}/metrics`)
-	);
+	metricsServer.listen(METRICS_PORT, () => console.log(`Metrics endpoint running on http://localhost:${METRICS_PORT}/metrics`));
 }

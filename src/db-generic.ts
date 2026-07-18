@@ -1,5 +1,5 @@
 import { Pool, PoolClient, types } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, DEV_ENV } from "./env.js";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
 
 // TODO: build from SCORE_TABLE_COLUMNS
 export const SCORE_TABLE_COLUMNS_ALL = Object.freeze([

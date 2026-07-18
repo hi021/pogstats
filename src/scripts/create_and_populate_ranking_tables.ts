@@ -44,9 +44,7 @@ function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 					id,
 					rulesetId,
 					positionThreshold,
-					name: toCapitalFirstLetter(
-						proto.nameTemplate.replaceAll("%t%", buildPositionThresholdName(positionThreshold))
-					),
+					name: toCapitalFirstLetter(proto.nameTemplate.replaceAll("%t%", buildPositionThresholdName(positionThreshold))),
 					code: proto.codeTemplate.replaceAll("%t%", buildPositionThresholdCode(positionThreshold))
 				};
 				rankingTypes.push(type);

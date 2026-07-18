@@ -29,10 +29,7 @@ export function onConnect(ws: WebSocket) {
 	});
 }
 
-export async function socketDebugMessageEndpoint(
-	ctx: ParameterizedContext<DefaultState, DefaultContext, any>,
-	next: Next
-) {
+export async function socketDebugMessageEndpoint(ctx: ParameterizedContext<DefaultState, DefaultContext, any>, next: Next) {
 	if (ctx.path == BASE_POG_WS_URL && ctx.method == "POST") {
 		const message = "Hello from pog server!";
 		for (const client of wsClients) client.send(message);

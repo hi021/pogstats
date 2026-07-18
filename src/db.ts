@@ -1,4 +1,4 @@
-import { ClientBase } from "pg";
+import { ClientBase, QueryResult } from "pg";
 import {
 	BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS,
 	BEATMAP_TABLE_COLUMNS,
@@ -50,7 +50,7 @@ export async function saveLastScoreId(scoreId: number, source: ActionSource = "u
 }
 
 export async function getLastScoreId(source: ActionSource = "unknown") {
-	const result = await withDbClient(client =>
+	const result = await withDbClient<QueryResult<ConfigEntry>>(client =>
 		queryWithTiming(
 			client,
 			"getLastScoreId",
@@ -80,11 +80,7 @@ export async function updateBeatmapScoresRetrievalDate(
 	);
 }
 
-export async function getInexistentPlayerIds(
-	client: ClientBase,
-	playerIds: number[],
-	source: ActionSource = "unknown"
-) {
+export async function getInexistentPlayerIds(client: ClientBase, playerIds: number[], source: ActionSource = "unknown") {
 	return (
 		await queryWithTiming(
 			client,
@@ -99,11 +95,7 @@ export async function getInexistentPlayerIds(
 	).rows.map(r => r.id) as number[];
 }
 
-export async function getInexistentBeatmapIds(
-	client: ClientBase,
-	beatmapIds: number[],
-	source: ActionSource = "unknown"
-) {
+export async function getInexistentBeatmapIds(client: ClientBase, beatmapIds: number[], source: ActionSource = "unknown") {
 	return (
 		await queryWithTiming(
 			client,
@@ -229,11 +221,7 @@ export async function recalculateScorePositionsForMapIds(
 	);
 }
 
-export async function getBeatmapIdsWithPlayerScores(
-	client: ClientBase,
-	playerIds: number[],
-	source: ActionSource = "unknown"
-) {
+export async function getBeatmapIdsWithPlayerScores(client: ClientBase, playerIds: number[], source: ActionSource = "unknown") {
 	const beatmaps = await queryWithTiming<BeatmapRuleset>(
 		client,
 		"getBeatmapIdsWithPlayerScores",
@@ -282,11 +270,7 @@ export async function findNoLongerMiaPlayerIds(client: ClientBase, source: Actio
 	return result.rows.map(row => row.id);
 }
 
-export async function insertNewMiaPlayers(
-	client: ClientBase,
-	miaPlayers: Map<number, Date>,
-	source: ActionSource = "unknown"
-) {
+export async function insertNewMiaPlayers(client: ClientBase, miaPlayers: Map<number, Date>, source: ActionSource = "unknown") {
 	if (!miaPlayers?.size) return;
 
 	const paramGroups = [];
@@ -319,11 +303,7 @@ export async function insertNewMiaPlayers(
 	);
 }
 
-export async function insertNoLongerMiaPlayers(
-	client: ClientBase,
-	miaPlayerIds: number[],
-	source: ActionSource = "unknown"
-) {
+export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayerIds: number[], source: ActionSource = "unknown") {
 	if (!miaPlayerIds?.length) return;
 
 	await queryWithTiming(
