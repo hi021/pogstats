@@ -418,8 +418,6 @@ async function upsertBeatmapScores(
 // WARNING: the DB_BEATMAP_RULESET_UPDATE_DATES_TABLE join is only necessary for the first main score scrape!! remove it later or new maps will never be populated
 // duct tape solution but it's bed time
 // TODO
-
-// This also filters out scores from qualified maps by joining on status IN (1,2,4)
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores);
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
@@ -440,11 +438,8 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 		filtered_candidates AS (
 			SELECT c.*
 			FROM candidates c
-			JOIN ${DB_BEATMAPS_TABLE} b
-				ON b.id = c.candidate_beatmap_id
-				AND b.status IN (1,2,4)
 			JOIN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} u
-				ON u.beatmap_id = b.id
+				ON u.beatmap_id = c.candidate_beatmap_id
 				AND u.ruleset_id = c.candidate_ruleset_id
 				AND u.last_scores_scrape IS NOT NULL
 		)

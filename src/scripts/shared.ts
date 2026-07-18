@@ -88,6 +88,10 @@ export function convertApiBeatmap(map: ApiBeatmapDbBeatmap, retrievedAt: Date): 
 	};
 }
 
+export function doesBeatmapHaveLeaderboards(map: ApiBeatmapDbBeatmap) {
+	return [1, 2, 4].includes(map.approved);
+}
+
 export type TimestampAccessor = {
 	get: () => number;
 	set: (value: number) => void;
@@ -128,7 +132,7 @@ export const buildBeatmapDbUrl = (beatmapIds: Array<number | string>) => {
 	return new URL(`${BEATMAP_DB_BEATMAP_FETCH_URL}/${beatmapIds.join(",")}`);
 };
 
-export async function readFileByLine(filePath: string, lineCallback: (line: string, rowNo: number) => Promise<void>) {
+export async function readFileByLine(filePath: string, lineCallback: (line: string, rowNo: number) => Promise<any>) {
 	const fileStream = fs.createReadStream(filePath);
 	const rl = readline.createInterface({
 		input: fileStream,

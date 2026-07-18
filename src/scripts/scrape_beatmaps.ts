@@ -9,11 +9,16 @@ import { upsertBeatmapBatch } from "../db.js";
 import { DB_BEATMAPS_TABLE } from "../env.js";
 import { queryWithTiming, timedFetch } from "../metrics.js";
 import { splitIntoBatches } from "../shared.js";
-import { BEATMAP_DB_BEATMAP_FETCH_URL, buildBeatmapDbUrl, convertApiBeatmap, DEFAULT_HEADERS } from "./shared.js";
+import {
+	BEATMAP_DB_BEATMAP_FETCH_URL,
+	buildBeatmapDbUrl,
+	convertApiBeatmap,
+	DEFAULT_HEADERS,
+	doesBeatmapHaveLeaderboards
+} from "./shared.js";
 
 const BEATMAP_BATCH_SIZE = 100;
 
-// TODO: do not fetch qualified (approved = 3) maps since rankings are kept for (1,2,4) only
 async function fetchBeatmaps(headers: Record<string, string>, beatmapIds: number[]) {
 	const url = buildBeatmapDbUrl(beatmapIds);
 	const res = await timedFetch(url, { headers }, "scrape_beatmaps", BEATMAP_DB_BEATMAP_FETCH_URL);
@@ -23,10 +28,16 @@ async function fetchBeatmaps(headers: Record<string, string>, beatmapIds: number
 	return Array.isArray(beatmaps) ? beatmaps.map(b => b.beatmap) : [beatmaps.beatmap];
 }
 
-function convertBeatmaps(beatmaps: ApiBeatmapDbBeatmap[], updatedAt?: Date) {
+// TODO: doesBeatmapHaveLeaderboards is kinda a workaround!!!
+// ideally listen to osu's api/v2/beatmapsets/events (obv no docs) since beatmap-db updates once a day
+// qualified beatmaps do not count toward pogstats rankings and would have to be re-fetched anyway
+function filterAndConvertBeatmaps(beatmaps: ApiBeatmapDbBeatmap[], updatedAt?: Date) {
 	updatedAt = updatedAt || new Date();
-	const converted = new Array<Beatmap>(beatmaps.length);
-	for (let i = 0; i < beatmaps.length; ++i) converted[i] = convertApiBeatmap(beatmaps[i], updatedAt);
+	const converted: Beatmap[] = [];
+	for (let i = 0; i < beatmaps.length; ++i) {
+		if (!doesBeatmapHaveLeaderboards(beatmaps[i])) continue;
+		converted.push(convertApiBeatmap(beatmaps[i], updatedAt));
+	}
 
 	return converted;
 }
@@ -89,7 +100,7 @@ export async function scrapeBeatmaps(ids?: number[]) {
 			const apiBeatmaps = await fetchBeatmaps(DEFAULT_HEADERS, batch.ids);
 
 			console.log(`[scrape_beatmaps] Processing and inserting beatmap batch #${batch.batch_no}`);
-			const convertedBeatmaps = convertBeatmaps(apiBeatmaps, updatedAt);
+			const convertedBeatmaps = filterAndConvertBeatmaps(apiBeatmaps, updatedAt);
 
 			scrapedCount += convertedBeatmaps.length;
 			await withDbClientTransaction(async client => {

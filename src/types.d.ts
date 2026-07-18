@@ -7,7 +7,7 @@ type Ruleset = "osu" | "taiko" | "fruits" | "mania";
 type RankingPositionThreshold = 100 | 50 | 25 | 15 | 8 | 1;
 type RankingPositionThresholdName = `Top ${RankingPositionThreshold}`;
 type RankingPositionThresholdCode = `top${RankingPositionThreshold}`;
-type MapStatusId = 0 | 1 | 2 | 3 | 4; // 0 - pending, 1 - ranked, 2 - approved, 3 - qualified, 4 - loved
+type MapStatusId = -2 | -1 | 0 | 1 | 2 | 3 | 4; // -2 - graveyard, -1 - wip, 0 - pending, 1 - ranked, 2 - approved, 3 - qualified, 4 - loved
 interface BeatmapScoreParams {
 	mode?: Ruleset;
 	mods?: string;
@@ -55,7 +55,6 @@ type ActionSource =
 //     legacy_total_score - dropped
 // 		 lazer - renamed to is_lazer
 //     + 3 other meta columns: is_scraped, retrieved_at, position, is_perma
-
 interface ScoreSortData {
 	id: number;
 	totalScore: number;
@@ -131,7 +130,7 @@ interface Player {
 	coverUrl?: string;
 	retrievedAt: Date; // meta
 	isFromOsuApi: boolean; // meta
-	isMia: boolean; // meta - missing in action as in not returned by the API and probably restricted
+	isMia: boolean; // meta - missing in action, as in not returned by the API and probably restricted
 	// TODO?: maybe poggers stats, e.g. peak/lowest for each ranking type, etc.
 }
 
