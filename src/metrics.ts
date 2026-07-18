@@ -41,6 +41,7 @@ export const scoreBatchDuration = new prom.Histogram({
 	name: "pogstats_score_batch_duration_s",
 	help: "How long it takes to process a score batch in seconds",
 	buckets: [0.25, 1, 2, 5, 10, 25, 60],
+	labelNames: ["success", "batchNo"],
 	registers: [metricsRegistry]
 });
 

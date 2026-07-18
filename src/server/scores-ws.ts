@@ -32,6 +32,7 @@ import {
 	unnestObjectsIntoArrays
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
+import { LabelValues } from "prom-client";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
 const SCORES_WS_PING_INTERVAL = 30000;
@@ -39,7 +40,7 @@ const SCORES_WS_RECONNECTION_INTERVAL = 10000;
 
 const batchCandidateScores = new Array<WsScore>();
 const batchCandidateBeatmapIds = new Array<number>();
-let batchTimer: () => number;
+let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
 let sessionBatchCount = 0;
 let batchTotalScoreCount = 0;
 let batchLowestScoreId = Infinity; // assumes score ids to be monotonic
@@ -84,15 +85,15 @@ export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINI
 }
 
 export function scoresWsOnClose(code: number, reason: Buffer) {
-	console.warn("scores-ws connection closed:", code, reason?.toString());
-	saveLastScoreId(batchLowestScoreId);
+	console.error(`[Batch #${sessionBatchCount}] scores-ws connection closed with code ${code}`, reason?.toString());
+	saveLastScoreId(batchLowestScoreId, "scores_ws");
 
 	reconnectScoresWs();
 }
 
 export function scoresWsOnError(e: Error) {
-	console.error("scores-ws error:\n", e);
-	saveLastScoreId(batchLowestScoreId);
+	console.error(`[Batch #${sessionBatchCount}] scores-ws error:\n`, e);
+	saveLastScoreId(batchLowestScoreId, "scores_ws");
 
 	reconnectScoresWs();
 }
@@ -107,10 +108,10 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 		try {
 			++sessionBatchCount;
 			await endAndSaveScoresBatch();
+			batchTimer?.({success: "true", batchNo: sessionBatchCount});
 		} catch (e) {
-			console.error("failed to process scores-ws batch:\n", e);
-		} finally {
-			batchTimer?.();
+			console.error(`[Batch #${sessionBatchCount}] failed to proces:\n` , e);
+			batchTimer?.({success: "false", batchNo: sessionBatchCount});
 		}
 		return;
 	}
@@ -118,7 +119,7 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 	try {
 		const score = JSON.parse(message) as WsScore;
 		if (!score.id) {
-			console.warn("skipping malformed scores-ws JSON:\n", score);
+			console.warn(`[Batch #${sessionBatchCount}] skipping malformed scores-ws JSON:\n`, score);
 			return;
 		}
 
@@ -128,8 +129,8 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 		batchCandidateScores.push(score);
 		batchCandidateBeatmapIds.push(score.beatmap_id);
 	} catch (e) {
-		console.error("failed to parse scores-ws message as JSON:\n", e);
-		saveLastScoreId(batchLowestScoreId);
+		console.error(`[Batch #${sessionBatchCount}] failed to parse scores-ws message as JSON:\n`, e);
+		saveLastScoreId(batchLowestScoreId, "scores_ws");
 	}
 }
 
@@ -150,10 +151,11 @@ function parseCursorScoreId(cursorScoreIdCli?: string) {
 }
 
 async function endAndSaveScoresBatch(scores = batchCandidateScores) {
-	console.log(`\n[Batch #${sessionBatchCount}] ${batchTotalScoreCount} scores total | ${scores?.length} candidate scores`);
+	console.log("");
+	console.log(`[Batch #${sessionBatchCount}] ${batchTotalScoreCount} scores total | ${scores?.length} candidate scores`);
 	if (sessionBatchCount <= 1 && initialCursorScoreId && batchLowestScoreId > initialCursorScoreId + 1)
 		console.warn(
-			`POSSIBLE DATA LOSS: Gap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})`
+			`POSSIBLE DATA LOSS:\nGap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})`
 		);
 	if (!scores?.length) return;
 
@@ -181,7 +183,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 			: provenScoresByMaps.set(key, { beatmapId, rulesetId, scores: provenScores });
 	}
 
-	if (VERBOSE) console.log(`Found ${totalProvenScoreCount} beaten top 100 score(s)`);
+	if (VERBOSE) console.log(`[Batch #${sessionBatchCount}] found ${totalProvenScoreCount} new (proven) top 100 score(s)`);
 	recordScoreBatchCounts(batchTotalScoreCount, totalProvenScoreCount);
 
 	await withDbClientTransaction(async client => {
@@ -202,7 +204,6 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 
 function isCandidateScore(score: WsScore) {
 	// only passed scores are sent anyway, not much to do here
-	// actually this also includes scores from qualified maps that we do not care about...
 	// TODO osu!standard only for now, maybe add other rulesets later
 	return score.ruleset_id == 0;
 }
