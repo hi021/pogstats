@@ -192,7 +192,8 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 			const convertedScores = dedupedScores.map(score =>
 				convertApiScore(score, /* positions set later in upsertBeatmapScores */ -1, false)
 			);
-			await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
+			const snipes = await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
+			// TODO: send snipe info to pog-ws
 		}
 
 		saveLastScoreId(batchLowestScoreId, "scores_ws");
@@ -204,7 +205,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 
 function isCandidateScore(score: WsScore) {
 	// only passed scores are sent anyway, not much to do here
-	// TODO osu!standard only for now, maybe add other rulesets later
+	// TODO: osu!standard only for now, maybe add other rulesets later
 	return score.ruleset_id == 0;
 }
 
@@ -388,15 +389,15 @@ async function upsertBeatmapScores(
 		"upsertBeatmapScores_get_beating_scores",
 		"scores_ws",
 		`SELECT s.id AS score_id,
-		 s.position,
-		 s.grade,
-		 provenPlr.id AS proven_user_id,
-		 provenPlr.username AS proven_username,
-		 provenPlr.country_code AS proven_country,
-		 b.artist,
-		 b.title,
-		 b.version,
-		 (b.approved_date > NOW() - INTERVAL '3 DAYS') AS is_beatmap_new
+						s.position,
+						s.grade,
+						provenPlr.id AS proven_user_id,
+						provenPlr.username AS proven_username,
+						provenPlr.country_code AS proven_country,
+						b.artist,
+						b.title,
+						b.version,
+						(b.approved_date > NOW() - INTERVAL '3 DAYS') AS is_beatmap_new
 		 FROM ${DB_SCORES_TABLE} s
 			JOIN ${DB_PLAYERS_TABLE} provenPlr ON provenPlr.id = s.user_id
 			JOIN ${DB_BEATMAPS_TABLE} b ON b.id = s.beatmap_id

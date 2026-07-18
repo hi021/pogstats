@@ -164,7 +164,7 @@ async function handleBeatmap(beatmapId: number, beatmapNo: number, headers: Reco
 
 		logInfo(infoLogStream, `[${beatmapId}][#${beatmapNo}] - Processed ${convertedScores.length} scores`);
 	} catch (e) {
-		logError(errorLogStream, `[${beatmapId}][#${beatmapNo}] - Processing failed`, e);
+		logError(errorLogStream, `[${beatmapId}][#${beatmapNo}] - Processing failed\n`, e);
 	}
 }
 
@@ -194,6 +194,7 @@ async function scrapeScores() {
 	try {
 		infoLogStream = createLogStream(SCORE_SCRAPE_LOG_PATH);
 		errorLogStream = createLogStream(SCORE_SCRAPE_ERROR_LOG_PATH);
+		// TODO: this takes up way too much memory and time in prod, just use pg_dump or postgres' COPY
 		if (!SKIP_DUMP_BEFORE_SCRAPE)
 			withDbClient(async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream));
 
@@ -209,8 +210,7 @@ async function scrapeScores() {
 			}
 		}
 
-		// TODO graceful shutdown handling to ensure logs are flushed and DB connection is closed even if the process is killed mid-run
-		logInfo(infoLogStream, "Finished processing all beatmaps");
+		logInfo(infoLogStream, "\nFinished processing all beatmaps");
 	} finally {
 		infoLogStream.end();
 		errorLogStream.end();
