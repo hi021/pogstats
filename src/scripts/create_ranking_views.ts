@@ -21,6 +21,18 @@ async function createRankingView(
 	console.log(`Created or replaced ranking view '${viewName}'`);
 }
 
+// TODO: FIX
+// SELECT row_number() OVER (ORDER BY count(s.id) FILTER (WHERE s.ruleset_id = 0 AND s."position" >= 1 AND s."position" <= 100) DESC, p.id) AS "position",
+//     p.id AS user_id,
+//     p.username,
+//     p.country_code,
+//     count(s.id) FILTER (WHERE s.ruleset_id = 0 AND s."position" >= 1 AND s."position" <= 100) AS value,
+//     count(s.id) FILTER (WHERE s.ruleset_id = 0 AND s.is_perma = true AND s."position" >= 1 AND s."position" <= 100) AS value_perma
+//    FROM scores s
+//      JOIN players p ON p.id = s.user_id AND p.is_mia = false
+//   GROUP BY p.id, p.username, p.country_code
+//    having  count(s.id) FILTER (WHERE s.ruleset_id = 0 AND s."position" >= 1 AND s."position" <= 100) > 0
+//  LIMIT 10000;
 const countRankingBuilder: QueryBuilder = (
 	viewName: string,
 	rulesetId: RulesetId,

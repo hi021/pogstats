@@ -71,9 +71,9 @@ async function createScoreTables() {
 	// ? MIA scores index? (position, user_id) WHERE position = 0?
 	await client.query(
 		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);
-				 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 			ON ${DB_SCORES_TABLE} (user_id, position);
-				 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
-				 CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
+		CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 				ON ${DB_SCORES_TABLE} (user_id, position);
+		CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
+		CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
 	);
 
 	await client.query(`
