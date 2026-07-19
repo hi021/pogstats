@@ -1,8 +1,8 @@
+import { assert } from "node:console";
 import { ClientBase } from "pg";
 import { withDbClient } from "../db-generic.js";
 import { DB_PLAYERS_TABLE, DB_RANKING_TYPES_TABLE, DB_SCORES_TABLE } from "../env.js";
 import { parsePositionThresholdAndRankingType } from "../shared.js";
-import { assert } from "node:console";
 
 const RANKING_PLAYER_LIMIT = 10000;
 
@@ -21,7 +21,7 @@ async function createRankingView(
 	console.log(`Created or replaced ranking view '${viewName}'`);
 }
 
-// TODO: FIX
+// TODO: Materialized views instead
 // SELECT row_number() OVER (ORDER BY count(s.id) FILTER (WHERE s.ruleset_id = 0 AND s."position" >= 1 AND s."position" <= 100) DESC, p.id) AS "position",
 //     p.id AS user_id,
 //     p.username,

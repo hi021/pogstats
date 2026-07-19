@@ -69,11 +69,15 @@ async function createScoreTables() {
 	// TODO: verify performance, maybe add JSONB GIN, score, pp, grade after verifying ranking queries
 	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
 	// ? MIA scores index? (position, user_id) WHERE position = 0?
+	// TODO?: for _user_position_ruleset_idx and _ss_idx indexes could move ruleset_id before position if adding other modes? - remove ruleset_id = 0 from pp_idx!!
 	await client.query(
-		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);
-		CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 				ON ${DB_SCORES_TABLE} (user_id, position);
-		CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
-		CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
+		`CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);
+		 CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_user_id_position_idx 				ON ${DB_SCORES_TABLE} (user_id, position);
+		 CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_beaten_scores_idx 					ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, total_score DESC, position) WHERE position BETWEEN 1 AND 100;
+		 CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_user_position_ruleset_idx		ON ${DB_SCORES_TABLE} (ruleset_id, position, user_id) INCLUDE (is_perma);
+		 CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_ss_idx											ON ${DB_SCORES_TABLE} (ruleset_id, position, user_id) INCLUDE (is_perma) WHERE grade IN ('XH', 'X');
+		 CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_pp_idx 											ON ${DB_SCORES_TABLE} (user_id, pp DESC) INCLUDE (position) WHERE ruleset_id = 0 AND position BETWEEN 1 AND 100;
+		 CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_SCORES_TABLE}_position_brin_idx 					ON ${DB_SCORES_TABLE} USING BRIN (position);`
 	);
 
 	await client.query(`
@@ -94,10 +98,9 @@ async function createScoreTables() {
 		)`);
 	// FK to scores.id is not possible since it's deferrable...
 	await client.query(`
-		CREATE INDEX IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}_user_id_idx 								ON ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (user_id);
-		CREATE INDEX IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}_sniped_by_idx 							ON ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (sniped_by);
-		`);
-	// TODO: Maybe CREATE INDEX IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (beatmap_id, ruleset_id);
+		CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}_user_id_idx 					ON ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (user_id);
+		CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}_sniped_by_idx 				ON ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (sniped_by);`);
+	// TODO: Maybe CREATE INDEX CONCURRENTLY IF NOT EXISTS ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_HISTORICAL_PLAYER_SNIPES_TABLE} (beatmap_id, ruleset_id);
 
 	await client.query(`
 		CREATE TABLE IF NOT EXISTS ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} (

@@ -13,13 +13,24 @@ async function createMiscellaneousDBFunctions() {
 	console.log("Attempting to create miscellaneous DB functions");
 
 	await client.query(`
-		CREATE OR REPLACE FUNCTION calc_weighted_pp_sfunc(acc real, pp real, idx bigint)
-		returns real
+		CREATE OR REPLACE FUNCTION calc_weighted_pp_sfunc(acc real, pp real, idx integer)
+		RETURNS real
 		LANGUAGE plpgsql
 		AS $$
-			begin
-				return acc + coalesce(pp, 0) * power(0.95, idx - 1);
-			end;
+		DECLARE
+				w real;
+		BEGIN
+				IF idx > 300 THEN
+					RETURN acc;
+				END IF;
+
+				w := coalesce(pp, 0) * power(0.95, idx - 1);
+				IF w < 1e-9 THEN
+					RETURN acc;
+				END IF;
+
+				RETURN acc + w;
+		END;
 		$$;
 
 		CREATE OR REPLACE AGGREGATE calc_weighted_pp(real, bigint) (

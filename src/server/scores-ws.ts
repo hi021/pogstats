@@ -418,8 +418,10 @@ async function upsertBeatmapScores(
 // WARNING: the DB_BEATMAP_RULESET_UPDATE_DATES_TABLE join is only necessary for the first main score scrape!! remove it later or new maps will never be populated
 // duct tape solution but it's bed time
 // TODO
+
+// WARNING: this skips inserting scores with position > 100, so when a player gets restricted, there might be a gap or a stale score (#101 in the db but >#101 on osu) will make it into top 100
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
-	const arrays = unnestObjectsIntoArrays(scores);
+	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once?
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
 		client,
 		"getBeatenScoresByMap",
