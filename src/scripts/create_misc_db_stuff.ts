@@ -12,6 +12,7 @@ const client = new Client({
 async function createMiscellaneousDBFunctions() {
 	console.log("Attempting to create miscellaneous DB functions");
 
+	// osu takes into consideration top 1000 scores, not just 250...
 	await client.query(`
 		CREATE OR REPLACE FUNCTION calc_weighted_pp_sfunc(acc real, pp real, idx integer)
 		RETURNS real
@@ -20,7 +21,7 @@ async function createMiscellaneousDBFunctions() {
 		DECLARE
 				w real;
 		BEGIN
-				IF idx > 300 THEN
+				IF idx > 250 THEN
 					RETURN acc;
 				END IF;
 
@@ -33,7 +34,7 @@ async function createMiscellaneousDBFunctions() {
 		END;
 		$$;
 
-		CREATE OR REPLACE AGGREGATE calc_weighted_pp(real, bigint) (
+		CREATE OR REPLACE AGGREGATE calc_weighted_pp(real, integer) (
 			sfunc = calc_weighted_pp_sfunc,
 			stype = real,
 			initcond = 0
