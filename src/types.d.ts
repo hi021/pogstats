@@ -202,12 +202,11 @@ interface Beatmap {
 
 // ------------------------------------------
 
-// TODO?: make every ranking a view and just store a reference to them here
-// this would also allow for high resolution rank history for all rankings (like historical player snipes but for rank changes instead?)
+// maybe high resolution rank history for all rankings (like historical player snipes but for rank changes instead?) some day?
 interface RankingType {
 	id: number;
-	rulesetId: number;
-	positionThreshold: number;
+	ruleset_id: RulesetId;
+	position_threshold: RankingPositionThreshold;
 	name: string;
 	code: string;
 }

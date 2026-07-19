@@ -42,8 +42,8 @@ function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 				const id = protoIndex + positionThresholdIndex + rulesetIndex + 1;
 				const type: RankingType = {
 					id,
-					rulesetId,
-					positionThreshold,
+					ruleset_id: rulesetId,
+					position_threshold: positionThreshold,
 					name: toCapitalFirstLetter(proto.nameTemplate.replaceAll("%t%", buildPositionThresholdName(positionThreshold))),
 					code: proto.codeTemplate.replaceAll("%t%", buildPositionThresholdCode(positionThreshold))
 				};
@@ -80,7 +80,7 @@ async function populateRankingTypesTable(client: ClientBase) {
 	for (const rankingType of rankingTypes)
 		await client.query(
 			`INSERT INTO ${DB_RANKING_TYPES_TABLE} (id, ruleset_id, position_threshold, name, code) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING`,
-			[rankingType.id, rankingType.rulesetId, rankingType.positionThreshold, rankingType.name, rankingType.code]
+			[rankingType.id, rankingType.ruleset_id, rankingType.position_threshold, rankingType.name, rankingType.code]
 		);
 
 	console.log(`Populated ${DB_RANKING_TYPES_TABLE} table with values`);

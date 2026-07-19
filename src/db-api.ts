@@ -59,12 +59,12 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
 		"pog_api_v2",
 		`
     SELECT 
-      COUNT(s.id) FILTER (WHERE s.position <= 1) AS top_1,
-      COUNT(s.id) FILTER (WHERE s.position <= 8) AS top_8,
-      COUNT(s.id) FILTER (WHERE s.position <= 15) AS top_15,
-      COUNT(s.id) FILTER (WHERE s.position <= 25) AS top_25,
-      COUNT(s.id) FILTER (WHERE s.position <= 50) AS top_50,
-      COUNT(s.id) FILTER (WHERE s.position <= 100) AS top_100
+      COUNT(s.id) FILTER (WHERE s.position BETWEEN 1 AND 1) AS top_1,
+      COUNT(s.id) FILTER (WHERE s.position BETWEEN 1 AND 8) AS top_8,
+      COUNT(s.id) FILTER (WHERE s.position BETWEEN 1 AND 15) AS top_15,
+      COUNT(s.id) FILTER (WHERE s.position BETWEEN 1 AND 25) AS top_25,
+      COUNT(s.id) FILTER (WHERE s.position BETWEEN 1 AND 50) AS top_50,
+      COUNT(s.id) FILTER (WHERE s.position BETWEEN 1 AND 100) AS top_100
     FROM ${DB_SCORES_TABLE} s
     WHERE user_id = $1`,
 		[playerId]

@@ -129,8 +129,8 @@ async function main() {
 	const beatmaps: Beatmap[] = [];
 
 	// TODO: the import seems to have the approved dates set 2h too early... not a huge deal, should be fixed with re-scraping....
-	
-	// TODO: should also filter out qualified maps (approved = 3) like scrape_beatmaps !!! tho this was just a one-time thing.. 
+
+	// TODO: should also filter out qualified maps (approved = 3) like scrape_beatmaps !!! tho this was just a one-time thing..
 
 	// TODO custom path via flag, option to truncate db, option to skip 1st header row
 	console.log("Reading osu! beatmap database dump...");
