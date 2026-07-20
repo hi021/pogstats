@@ -31,17 +31,14 @@ const playerIdByIdOrNameMiddleware: Middleware<DefaultState, DefaultContext, any
 //// PLAYER ROUTES
 router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) => {
 	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
 	if (rulesetId == null) return ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
 
-	const ranking = await withDbClient(
-		async client => await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date)
-	);
-	if (!ranking) ctx.throw(400, "Invalid ranking");
+	const spread = await withDbClient(async client => await getPositionSpreadForPlayer(client, ctx.state.playerId, rulesetId));
 
 	ctx.headers["content-type"] = "application/json";
-	ctx.body = ranking;
+	ctx.body = spread;
 });
 
 router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread", async (ctx, next) => {
@@ -54,12 +51,15 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread", async (ctx, next) => 
 	ctx.body = spread;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next) => {
 	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
 	if (rulesetId == null) return ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
 
-	const spread = await withDbClient(async client => await getPositionSpreadForPlayer(client, ctx.state.playerId, rulesetId));
+	const ranking = await withDbClient(
+		async client => await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date)
+	);
+	if (!ranking) ctx.throw(400, "Invalid ranking");
 
 	ctx.headers["content-type"] = "application/json";
-	ctx.body = spread;
+	ctx.body = ranking;
 });
