@@ -29,7 +29,7 @@ async function fetchBeatmaps(headers: Record<string, string>, beatmapIds: number
 }
 
 // TODO: doesBeatmapHaveLeaderboards is kinda a workaround!!!
-// ideally listen to osu's api/v2/beatmapsets/events (obv no docs) since beatmap-db updates once a day
+// ideally listen to osu's api/v2/beatmapsets/events (obv no docs) since beatmap-db only updates once a day
 // qualified beatmaps do not count toward pogstats rankings and would have to be re-fetched anyway
 function filterAndConvertBeatmaps(beatmaps: ApiBeatmapDbBeatmap[], updatedAt?: Date) {
 	updatedAt = updatedAt || new Date();
@@ -120,5 +120,9 @@ export async function scrapeBeatmaps(ids?: number[]) {
 
 // TODO: make this a cron (that calls scrapeBeatmaps with no arguments) that iterates through every ranked map (get ids from /beatmaps?)
 // and handles unranks, metadata changes, etc.
+
+// when doing doesBeatmapHaveLeaderboards() ask osu! api whether they are still qualified beatmaps??
+// no I guess not?? seems to be working...
+
 // this does nothing for now
 if (import.meta.main) scrapeBeatmaps();

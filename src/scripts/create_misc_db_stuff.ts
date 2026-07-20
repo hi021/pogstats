@@ -1,18 +1,10 @@
-import { Client } from "pg";
-import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
+import { ClientBase } from "pg";
+import { withDbClient } from "../db-generic.js";
 
-const client = new Client({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
-
-async function createMiscellaneousDBFunctions() {
+async function createMiscellaneousDBFunctions(client: ClientBase) {
 	console.log("Attempting to create miscellaneous DB functions");
 
-	// osu takes into consideration top 1000 scores, not just 250...
+	// osu takes into top 1000 pp scores consideration, not just 250, but 0.1pp has never hurt anybody
 	await client.query(`
 		CREATE OR REPLACE FUNCTION calc_weighted_pp_sfunc(acc real, pp real, idx integer)
 		RETURNS real
@@ -49,12 +41,9 @@ async function createMiscellaneousDBFunctions() {
 
 async function main() {
 	try {
-		await client.connect();
-		await createMiscellaneousDBFunctions();
+		await withDbClient(async client => await createMiscellaneousDBFunctions(client));
 	} catch (error) {
 		console.error("Error creating miscellaneous DB stuff:\n", error);
-	} finally {
-		await client.end();
 	}
 }
 

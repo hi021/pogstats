@@ -1,26 +1,14 @@
-import { Client } from "pg";
+import { ClientBase } from "pg";
+import { withDbClient } from "../db-generic.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
 	DB_HISTORICAL_PLAYER_SNIPES_TABLE,
-	DB_HOST,
-	DB_NAME,
-	DB_PASSWORD,
 	DB_PLAYERS_TABLE,
-	DB_PORT,
-	DB_SCORES_TABLE,
-	DB_USER
+	DB_SCORES_TABLE
 } from "../env.js";
 
-const client = new Client({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
-
-async function createScoreTables() {
+async function createScoreTables(client: ClientBase) {
 	console.log(
 		`Attempting to create ${DB_SCORES_TABLE}, ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}, and ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} tables`
 	);
@@ -124,12 +112,9 @@ async function createScoreTables() {
 
 async function main() {
 	try {
-		await client.connect();
-		await createScoreTables();
+		await withDbClient(async client => await createScoreTables(client));
 	} catch (e) {
 		console.error("Error creating tables:\n", e);
-	} finally {
-		await client.end();
 	}
 }
 
