@@ -29,7 +29,7 @@ interface ApiScore {
 	preserve: boolean;
 	processed: boolean;
 	ranked: boolean;
-	rank: ApiScoreRank;
+	rank: ApiScoreGrade;
 	type: string;
 	ruleset_id: RulesetId;
 	started_at?: string; // ISO 8601 format, e.g. "2020-01-01T00:00:00+00:00"

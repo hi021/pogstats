@@ -20,7 +20,7 @@ export function convertApiScore(
 		userId: apiScore.user_id,
 		rulesetId: apiScore.ruleset_id,
 		beatmapId: apiScore.beatmap_id,
-		grade: apiScore.rank as ScoreRank, // safe because postgres pads to char(2) automatically
+		grade: apiScore.rank as ScoreGrade, // safe because postgres pads to char(2) automatically
 		accuracy: apiScore.accuracy,
 		maxCombo: apiScore.max_combo,
 		totalScore: apiScore.total_score,
@@ -48,7 +48,7 @@ export function convertDatabaseScore(dbScore: Record<string, unknown>): BeatmapS
 		userId: dbScore.user_id as number,
 		rulesetId: dbScore.ruleset_id as number,
 		beatmapId: Number(dbScore.beatmap_id),
-		grade: dbScore.grade as ScoreRank,
+		grade: dbScore.grade as ScoreGrade,
 		accuracy: dbScore.accuracy as number,
 		maxCombo: dbScore.max_combo as number,
 		totalScore: dbScore.total_score as number,

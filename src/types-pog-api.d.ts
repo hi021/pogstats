@@ -10,3 +10,7 @@ interface PlayerLiveCountData {
 	top_50: number;
 	top_100: number;
 }
+
+type PlayerPositionSpread = Array<number>; // 0 - 99, add + 1 to get position, (guaranteed dense)
+
+type PlayerGradeSpread = { [grade in ScoreGrade]: number }; // sparse

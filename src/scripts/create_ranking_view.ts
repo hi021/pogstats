@@ -7,7 +7,7 @@ async function createRankingView() {
 	await withDbClient(async client => {
 		await client.query(`
 			CREATE OR REPLACE MATERIALIZED VIEW ${DB_RANKING_VIEW} AS
-		TODO:...`)
+		TODO:...`);
 	});
 }
 

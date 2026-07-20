@@ -13,13 +13,7 @@ import {
 	saveLastScoreId,
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
-import {
-	DB_BEATMAPS_TABLE,
-	DB_PLAYERS_TABLE,
-	DB_SCORES_TABLE,
-	DEV_ENV,
-	VERBOSE
-} from "../env.js";
+import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
 import { queryWithTiming, recordScoreBatchCounts, scoreBatchDuration } from "../metrics.js";
 import {
 	convertApiScore,

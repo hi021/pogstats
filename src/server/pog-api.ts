@@ -1,6 +1,6 @@
 import Router from "@koa/router";
 import { DefaultContext, DefaultState, Middleware } from "koa";
-import { getPlayerIdByIdOrName, getRankingForPlayer } from "../db-api.js";
+import { getGradeSpreadForPlayer, getPlayerIdByIdOrName, getPositionSpreadForPlayer, getRankingForPlayer } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
 import { getRulesetId } from "../shared.js";
 
@@ -33,7 +33,7 @@ router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
 
 router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next) => {
 	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
-	if (rulesetId == null) ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
+	if (rulesetId == null) return ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
 
 	const ranking = await withDbClient(
 		async client => await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date)
@@ -42,4 +42,24 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next)
 
 	ctx.headers["content-type"] = "application/json";
 	ctx.body = ranking;
+});
+
+router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread", async (ctx, next) => {
+	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
+	if (rulesetId == null) return ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
+
+	const spread = await withDbClient(async client => await getGradeSpreadForPlayer(client, ctx.state.playerId, rulesetId));
+
+	ctx.headers["content-type"] = "application/json";
+	ctx.body = spread;
+});
+
+router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) => {
+	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
+	if (rulesetId == null) return ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
+
+	const spread = await withDbClient(async client => await getPositionSpreadForPlayer(client, ctx.state.playerId, rulesetId));
+
+	ctx.headers["content-type"] = "application/json";
+	ctx.body = spread;
 });

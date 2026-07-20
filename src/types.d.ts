@@ -1,6 +1,6 @@
-type ApiScoreRank = "XH" | "X" | "SH" | "S" | "A" | "B" | "C" | "D";
-type ScoreRank = "XH" | "X " | "SH" | "S " | "A " | "B " | "C " | "D "; // postgres char(2) with trailing space for single char ranks
-type PlayerScoreRank = "ss" | "ssh" | "s" | "sh" | "a";
+type ApiScoreGrade = "XH" | "X" | "SH" | "S" | "A" | "B" | "C" | "D";
+type ScoreGrade = "XH" | "X " | "SH" | "S " | "A " | "B " | "C " | "D "; // postgres char(2) with trailing space for single char ranks
+type PlayerScoreGrade = "ss" | "ssh" | "s" | "sh" | "a";
 
 type RulesetId = 0 | 1 | 2 | 3;
 type Ruleset = "osu" | "taiko" | "fruits" | "mania";
@@ -70,7 +70,7 @@ interface BeatmapScoreFull extends ScoreSortData {
 	userId: number;
 	rulesetId: number;
 	beatmapId: number;
-	grade: ScoreRank;
+	grade: ScoreGrade;
 	accuracy: number; // 0-1
 	maxCombo: number;
 	classicTotalScore?: number; // seems to always be present
@@ -107,7 +107,7 @@ interface BeatenScoreData {
 interface BeatingScoreData {
 	score_id: number;
 	position: number;
-	grade: ScoreRank;
+	grade: ScoreGrade;
 	proven_user_id: number;
 	proven_username: string;
 	proven_country: string;
@@ -149,7 +149,7 @@ interface PlayerRulesetStats {
 	rank?: number; // can be out of date, but Chiffa wanted it; null for players not in the ranking
 	rankedScore: number;
 	gradeCounts: {
-		[grade in PlayerScoreRank]?: number;
+		[grade in PlayerScoreGrade]?: number;
 	};
 }
 

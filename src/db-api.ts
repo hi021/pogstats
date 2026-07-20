@@ -41,18 +41,19 @@ export async function getRankingForPlayer(client: ClientBase, rankingCode: strin
 }
 
 export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: string, playerId: number) {
+	// TODO: ruleset id !! aahah
 	const parsedRanking = parsePositionThresholdAndRankingType(rankingCode);
 	if (!parsedRanking) return;
 
 	switch (parsedRanking.rankingType) {
 		case "":
-			return getLiveCountRankingForPlayer(client, playerId);
+			return getLiveCountRankingForPlayer(client, playerId, 0);
 		case "-pp":
 			return;
 	}
 }
 
-export async function getLiveCountRankingForPlayer(client: ClientBase, playerId: number) {
+export async function getLiveCountRankingForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
 	const result = await queryWithTiming<PlayerLiveCountData>(
 		client,
 		"getLiveCountRankingForPlayer",
@@ -71,4 +72,48 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
 	);
 
 	return result.rows?.[0];
+}
+
+// TODO: ruleset id !! aahah
+export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
+	const result = await queryWithTiming<PlayerPositionSpread>(
+		client,
+		"getPositionSpreadForPlayer",
+		"pog_api_v2",
+		`
+		WITH counts AS (
+				SELECT position, COUNT(id) AS cnt
+				FROM ${DB_SCORES_TABLE}
+				WHERE user_id = $1
+					AND position BETWEEN 1 AND 100
+				GROUP BY position
+		),
+		arr AS (SELECT array_agg(cnt ORDER BY position) AS a FROM counts)
+
+		SELECT json_agg(COALESCE(arr.a[i], 0) ORDER BY i)
+		FROM arr, generate_series(1, 100) AS g(i)`,
+		[playerId]
+	);
+
+	return result.rows?.[0] ?? [];
+}
+
+export async function getGradeSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
+	const result = await queryWithTiming<PlayerGradeSpread>(
+		client,
+		"getGradeSpreadForPlayer",
+		"pog_api_v2",
+		`
+		SELECT json_object_agg(grade, cnt)
+		FROM (
+			SELECT grade, COUNT(id) AS cnt
+			FROM ${DB_SCORES_TABLE}
+			WHERE user_id = $1
+				AND position BETWEEN 1 AND 100
+			GROUP BY grade
+		)`,
+		[playerId]
+	);
+
+	return result.rows?.[0] ?? {};
 }
