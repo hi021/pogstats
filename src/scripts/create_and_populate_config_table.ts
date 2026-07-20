@@ -1,4 +1,4 @@
-import { ClientBase, PoolClient } from "pg";
+import { ClientBase } from "pg";
 import { withDbClientTransaction } from "../db-generic.js";
 import { DB_CONFIG_TABLE } from "../env.js";
 import { parseArgs } from "../shared.js";
@@ -12,6 +12,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 } as const);
 
 // TODO: come up with real values
+// TODO: move to redis
 const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "std_min_top100", valueInt: 900 },
 	{ key: "std_min_top50", valueInt: 500 },
@@ -40,8 +41,6 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "last_ws_score_id", valueText: "0" },
 	{ key: "global_message", valueText: "" }
 ]);
-
-let client: PoolClient;
 
 async function createConfigTable(client: ClientBase) {
 	console.log(`Attempting to create ${DB_CONFIG_TABLE} table`);

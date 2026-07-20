@@ -7,4 +7,5 @@ node create_player_tables.js &&
 node create_and_populate_pog_badge_table.js &&
 node create_beatmap_table.js &&
 node create_score_tables.js &&
-node create_and_populate_ranking_tables.js
+node create_and_populate_ranking_tables.js &&
+node create_ranking_view.js

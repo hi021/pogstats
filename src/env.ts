@@ -27,6 +27,7 @@ export const DB_RANKING_TYPES_TABLE = process.env.DB_RANKING_TYPES_TABLE || "RAN
 export const DB_HISTORICAL_RANKINGS_TABLE = process.env.DB_HISTORICAL_RANKINGS_TABLE || "HISTORICAL_RANKINGS";
 export const DB_HISTORICAL_PLAYER_SNIPES_TABLE = process.env.DB_HISTORICAL_PLAYER_SNIPES_TABLE || "HISTORICAL_PLAYER_SNIPES";
 export const DB_PLAYER_MIA_HISTORY_TABLE = process.env.DB_PLAYER_MIA_HISTORY_TABLE || "PLAYER_MIA_HISTORY";
+export const DB_RANKING_VIEW = process.env.DB_RANKING_VIEW || "RANKING_VIEW";
 
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;
