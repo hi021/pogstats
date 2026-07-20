@@ -408,6 +408,7 @@ async function upsertBeatmapScores(
 }
 
 // WARNING: this skips inserting scores with position > 100, so when a player gets restricted, there might be a gap or a stale score (#101 in the db but >#101 on osu) will make it into top 100
+// Does not save scores for qualified maps - fetching those is skipped in scrape_beatmaps
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once?
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
@@ -424,13 +425,20 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 				candidate_score
 			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
 					 AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
+		),
+		filtered_candidates AS (
+			SELECT c.*
+			FROM candidates c
+			JOIN ${DB_BEATMAPS_TABLE} u
+				ON u.beatmap_id = c.candidate_beatmap_id
+				AND u.status IN (1,2,4)
 		)
 		SELECT
 			c.candidate_beatmap_id AS beatmap_id,
 			c.candidate_ruleset_id AS ruleset_id,
 			array_agg(c.candidate_user_id) AS proven_user_ids,
 			array_agg(c.candidate_id) AS proven_ids
-		FROM candidates c
+		FROM filtered_candidates c
 		LEFT JOIN LATERAL (
 			SELECT
 				COUNT(*) AS score_count,
