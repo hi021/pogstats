@@ -1,5 +1,6 @@
 import https from "https";
 import { ClientBase } from "pg";
+import { LabelValues } from "prom-client";
 import WebSocket from "ws";
 import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
@@ -13,7 +14,6 @@ import {
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
 import {
-	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
 	DB_PLAYERS_TABLE,
 	DB_SCORES_TABLE,
@@ -32,7 +32,6 @@ import {
 	unnestObjectsIntoArrays
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
-import { LabelValues } from "prom-client";
 
 const SCORES_WS_URL = "wss://ushio.chiffa.lol";
 const SCORES_WS_PING_INTERVAL = 30000;
@@ -414,11 +413,6 @@ async function upsertBeatmapScores(
 	return result;
 }
 
-// TODO
-// WARNING: the DB_BEATMAP_RULESET_UPDATE_DATES_TABLE join is only necessary for the first main score scrape!! remove it later or new maps will never be populated
-// duct tape solution but it's bed time
-// TODO
-
 // WARNING: this skips inserting scores with position > 100, so when a player gets restricted, there might be a gap or a stale score (#101 in the db but >#101 on osu) will make it into top 100
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once?
@@ -436,21 +430,13 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 				candidate_score
 			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
 					 AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
-		),
-		filtered_candidates AS (
-			SELECT c.*
-			FROM candidates c
-			JOIN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} u
-				ON u.beatmap_id = c.candidate_beatmap_id
-				AND u.ruleset_id = c.candidate_ruleset_id
-				AND u.last_scores_scrape IS NOT NULL
 		)
 		SELECT
 			c.candidate_beatmap_id AS beatmap_id,
 			c.candidate_ruleset_id AS ruleset_id,
 			array_agg(c.candidate_user_id) AS proven_user_ids,
 			array_agg(c.candidate_id) AS proven_ids
-		FROM filtered_candidates c
+		FROM candidates c
 		LEFT JOIN LATERAL (
 			SELECT
 				COUNT(*) AS score_count,
