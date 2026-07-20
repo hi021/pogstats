@@ -430,7 +430,7 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 			SELECT c.*
 			FROM candidates c
 			JOIN ${DB_BEATMAPS_TABLE} u
-				ON u.beatmap_id = c.candidate_beatmap_id
+				ON u.id = c.candidate_beatmap_id
 				AND u.status IN (1,2,4)
 		)
 		SELECT
