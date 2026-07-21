@@ -95,7 +95,7 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
 
 // TODO: ruleset id !! aahah
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
-	const result = await queryWithTiming<PlayerPositionSpread>(
+	const result = await queryWithTiming<{spread: PlayerPositionSpread}>(
 		client,
 		"getPositionSpreadForPlayer",
 		"pog_api_v2",
@@ -110,12 +110,12 @@ export async function getPositionSpreadForPlayer(client: ClientBase, playerId: n
 		),
 		arr AS (SELECT array_agg(cnt ORDER BY position) AS a FROM counts)
 
-		SELECT json_agg(COALESCE(arr.a[i], 0) ORDER BY i)
+		SELECT json_agg(COALESCE(arr.a[i], 0) ORDER BY i) AS spread
 		FROM arr, generate_series(1, 100) AS g(i)`,
 		[playerId, rulesetId]
 	);
 
-	return result.rows?.[0] ?? [];
+	return result.rows?.[0]?.spread ?? [];
 }
 
 export async function getGradeSpreadForPlayer(
@@ -124,12 +124,12 @@ export async function getGradeSpreadForPlayer(
 	rulesetId: RulesetId,
 	positionThreshold: RankingPositionThreshold = 100
 ) {
-	const result = await queryWithTiming<PlayerGradeSpread>(
+	const result = await queryWithTiming<{spread: PlayerGradeSpread}>(
 		client,
 		"getGradeSpreadForPlayer",
 		"pog_api_v2",
 		`
-		SELECT json_object_agg(grade, cnt)
+		SELECT json_object_agg(grade, cnt) AS spread
 		FROM (
 			SELECT grade, COUNT(id) AS cnt
 			FROM ${DB_SCORES_TABLE}
@@ -141,7 +141,7 @@ export async function getGradeSpreadForPlayer(
 		[playerId, rulesetId, positionThreshold]
 	);
 
-	return result.rows?.[0] ?? {};
+	return result.rows?.[0]?.spread ?? {};
 }
 
 export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, rulesetId: RulesetId, positionThreshold: number) {
