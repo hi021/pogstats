@@ -1,6 +1,5 @@
 import { ClientBase } from "pg";
 import {
-	buildUpdateCoalesceAssignmentsString,
 	PLAYER_TABLE_COLUMNS,
 	withDbClient,
 	withDbClientTransaction
@@ -32,7 +31,7 @@ const MAX_RETRIEVED_AT = getMinDate(parsedFlags.minDate);
 
 let lastFetchTimestamp = 0;
 
-// all user ids with a score in the top 104 on any map, prioritizes active users
+// all user ids with a score in the top 105 on any map, prioritizes active users
 async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch[] | null> {
 	return await withDbClient(async client => {
 		const params = maxRetrievedAt ? [maxRetrievedAt] : [];
@@ -47,7 +46,7 @@ async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch
 				ROW_NUMBER() OVER (ORDER BY p.is_active DESC, s.user_id DESC) AS rn
 				FROM ${DB_SCORES_TABLE} s
 					LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = s.user_id
-				WHERE s.position <= 104
+				WHERE s.position <= 105
 				${maxRetrievedAt ? `AND (p.retrieved_at IS NULL OR p.retrieved_at < $1)` : ""}
 				GROUP BY p.is_active, s.user_id
 			),
@@ -159,18 +158,24 @@ async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Pl
 	);
 }
 
-// TODO fix! this always puts MIA player data even if we know the username
+const PLAYER_MIA_UPDATE_ASSIGNMENTS = PLAYER_TABLE_COLUMNS
+	.map(col => {
+		if (col == "retrieved_at" || col == "is_mia" || col == "is_from_osu_api") return `${col} = COALESCE(EXCLUDED.${col}, ${DB_PLAYERS_TABLE}.${col})`;
+		return `${col} = CASE WHEN EXCLUDED.is_mia THEN ${DB_PLAYERS_TABLE}.${col} ELSE COALESCE(EXCLUDED.${col}, ${DB_PLAYERS_TABLE}.${col}) END`;
+	})
+	.join(",");
+
 async function insertPlayerBatch(client: ClientBase) {
 	await queryWithTiming(
 		client,
 		"insertPlayerBatch",
 		"scrape_players",
 		`
-		INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(", ")})
-			SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(", ")}
+		INSERT INTO ${DB_PLAYERS_TABLE} (${PLAYER_TABLE_COLUMNS.join(",")})
+			SELECT ${PLAYER_TABLE_COLUMNS.map(col => `COALESCE(tmp.${col}, p.${col}) as ${col}`).join(",")}
 			FROM scrape_players_tmp tmp
-			LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
-		ON CONFLICT (id) DO UPDATE SET ${buildUpdateCoalesceAssignmentsString(PLAYER_TABLE_COLUMNS, DB_PLAYERS_TABLE)}`
+				LEFT JOIN ${DB_PLAYERS_TABLE} p ON p.id = tmp.id
+		ON CONFLICT (id) DO UPDATE SET ${PLAYER_MIA_UPDATE_ASSIGNMENTS}`
 	);
 }
 
