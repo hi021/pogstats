@@ -1,5 +1,5 @@
 import { ClientBase, QueryResult } from "pg";
-import { DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
+import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
 import { queryWithTiming } from "./metrics.js";
 import { parsePositionThresholdAndRankingType } from "./shared.js";
 
@@ -142,4 +142,40 @@ export async function getGradeSpreadForPlayer(
 	);
 
 	return result.rows?.[0] ?? {};
+}
+
+export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, rulesetId: RulesetId, positionThreshold: number) {
+	const result = await client.query<BeatmapWithoutPermaScore>(
+		`
+		SELECT
+				b.id,
+				b.beatmapset_id,
+				b.status,
+				b.artist,
+				b.title,
+				b.version,
+				b.creator,
+				b.approved_date,
+				b.star_rating AS base_star_rating,
+				b.total_length AS base_total_length,
+				b.od AS base_od,
+				s.position AS highest_non_perma_position
+		FROM ${DB_BEATMAPS_TABLE} b
+			LEFT JOIN (
+					SELECT DISTINCT ON (beatmap_id, ruleset_id)
+							beatmap_id,
+							ruleset_id,
+							position
+					FROM ${DB_SCORES_TABLE}
+					WHERE ruleset_id = $1
+						AND is_perma = FALSE
+					ORDER BY beatmap_id, ruleset_id, position
+			) s ON s.beatmap_id = b.id AND s.ruleset_id = b.ruleset_id
+		WHERE b.star_rating < 2.5
+			AND b.od <= 5
+			AND s.position <= $2`,
+		[rulesetId, positionThreshold]
+	);
+
+	return result.rows;
 }

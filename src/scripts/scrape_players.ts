@@ -1,9 +1,5 @@
 import { ClientBase } from "pg";
-import {
-	PLAYER_TABLE_COLUMNS,
-	withDbClient,
-	withDbClientTransaction
-} from "../db-generic.js";
+import { PLAYER_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import {
 	findNoLongerMiaPlayerIds,
 	insertNewMiaPlayers,
@@ -158,12 +154,11 @@ async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Pl
 	);
 }
 
-const PLAYER_MIA_UPDATE_ASSIGNMENTS = PLAYER_TABLE_COLUMNS
-	.map(col => {
-		if (col == "retrieved_at" || col == "is_mia" || col == "is_from_osu_api") return `${col} = COALESCE(EXCLUDED.${col}, ${DB_PLAYERS_TABLE}.${col})`;
-		return `${col} = CASE WHEN EXCLUDED.is_mia THEN ${DB_PLAYERS_TABLE}.${col} ELSE COALESCE(EXCLUDED.${col}, ${DB_PLAYERS_TABLE}.${col}) END`;
-	})
-	.join(",");
+const PLAYER_MIA_UPDATE_ASSIGNMENTS = PLAYER_TABLE_COLUMNS.map(col => {
+	if (col == "retrieved_at" || col == "is_mia" || col == "is_from_osu_api")
+		return `${col} = COALESCE(EXCLUDED.${col}, ${DB_PLAYERS_TABLE}.${col})`;
+	return `${col} = CASE WHEN EXCLUDED.is_mia THEN ${DB_PLAYERS_TABLE}.${col} ELSE COALESCE(EXCLUDED.${col}, ${DB_PLAYERS_TABLE}.${col}) END`;
+}).join(",");
 
 async function insertPlayerBatch(client: ClientBase) {
 	await queryWithTiming(

@@ -264,7 +264,7 @@ interface ApiUserStatisticsRulesets {
 interface ApiBeatmapDbBeatmap {
 	beatmap_id: number;
 	beatmapset_id: number;
-	approved: MapStatusId;
+	approved: BeatmapStatusId;
 	total_length: number; // in seconds
 	hit_length: number; // in seconds
 	version: string; // diff name
