@@ -28,8 +28,13 @@ const playerIdByIdOrNameMiddleware: Middleware<DefaultState, DefaultContext, any
 	await next();
 };
 
+//// RANKING ROUTES
+// ...
+
 //// PLAYER ROUTES
 router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
+
+// player info
 
 router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) => {
 	const rulesetId = getRulesetId(ctx.params.ruleset as Ruleset);
@@ -56,10 +61,19 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next)
 	if (rulesetId == null) return ctx.throw(400, "Invalid ruleset, remember osu!catch is called fruits :)");
 
 	const ranking = await withDbClient(
-		async client => await getRankingForPlayer(client, ctx.params.ranking, ctx.state.playerId, ctx.params.date)
+		async client => await getRankingForPlayer(client, ctx.params.ranking, rulesetId, ctx.state.playerId, ctx.params.date)
 	);
 	if (!ranking) ctx.throw(400, "Invalid ranking");
 
 	ctx.headers["content-type"] = "application/json";
 	ctx.body = ranking;
 });
+
+// player snipes
+// player sniped by
+
+//// BEATMAP ROUTES
+
+// beatmap/set metadata
+// beatmap scores (with or without metadata)
+// beatmap count

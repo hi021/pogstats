@@ -36,20 +36,39 @@ export async function getPlayerIdById(client: ClientBase, id: string | number) {
 // TODO: move to redis
 export async function getRankingId(client: ClientBase, rulesetId: RulesetId, code: string) {}
 
-export async function getRankingForPlayer(client: ClientBase, rankingCode: string, playerId: number, date?: string) {
-	if (!date) return getLiveRankingForPlayer(client, rankingCode, playerId); // ...or check if date is today
+export async function getRankingForPlayer(
+	client: ClientBase,
+	rankingCode: string,
+	rulesetId: RulesetId,
+	playerId: number,
+	date?: string
+) {
+	if (!date) return getLiveRankingForPlayer(client, rankingCode, rulesetId, playerId); // TODO: ...or check if date is today
+	// TODO: otherwise historical ranking
 }
 
-export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: string, playerId: number) {
-	// TODO: ruleset id !! aahah
+export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: string, rulesetId: RulesetId, playerId: number) {
 	const parsedRanking = parsePositionThresholdAndRankingType(rankingCode);
 	if (!parsedRanking) return;
 
 	switch (parsedRanking.rankingType) {
 		case "":
-			return getLiveCountRankingForPlayer(client, playerId, 0);
-		case "-pp":
-			return;
+			return getLiveCountRankingForPlayer(client, playerId, rulesetId);
+		case "-weighted":
+			console.log("weighted");
+			break;
+		case "-total-pp":
+			console.log("-total-pp");
+			break;
+		case "-weighted-pp":
+			console.log("-weighted-pp");
+			break;
+		case "-ranked-score":
+			console.log("-ranked-score");
+			break;
+		case "-ss":
+			console.log("-ss");
+			break;
 	}
 }
 
@@ -85,6 +104,7 @@ export async function getPositionSpreadForPlayer(client: ClientBase, playerId: n
 				SELECT position, COUNT(id) AS cnt
 				FROM ${DB_SCORES_TABLE}
 				WHERE user_id = $1
+					AND ruleset_id = $2
 					AND position BETWEEN 1 AND 100
 				GROUP BY position
 		),
@@ -92,13 +112,18 @@ export async function getPositionSpreadForPlayer(client: ClientBase, playerId: n
 
 		SELECT json_agg(COALESCE(arr.a[i], 0) ORDER BY i)
 		FROM arr, generate_series(1, 100) AS g(i)`,
-		[playerId]
+		[playerId, rulesetId]
 	);
 
 	return result.rows?.[0] ?? [];
 }
 
-export async function getGradeSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
+export async function getGradeSpreadForPlayer(
+	client: ClientBase,
+	playerId: number,
+	rulesetId: RulesetId,
+	positionThreshold: RankingPositionThreshold = 100
+) {
 	const result = await queryWithTiming<PlayerGradeSpread>(
 		client,
 		"getGradeSpreadForPlayer",
@@ -109,10 +134,11 @@ export async function getGradeSpreadForPlayer(client: ClientBase, playerId: numb
 			SELECT grade, COUNT(id) AS cnt
 			FROM ${DB_SCORES_TABLE}
 			WHERE user_id = $1
-				AND position BETWEEN 1 AND 100
+				AND ruleset_id = $2
+				AND position BETWEEN 1 AND $3
 			GROUP BY grade
 		)`,
-		[playerId]
+		[playerId, rulesetId, positionThreshold]
 	);
 
 	return result.rows?.[0] ?? {};

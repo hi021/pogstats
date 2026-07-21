@@ -16,7 +16,7 @@ export function onUpgrade(req: http.IncomingMessage, socket: stream.Duplex, head
 	else socket.destroy();
 }
 
-// Placeholder
+// TODO Placeholder
 export function onConnect(ws: WebSocket) {
 	wsClients.add(ws);
 

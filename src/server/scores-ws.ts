@@ -147,6 +147,7 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	console.log("");
 	console.log(`[Batch #${sessionBatchCount}] ${batchTotalScoreCount} scores total | ${scores?.length} candidate scores`);
 	if (sessionBatchCount <= 1 && initialCursorScoreId && batchLowestScoreId > initialCursorScoreId + 1)
+		// This is usually not an issue if the downtime was under an hour, there may have been intermediate failed or other mode scores
 		console.warn(
 			`POSSIBLE DATA LOSS:\nGap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})`
 		);
@@ -202,7 +203,7 @@ function isCandidateScore(score: WsScore) {
 	return score.ruleset_id == 0;
 }
 
-// TODO: Probably want to do it directly in the database in getBeatenScoresByMap() but brain too small
+// TODO?: Probably want to do it directly in the database in getBeatenScoresByMap() but brain too small
 function dedupeTopScoresByUser(scores: WsScore[]) {
 	const seenUserIds = new Set<number>();
 	return scores.filter(score => {
@@ -331,7 +332,7 @@ async function upsertBeatmapScores(
 	const beatenScoresMap = new Map<number, BeatenScoreData[]>();
 	const snipes: HistoricalPlayerSnipes[] = [];
 
-	// TODO: I'd like this to be within postgres temporary tables, but idk no perf issues for now
+	// TODO?: move this logic into postgres temporary tables, but idk no perf issues for now
 	for (const newScore of insertedScores.rows) {
 		const existingUserScoreIndex = currentScores.findIndex(s => s.userId == newScore.userId);
 		if (existingUserScoreIndex != -1) currentScores.splice(existingUserScoreIndex, 1);
@@ -410,7 +411,7 @@ async function upsertBeatmapScores(
 // WARNING: this skips inserting scores with position > 100, so when a player gets restricted, there might be a gap or a stale score (#101 in the db but >#101 on osu) will make it into top 100
 // Does not save scores for qualified maps - fetching those is skipped in scrape_beatmaps
 async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
-	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once?
+	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once? has not happened since....
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
 		client,
 		"getBeatenScoresByMap",
@@ -459,8 +460,8 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 			u_agg.user_best_score IS NOT NULL AND u_agg.user_best_score >= c.candidate_score
 		) AND (
 			s_agg.score_count = 0 OR
-			(s_agg.max_position IS NOT NULL AND s_agg.max_position < 100) OR
-			(s_agg.min_top100_score IS NOT NULL AND s_agg.min_top100_score < c.candidate_score)
+			s_agg.max_position < 100 OR
+			s_agg.min_top100_score < c.candidate_score
 		)
 		GROUP BY c.candidate_beatmap_id, c.candidate_ruleset_id`,
 		[arrays.id, arrays.ruleset_id, arrays.beatmap_id, arrays.user_id, arrays.total_score]

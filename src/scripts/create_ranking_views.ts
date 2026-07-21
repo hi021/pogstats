@@ -11,4 +11,4 @@ async function createRankingView() {
 	});
 }
 
-createRankingView();
+// createRankingView();

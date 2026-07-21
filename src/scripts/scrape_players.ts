@@ -159,6 +159,7 @@ async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Pl
 	);
 }
 
+// TODO fix! this always puts MIA player data even if we know the username
 async function insertPlayerBatch(client: ClientBase) {
 	await queryWithTiming(
 		client,
