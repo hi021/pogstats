@@ -114,6 +114,34 @@ export function parseInteger(num: unknown, min = 1, max?: number) {
 	return n;
 }
 
+export function parseBeatmapStatusIds(statuses: string) {
+	const split = (statuses || "").split(",").map(s => s.trim().toLowerCase());
+	const statusNames = [...new Set(split)];
+	const statusIds: BeatmapStatusId[] = [];
+
+	for (const name of statusNames) {
+		if (name == "all" || name == "any") return [1, 2, 4] as BeatmapStatusId[];
+
+		const id = parseBeatmapStatusId(name);
+		if (id != null) statusIds.push(id);
+	}
+
+	return statusIds;
+}
+
+export function parseBeatmapStatusId(status: string): BeatmapStatusId | null {
+	switch (status) {
+		case "ranked":
+			return 1;
+		case "approved":
+			return 2;
+		case "loved":
+			return 4;
+		default:
+			return null;
+	}
+}
+
 export function isMissingPlayer(player: Player | MissingPlayer): player is MissingPlayer {
 	return player.username == "<POGSTATS::UNKNOWN>" && player.countryCode == "XX" && player.isMia;
 }

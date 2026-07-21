@@ -1,6 +1,7 @@
 import Router from "@koa/router";
 import { Middleware } from "koa";
 import {
+	getBeatmapCount,
 	getEasiestBeatmapsWithoutPermaScore,
 	getGradeSpreadForPlayer,
 	getPlayerIdByIdOrName,
@@ -8,7 +9,7 @@ import {
 	getRankingForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
-import { getRulesetId, parseInteger } from "../shared.js";
+import { getRulesetId, parseBeatmapStatusIds, parseInteger } from "../shared.js";
 
 export const API_BASE_URL = "/api/v2/";
 const API_PLAYER_BASE_URL = "player/:idOrName";
@@ -57,7 +58,7 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) 
 		async client => await getPositionSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId)
 	);
 
-	ctx.headers["content-type"] = "application/json";
+	ctx.headers["Content-Type"] = "application/json";
 	ctx.body = spread;
 });
 
@@ -66,7 +67,7 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread", async (ctx, next) => 
 		async client => await getGradeSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId)
 	);
 
-	ctx.headers["content-type"] = "application/json";
+	ctx.headers["Content-Type"] = "application/json";
 	ctx.body = spread;
 });
 
@@ -77,7 +78,7 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next)
 	);
 	if (!ranking) ctx.throw(400, "Invalid ranking");
 
-	ctx.headers["content-type"] = "application/json";
+	ctx.headers["Content-Type"] = "application/json";
 	ctx.body = ranking;
 });
 
@@ -95,15 +96,23 @@ router.use(API_BEATMAPS_BASE_URL + "/:ruleset", rulesetIdByNameMiddleware);
 router.get(API_BEATMAPS_BASE_URL + "/:ruleset/no-perma{/:position}", async (ctx, next) => {
 	const posThreshold = parseInteger(ctx.params.position, 1) || 1;
 	const beatmaps = await withDbClient(
-		async client => await getEasiestBeatmapsWithoutPermaScore(client, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
+		async client =>
+			await getEasiestBeatmapsWithoutPermaScore(client, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
-	ctx.headers["content-type"] = "application/json";
+	ctx.headers["Content-Type"] = "application/json";
 	ctx.body = beatmaps;
 });
 
-// beatmap count
+router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async (ctx, next) => {
+	const statusIds = parseBeatmapStatusIds(ctx.params.statuses);
+	const count = await withDbClient(
+		async client => await getBeatmapCount(client, ctx.state.rulesetId, statusIds.length ? statusIds : [1, 2, 4])
+	);
 
+	ctx.headers["Content-Type"] = "text/plain";
+	ctx.body = count;
+});
 //// AUTOCOMPLETE ROUTES
 
 // beatmap title SIMILARITY() lookup

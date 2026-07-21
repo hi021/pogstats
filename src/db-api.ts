@@ -179,3 +179,15 @@ export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, ru
 
 	return result.rows;
 }
+
+export async function getBeatmapCount(client: ClientBase, rulesetId: RulesetId, statuses: BeatmapStatusId[]) {
+	const result = await client.query<{ beatmaps: number }>(
+		`SELECT COUNT(id) AS beatmaps
+		FROM ${DB_BEATMAPS_TABLE}
+		WHERE ruleset_id = $1
+			AND status = ANY($2::SMALLINT[])`,
+		[rulesetId, statuses]
+	);
+
+	return result.rows[0]?.beatmaps ?? -1;
+}
