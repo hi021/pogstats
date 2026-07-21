@@ -1,14 +1,16 @@
 {
-  "name": "pog_stats",
+  "name": "pogstats",
   "version": "1.0.0",
   "description": "osu!stats but it's poggers",
   "keywords": [
+    "poggers",
     "osu",
     "stats",
     "api",
-    "top scores",
-    "ranking",
-    "poggers"
+    "top",
+    "leaderboard",
+    "scores",
+    "ranking"
   ],
   "author": "hi",
   "license": "ISC",
@@ -16,8 +18,7 @@
   "main": "target/server/main.js",
   "scripts": {
     "build": "tsc",
-    "format": "prettier ./src --write",
-    "start": "node target/server/main.js"
+    "format": "prettier ./src --write"
   },
   "devEngines": {
     "packageManager": {
