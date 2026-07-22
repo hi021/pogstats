@@ -43,7 +43,8 @@ export async function getRankingForPlayer(
 	playerId: number,
 	date?: string
 ) {
-	if (!date) return getLiveRankingForPlayer(client, rankingCode, rulesetId, playerId); // TODO: ...or check if date is today
+	// TODO: ...or check if date is today
+	if (!date) return getLiveRankingForPlayer(client, rankingCode, rulesetId, playerId);
 	// TODO: otherwise historical ranking
 }
 
@@ -93,7 +94,6 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
 	return result.rows?.[0];
 }
 
-// TODO: ruleset id !! aahah
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
 	const result = await queryWithTiming<{spread: PlayerPositionSpread}>(
 		client,
@@ -144,6 +144,7 @@ export async function getGradeSpreadForPlayer(
 	return result.rows?.[0]?.spread ?? {};
 }
 
+// TODO?: materialized view that updates every few minutes?
 export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, rulesetId: RulesetId, positionThreshold: number) {
 	const result = await client.query<BeatmapWithoutPermaScore>(
 		`
