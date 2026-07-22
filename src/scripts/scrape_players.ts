@@ -33,6 +33,7 @@ const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta
 const MAX_RETRIEVED_AT = getMinDate(parsedFlags.minDate);
 
 let lastFetchTimestamp = 0;
+let scrapedPlayerCount = 0;
 
 // all user ids with a score in the top 105 on any map, prioritizes active users
 async function getRankingPlayerIdBatches(maxRetrievedAt?: Date): Promise<IdBatch[] | null> {
@@ -123,11 +124,10 @@ async function createTempPlayersTable(client: ClientBase) {
 	);
 }
 
-async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Player>, exemplaryPlayer: Player) {
-	const arrays = unnestObjectsIntoArrays(
-		batch as unknown as Array<Record<string, unknown>>,
-		exemplaryPlayer as unknown as Record<string, unknown>
-	) as { [K in keyof Player]: Array<Player[K]> };
+async function insertPlayerBatchIntoTmpTable(client: ClientBase, batch: Array<Player>) {
+	const arrays = unnestObjectsIntoArrays(batch as unknown as Array<Record<string, unknown>>) as {
+		[K in keyof Player]: Array<Player[K]>;
+	};
 
 	await queryWithTiming(
 		client,
@@ -181,48 +181,53 @@ async function insertPlayerBatch(client: ClientBase) {
 	);
 }
 
+async function processPlayerBatch(batch: IdBatch, miaPlayers: Map<number, Date>, headers: Record<string, string>) {
+	// TODO?: use respektive's osu-score-rank-api and osu! api only as a fallback to save some calls
+	// would have to PR in the endpoint and that's only 10-15k out of 330k+ players anyway
+	const retrievedAt = new Date();
+	lastFetchTimestamp = retrievedAt.getTime();
+	console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
+	const apiPlayers = await lookupPlayers(headers, batch.ids);
+
+	console.log(`[scrape_players] Processing and inserting player batch #${batch.batch_no}`);
+	const convertedPlayers = convertPlayers(apiPlayers, retrievedAt);
+	const players: Player[] = [];
+
+	for (const playerId of batch.ids) {
+		const player = convertedPlayers.find(p => p.id == playerId); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
+		if (!player) miaPlayers.set(playerId, retrievedAt);
+		players.push(player ?? buildMiaPlayer(playerId, retrievedAt));
+	}
+
+	await withDbClientTransaction(async client => {
+		await createTempPlayersTable(client);
+		await insertPlayerBatchIntoTmpTable(client, players);
+		await insertPlayerBatch(client);
+	});
+	scrapedPlayerCount += players.length;
+	players.length = 0;
+}
+
 export async function scrapePlayers(ids?: number[]) {
 	try {
 		const playerIdBatches = ids ? splitIntoBatches(ids, PLAYER_BATCH_SIZE) : await getRankingPlayerIdBatches(MAX_RETRIEVED_AT);
 		if (!playerIdBatches?.length) return;
 
 		console.log(
-			`${playerIdBatches.length} batch(es) - projected time to scrape: ${formatMilliseconds((playerIdBatches.length - 1) * SCRAPE_PLAYER_DELAY_MS + 200)}`
+			`[scrape_players] ${playerIdBatches.length} batch(es) - projected time to scrape: ${formatMilliseconds((playerIdBatches.length - 1) * SCRAPE_PLAYER_DELAY_MS + 200)}`
 		);
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
+		const failedBatches: IdBatch[] = [];
 		const miaPlayers = new Map<number, Date>();
-		let scrapedPlayerCount = 0;
-		let exemplaryPlayer: Player;
 
 		for (const batch of playerIdBatches) {
 			try {
-				// TODO?: use respektive's osu-score-rank-api and osu! api only as a fallback to save some calls
-				// would have to PR in the endpoint and that's only 10-15k out of 330k+ players anyway
-				const retrievedAt = new Date();
-				lastFetchTimestamp = retrievedAt.getTime();
-				console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
-				const apiPlayers = await lookupPlayers(headers, batch.ids);
-
-				console.log(`[scrape_players] Processing and inserting player batch #${batch.batch_no}`);
-				const convertedPlayers = convertPlayers(apiPlayers, retrievedAt);
-				exemplaryPlayer = convertedPlayers[0] ?? buildMiaPlayer(0, retrievedAt);
-				const players: Player[] = [];
-
-				for (const playerId of batch.ids) {
-					const player = convertedPlayers.find(p => p.id == playerId); // probably better to make it a Map straight away, but the number of players is small enough that it doesn't matter
-					if (!player) miaPlayers.set(playerId, retrievedAt);
-					players.push(player ?? buildMiaPlayer(playerId, retrievedAt));
-				}
-
-				scrapedPlayerCount += players.length;
-				await withDbClientTransaction(async client => {
-					await createTempPlayersTable(client);
-					await insertPlayerBatchIntoTmpTable(client, players, exemplaryPlayer);
-					await insertPlayerBatch(client);
-				});
-				players.length = 0;
-
+				await processPlayerBatch(batch, miaPlayers, headers);
+			} catch (e) {
+				console.error(`[scrape_players] Failed to scrape, process, and insert batch #${batch.batch_no}:\n`, e);
+				failedBatches.push(batch);
+			} finally {
 				await rateLimit(
 					{
 						get: () => lastFetchTimestamp,
@@ -230,13 +235,51 @@ export async function scrapePlayers(ids?: number[]) {
 					},
 					SCRAPE_PLAYER_DELAY_MS
 				);
-			} catch (e) {
-				console.error(`[scrape_players] Failed to scrape, process, and insert batch #${batch.batch_no}:\n`, e);
-				break;
 			}
 		}
 
-		console.log(`[scrape_players] Finished saving ${scrapedPlayerCount} players`);
+		if (failedBatches.length) {
+			let failCount = 0;
+
+			while (failedBatches.length && ++failCount <= 3) {
+				console.log(`[scrape_players] Retrying ${failedBatches.length} failed batch(es) - attempt ${failCount}/3`);
+				await rateLimit(
+					{
+						get: () => lastFetchTimestamp,
+						set: value => (lastFetchTimestamp = value)
+					},
+					5000 * 8 ** (failCount - 1)
+				);
+
+				for (const batch of failedBatches) {
+					try {
+						await processPlayerBatch(batch, miaPlayers, headers);
+						failedBatches.splice(
+							failedBatches.findIndex(b => b.batch_no == batch.batch_no),
+							1
+						);
+					} catch (e) {
+						console.error(`[scrape_players] Failed to scrape, process, and insert batch #${batch.batch_no}:\n`, e);
+					} finally {
+						await rateLimit(
+							{
+								get: () => lastFetchTimestamp,
+								set: value => (lastFetchTimestamp = value)
+							},
+							SCRAPE_PLAYER_DELAY_MS
+						);
+					}
+				}
+			}
+
+			if (failedBatches.length)
+				console.log(
+					"[scrape_players] Failed to process players with the following ids even after 4 attempts:",
+					failedBatches.map(b => b.ids).join(",")
+				);
+		}
+
+		console.log(`[scrape_players] Finished saving ${scrapedPlayerCount} players\n`);
 
 		await withDbClientTransaction(async client => {
 			const miaPlayerIds = [...miaPlayers.keys()];
