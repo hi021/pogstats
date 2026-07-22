@@ -45,6 +45,4 @@ export const SCORE_SCRAPE_ERROR_LOG_PATH =
 const parsedScoreScrapeDelayMs = Number(process.env.SCRAPE_SCORE_DELAY_MS);
 export const SCRAPE_SCORE_DELAY_MS = Number.isFinite(parsedScoreScrapeDelayMs) ? parsedScoreScrapeDelayMs : 1500;
 const parsedPlayerScrapeDelayMs = Number(process.env.SCRAPE_PLAYER_DELAY_MS);
-export const SCRAPE_PLAYER_DELAY_MS = Number.isFinite(parsedPlayerScrapeDelayMs)
-	? parsedPlayerScrapeDelayMs
-	: 1200;
+export const SCRAPE_PLAYER_DELAY_MS = Number.isFinite(parsedPlayerScrapeDelayMs) ? parsedPlayerScrapeDelayMs : 1200;

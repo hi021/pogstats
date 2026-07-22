@@ -35,6 +35,18 @@ export function buildRandomString() {
 	);
 }
 
+export function formatMilliseconds(ms: number) {
+	if (!ms) return "instant";
+	if (ms < 60 * 1000) return `${Math.round((ms / 1000) * 10) / 10} s`;
+	const h = Math.floor(ms / (60 * 60 * 1000));
+	ms -= h * 60 * 60 * 1000;
+	const m = Math.round(ms / (60 * 1000));
+
+	let s = h ? h + (h == 1 ? " hour " : " hours ") : "";
+	s += m ? m + (m == 1 ? " minute" : " minutes") : "";
+	return s.trim();
+}
+
 export const buildHeadersWithAuth = (token: string) => {
 	return {
 		...DEFAULT_OSU_API_HEADERS,

@@ -30,6 +30,7 @@ import {
 	buildHeadersWithAuth,
 	createLogStream,
 	dumpTableToCsv,
+	formatMilliseconds,
 	getMinDate,
 	logError,
 	logInfo,
@@ -199,7 +200,10 @@ async function scrapeScores() {
 			withDbClient(async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream));
 
 		const beatmapIds = await withDbClient(async client => await getBeatmapIds(client, ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE));
-		logInfo(infoLogStream, `Found ${beatmapIds.length} beatmap IDs to process`);
+		logInfo(
+			infoLogStream,
+			`Found ${beatmapIds.length} beatmap IDs to process - projected time to scrape: ${formatMilliseconds((beatmapIds.length - 1) * SCRAPE_SCORE_DELAY_MS + 300)}`
+		);
 
 		const beatmapBatches = splitIntoBatches(beatmapIds, BEATMAP_BATCH_SIZE);
 		for (const batch of beatmapBatches) {

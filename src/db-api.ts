@@ -95,7 +95,7 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
 }
 
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
-	const result = await queryWithTiming<{spread: PlayerPositionSpread}>(
+	const result = await queryWithTiming<{ spread: PlayerPositionSpread }>(
 		client,
 		"getPositionSpreadForPlayer",
 		"pog_api_v2",
@@ -124,7 +124,7 @@ export async function getGradeSpreadForPlayer(
 	rulesetId: RulesetId,
 	positionThreshold: RankingPositionThreshold = 100
 ) {
-	const result = await queryWithTiming<{spread: PlayerGradeSpread}>(
+	const result = await queryWithTiming<{ spread: PlayerGradeSpread }>(
 		client,
 		"getGradeSpreadForPlayer",
 		"pog_api_v2",

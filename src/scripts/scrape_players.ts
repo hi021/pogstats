@@ -11,7 +11,14 @@ import { DB_PLAYERS_TABLE, DB_SCORES_TABLE, SCRAPE_PLAYER_DELAY_MS } from "../en
 import { queryWithTiming, timedFetch } from "../metrics.js";
 import { parseArgs, splitIntoBatches, unnestObjectsIntoArrays } from "../shared.js";
 import { getOAuthToken } from "./osu_auth.js";
-import { buildHeadersWithAuth, buildUserLookupUrl, convertApiPlayerLookup, getMinDate, rateLimit } from "./shared.js";
+import {
+	buildHeadersWithAuth,
+	buildUserLookupUrl,
+	convertApiPlayerLookup,
+	formatMilliseconds,
+	getMinDate,
+	rateLimit
+} from "./shared.js";
 
 const PLAYER_BATCH_SIZE = 50;
 const FLAG_DEFINITIONS = Object.freeze({
@@ -177,7 +184,11 @@ async function insertPlayerBatch(client: ClientBase) {
 export async function scrapePlayers(ids?: number[]) {
 	try {
 		const playerIdBatches = ids ? splitIntoBatches(ids, PLAYER_BATCH_SIZE) : await getRankingPlayerIdBatches(MAX_RETRIEVED_AT);
-		if (!playerIdBatches) return;
+		if (!playerIdBatches?.length) return;
+
+		console.log(
+			`${playerIdBatches.length} batch(es) - projected time to scrape: ${formatMilliseconds((playerIdBatches.length - 1) * SCRAPE_PLAYER_DELAY_MS + 200)}`
+		);
 
 		const headers = buildHeadersWithAuth(await getOAuthToken());
 		const miaPlayers = new Map<number, Date>();
@@ -186,7 +197,8 @@ export async function scrapePlayers(ids?: number[]) {
 
 		for (const batch of playerIdBatches) {
 			try {
-				// TODO: use respektive's osu-score-rank-api and osu! api only as a fallback to save some calls
+				// TODO?: use respektive's osu-score-rank-api and osu! api only as a fallback to save some calls
+				// would have to PR in the endpoint and that's only 10-15k out of 330k+ players anyway
 				const retrievedAt = new Date();
 				lastFetchTimestamp = retrievedAt.getTime();
 				console.log(`[scrape_players] Fetching player batch #${batch.batch_no}`);
