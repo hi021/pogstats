@@ -37,6 +37,7 @@ export const METRICS_PORT = Number.isFinite(parsedMetricsPort) ? parsedMetricsPo
 
 export const DEV_ENV = process.env.DEV_ENV?.toLowerCase() === "true";
 export const VERBOSE = process.env.VERBOSE?.toLowerCase() === "true";
+export const SIMULATE_OSU_OUTAGE = process.env.SIMULATE_OSU_OUTAGE?.toLowerCase() === "true";
 
 export const SCORE_SCRAPE_LOG_PATH = process.env.SCORE_SCRAPE_LOG_PATH || "../../data/logs/scrape_scores.log";
 export const SCORE_SCRAPE_ERROR_LOG_PATH =

@@ -113,7 +113,7 @@ router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async (ctx, ne
 	ctx.headers["Content-Type"] = "text/plain";
 	ctx.body = count;
 });
-//// AUTOCOMPLETE ROUTES
 
+//// AUTOCOMPLETE ROUTES
 // beatmap title SIMILARITY() lookup
 // player username SIMILARITY() lookup

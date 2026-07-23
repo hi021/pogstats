@@ -176,7 +176,7 @@ Usually not an issue if the downtime was under an hour, there may have been inte
 		const beatmapId = beatenScoresByMap.beatmap_id;
 		const rulesetId = beatenScoresByMap.ruleset_id;
 		const provenScoreIds = new Set(beatenScoresByMap.proven_ids.map(id => Number(id)));
-		const provenScores = scores.filter(score => provenScoreIds.has(score.id)).sort(sortWsScores);
+		const provenScores = scores.filter(score => provenScoreIds.has(score.id)).sort(sortWsScores); // sort for dedupeTopScoresByUser, this is usually less than 5 scores
 		totalProvenScoreCount += provenScores.length;
 
 		const key = `${beatmapId}:${rulesetId}`;
@@ -192,7 +192,7 @@ Usually not an issue if the downtime was under an hour, there may have been inte
 	await withDbClientTransaction(async client => {
 		for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
 			const dedupedScores = dedupeTopScoresByUser(mapScores);
-			const convertedScores = dedupedScores.map(score =>convertApiScore(score, /*set in upsertBeatmapScores*/ -1, false));
+			const convertedScores = dedupedScores.map(score => convertApiScore(score, /*set in upsertBeatmapScores*/ -1, false));
 
 			const snipes = await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
 			// TODO: send snipe info to pog-ws
@@ -262,7 +262,7 @@ async function upsertBeatmapScores(
 	rulesetId: RulesetId,
 	provenScores: BeatmapScoreFull[]
 ) {
-	if (!provenScores?.length) return;
+	if (!provenScores?.length) return [];
 	await acquireBeatmapAdvisoryLock(client, beatmapId, rulesetId, "scores_ws");
 	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update", "scores_ws");
 
@@ -434,7 +434,7 @@ async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
 				candidate_beatmap_id,
 				candidate_user_id,
 				candidate_score
-			FROM UNNEST($1::bigint[], $2::smallint[], $3::bigint[], $4::integer[], $5::bigint[])
+			FROM UNNEST($1::BIGINT[], $2::SMALLINT[], $3::BIGINT[], $4::INTEGER[], $5::BIGINT[])
 					 AS t(candidate_id, candidate_ruleset_id, candidate_beatmap_id, candidate_user_id, candidate_score)
 		),
 		filtered_candidates AS (
