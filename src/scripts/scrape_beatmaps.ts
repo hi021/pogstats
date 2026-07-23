@@ -111,7 +111,7 @@ export async function scrapeBeatmaps(ids?: number[]) {
 			});
 		} catch (e) {
 			console.error(`[scrape_beatmaps] Failed to scrape, process, and insert batch #${batch.batch_no}:\n`, e);
-			break;
+			throw new Error("scrape_beatmaps failed with above error.");
 		}
 	}
 

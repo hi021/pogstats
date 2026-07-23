@@ -67,8 +67,9 @@ async function reconnectScoresWs() {
 export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINITIONS>) {
 	sessionBatchCount = 0;
 	batchTotalScoreCount = 0;
+	batchCandidateScores.length = 0;
+	batchCandidateBeatmapIds.length = 0;
 	batchLowestScoreId = Infinity;
-	initialCursorScoreId = null;
 	const cursorScoreId = await getCursorScoreId(parsedFlags?.cursorScoreId);
 	initialCursorScoreId = cursorScoreId;
 
@@ -79,14 +80,14 @@ export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINI
 
 export function scoresWsOnClose(code: number, reason: Buffer) {
 	logError(`scores-ws connection closed with code ${code}`, reason?.toString());
-	saveLastScoreId(batchLowestScoreId, "scores_ws");
+	saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
 
 	reconnectScoresWs();
 }
 
 export function scoresWsOnError(e: Error) {
 	logError(`scores-ws error:\n`, e);
-	saveLastScoreId(batchLowestScoreId, "scores_ws");
+	saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
 
 	reconnectScoresWs();
 }
@@ -103,10 +104,10 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 			await endAndSaveScoresBatch();
 			batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		} catch (e) {
-			logError(`failed to process:\n`, e);
+			logError("failed to process:\n", e);
 			batchTimer?.({ success: "false", batchNo: sessionBatchCount });
-			await saveLastScoreId(batchLowestScoreId, "scores_ws");
-			scoresWs.close();
+			await saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
+			scoresWs.close(1011, "Failed to process batch, will attempt to reconnect with cursor score id from before the failure");
 		}
 		return;
 	}
@@ -122,17 +123,17 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 		batchCandidateBeatmapIds.push(score.beatmap_id);
 	} catch (e) {
 		logError(`failed to parse scores-ws message as JSON:\n`, e);
-		await saveLastScoreId(batchLowestScoreId, "scores_ws");
-		scoresWs.close(); // will attempt to reconnect, this may cause 'crash' loops for 1-2h while the offending batch is still in ushio's memory
+		await saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
+		scoresWs.close(1003); // will attempt to reconnect, this may cause 'crash' loops for 1-2h while the offending batch is still in ushio's memory
 	}
 }
 
 function logInfo(msg: string, ...data: any[]) {
-	console.log(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, data);
+	console.log(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, ...data);
 }
 
 function logError(msg: string, ...data: any[]) {
-	console.error(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, data);
+	console.error(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, ...data);
 }
 
 async function getCursorScoreId(cursorScoreIdCli?: string) {
