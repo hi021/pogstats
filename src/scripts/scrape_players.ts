@@ -312,7 +312,7 @@ export async function scrapePlayers(ids?: number[]) {
 			);
 		});
 	} catch (e) {
-		console.error("Error scraping players:\n", e);
+		console.error("[scrape_players] failed:\n", e);
 	}
 }
 

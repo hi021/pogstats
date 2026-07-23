@@ -131,7 +131,6 @@ export const BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS = Object.freeze([
 ]);
 
 // TODO make sure this is respected in every script? I assume you have to make them use the dbPool here
-// TODO I dont think this SHIT works
 // pg returns BIGINTs as strings since numbers over 2^53 (9+E15) lose precision when stored as doubles
 // ignoring this concern here, since score ids are in the billions and ranked score is in the trillions
 // osu! api just returns normal numbers anyway

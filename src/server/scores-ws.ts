@@ -78,14 +78,14 @@ export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINI
 }
 
 export function scoresWsOnClose(code: number, reason: Buffer) {
-	console.error(`[Batch #${sessionBatchCount}] scores-ws connection closed with code ${code}`, reason?.toString());
+	logError(`scores-ws connection closed with code ${code}`, reason?.toString());
 	saveLastScoreId(batchLowestScoreId, "scores_ws");
 
 	reconnectScoresWs();
 }
 
 export function scoresWsOnError(e: Error) {
-	console.error(`[Batch #${sessionBatchCount}] scores-ws error:\n`, e);
+	logError(`scores-ws error:\n`, e);
 	saveLastScoreId(batchLowestScoreId, "scores_ws");
 
 	reconnectScoresWs();
@@ -103,18 +103,17 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 			await endAndSaveScoresBatch();
 			batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		} catch (e) {
-			console.error(`[Batch #${sessionBatchCount}] failed to proces:\n`, e);
+			logError(`failed to process:\n`, e);
 			batchTimer?.({ success: "false", batchNo: sessionBatchCount });
+			await saveLastScoreId(batchLowestScoreId, "scores_ws");
+			scoresWs.close();
 		}
 		return;
 	}
 
 	try {
 		const score = JSON.parse(message) as WsScore;
-		if (!score.id) {
-			console.warn(`[Batch #${sessionBatchCount}] skipping malformed scores-ws JSON:\n`, score);
-			return;
-		}
+		if (!score.id) return logError(`skipping malformed scores-ws JSON:\n`, score);
 
 		++batchTotalScoreCount;
 		if (!isCandidateScore(score)) return;
@@ -122,9 +121,18 @@ export async function scoresWsOnMessage(event: WebSocket.RawData) {
 		batchCandidateScores.push(score);
 		batchCandidateBeatmapIds.push(score.beatmap_id);
 	} catch (e) {
-		console.error(`[Batch #${sessionBatchCount}] failed to parse scores-ws message as JSON:\n`, e);
-		saveLastScoreId(batchLowestScoreId, "scores_ws");
+		logError(`failed to parse scores-ws message as JSON:\n`, e);
+		await saveLastScoreId(batchLowestScoreId, "scores_ws");
+		scoresWs.close(); // will attempt to reconnect, this may cause 'crash' loops for 1-2h while the offending batch is still in ushio's memory
 	}
+}
+
+function logInfo(msg: string, ...data: any[]) {
+	console.log(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, data);
+}
+
+function logError(msg: string, ...data: any[]) {
+	console.error(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, data);
 }
 
 async function getCursorScoreId(cursorScoreIdCli?: string) {
@@ -144,21 +152,22 @@ function parseCursorScoreId(cursorScoreIdCli?: string) {
 }
 
 async function endAndSaveScoresBatch(scores = batchCandidateScores) {
-	console.log("");
-	console.log(`[Batch #${sessionBatchCount}] ${batchTotalScoreCount} scores total | ${scores?.length} candidate scores`);
+	console.log();
+	logInfo(`${batchTotalScoreCount} scores total | ${scores.length} candidate scores`);
 	if (sessionBatchCount <= 1 && initialCursorScoreId && batchLowestScoreId > initialCursorScoreId + 1)
-		// This is usually not an issue if the downtime was under an hour, there may have been intermediate failed or other mode scores
 		console.warn(
-			`POSSIBLE DATA LOSS:\nGap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})`
+			`POSSIBLE DATA LOSS: gap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})
+Usually not an issue if the downtime was under an hour, there may have been intermediate scores from other modes or with passed = false`
 		);
-	if (!scores?.length) return;
+	if (!scores.length) return;
 
-	let beatenScoresByMaps: ProvenScoresPerRulesetBeatmap[] = [];
-	await withDbClientTransaction(async client => {
+	const beatenScoresByMaps = await withDbClientTransaction(async client => {
 		await fetchNewBeatmaps(client, batchCandidateBeatmapIds, () => (batchCandidateBeatmapIds.length = 0), "scores_ws");
-		beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
+		const beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
 		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
 		await fetchNewPlayers(client, provenUserIds, undefined, "scores_ws");
+
+		return beatenScoresByMaps;
 	});
 
 	let totalProvenScoreCount = 0;
@@ -177,15 +186,14 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 			: provenScoresByMaps.set(key, { beatmapId, rulesetId, scores: provenScores });
 	}
 
-	if (VERBOSE) console.log(`[Batch #${sessionBatchCount}] found ${totalProvenScoreCount} new (proven) top 100 score(s)`);
+	if (VERBOSE) logInfo(`found ${totalProvenScoreCount} new (proven) top 100 score(s)`);
 	recordScoreBatchCounts(batchTotalScoreCount, totalProvenScoreCount);
 
 	await withDbClientTransaction(async client => {
 		for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
 			const dedupedScores = dedupeTopScoresByUser(mapScores);
-			const convertedScores = dedupedScores.map(score =>
-				convertApiScore(score, /* positions set later in upsertBeatmapScores */ -1, false)
-			);
+			const convertedScores = dedupedScores.map(score =>convertApiScore(score, /*set in upsertBeatmapScores*/ -1, false));
+
 			const snipes = await upsertBeatmapScores(client, beatmapId, rulesetId, convertedScores);
 			// TODO: send snipe info to pog-ws
 		}
@@ -195,6 +203,8 @@ async function endAndSaveScoresBatch(scores = batchCandidateScores) {
 	batchLowestScoreId = Infinity;
 	batchTotalScoreCount = 0;
 	scores.length = 0;
+
+	logInfo("finished processing");
 }
 
 function isCandidateScore(score: WsScore) {

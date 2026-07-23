@@ -18,9 +18,9 @@ import {
 	VERBOSE
 } from "./env.js";
 import { queryWithTiming, recordMissingEntity } from "./metrics.js";
-import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 import { scrapeBeatmaps } from "./scripts/scrape_beatmaps.js";
 import { scrapePlayers } from "./scripts/scrape_players.js";
+import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 
 export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number) {
 	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
@@ -36,7 +36,7 @@ export async function acquireBeatmapAdvisoryLock(
 	await queryWithTiming(client, "acquireBeatmapAdvisoryLock", source, "SELECT pg_advisory_xact_lock($1)", [lockKey]);
 }
 
-// Saving the lowest score id from given batch just to be safe for now - probably unnecessary, as the ids seem to be ordered
+// Saving the lowest score id from given batch just to be safe - probably unnecessary, as the ids seem to be ordered
 export async function saveLastScoreId(scoreId: number, source: ActionSource = "unknown") {
 	if (isNaN(scoreId) || !isFinite(scoreId)) return;
 	await withDbClient(client =>
@@ -119,14 +119,14 @@ export async function fetchNewBeatmaps(
 	try {
 		const missingIds = await getInexistentBeatmapIds(client, beatmapIds, source);
 		if (missingIds?.length) {
-			if (VERBOSE) console.log(`Found ${missingIds.length} new beatmap id(s) not in the database`);
+			if (VERBOSE) console.log(`[${source}] found ${missingIds.length} new beatmap id(s) not in the database`);
 			recordMissingEntity("beatmap", missingIds.length);
 			await scrapeBeatmaps(missingIds);
 		}
 
 		callback?.();
 	} catch (e) {
-		console.error(`[${source}] failed to fetch missing beatmaps:\n`, e);
+		throw new Error(`Failed to fetch missing beatmaps:\n${e}`);
 	}
 }
 
@@ -139,14 +139,14 @@ export async function fetchNewPlayers(
 	try {
 		const missingIds = await getInexistentPlayerIds(client, playerIds, source);
 		if (missingIds?.length) {
-			if (VERBOSE) console.log(`Found ${missingIds.length} new player id(s) not in the database`);
+			if (VERBOSE) console.log(`[${source}] found ${missingIds.length} new player id(s) not in the database`);
 			recordMissingEntity("player", missingIds.length);
 			await scrapePlayers(missingIds);
 		}
 
 		callback?.();
 	} catch (e) {
-		console.error(`[${source}] failed to fetch missing players:\n`, e);
+		throw new Error(`Failed to fetch missing players:\n${e}`);
 	}
 }
 
