@@ -160,6 +160,7 @@ export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, ru
 				b.star_rating AS base_star_rating,
 				b.total_length AS base_total_length,
 				b.od AS base_od,
+				b.ar as base_ar,
 				s.position AS highest_non_perma_position
 		FROM ${DB_BEATMAPS_TABLE} b
 			LEFT JOIN (
@@ -172,8 +173,9 @@ export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, ru
 						AND is_perma = FALSE
 					ORDER BY beatmap_id, ruleset_id, position
 			) s ON s.beatmap_id = b.id AND s.ruleset_id = b.ruleset_id
-		WHERE b.star_rating < 2.5
-			AND b.od <= 5
+		WHERE b.star_rating < 2.7
+			AND b.od <= 4.5
+			AND b.ar <= 6
 			AND s.position <= $2`,
 		[rulesetId, positionThreshold]
 	);
