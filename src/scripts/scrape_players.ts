@@ -210,6 +210,7 @@ async function processPlayerBatch(batch: IdBatch, miaPlayers: Map<number, Date>,
 
 export async function scrapePlayers(ids?: number[]) {
 	try {
+		scrapedPlayerCount = 0;
 		const playerIdBatches = ids ? splitIntoBatches(ids, PLAYER_BATCH_SIZE) : await getRankingPlayerIdBatches(MAX_RETRIEVED_AT);
 		if (!playerIdBatches?.length) return;
 
