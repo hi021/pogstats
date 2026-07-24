@@ -27,12 +27,12 @@ cd "$HOME/pogstats/target/scripts"
 
 if [[ -n "$minDate" ]]; then
   echo "Using min date: $minDate"
-  node scrape_scores.js --minDate "$minDate" \
+  /home/hi/.local/share/fnm/aliases/default/bin/node scrape_scores.js --minDate "$minDate" \
     1>"/dev/null" \
     2>"$HOME/pogstats/data/logs/scrape_scores_errors_cli.log" &
 else
   echo "No min date provided"
-  node scrape_scores.js \
+  /home/hi/.local/share/fnm/aliases/default/bin/node scrape_scores.js \
     1>"/dev/null" \
     2>"$HOME/pogstats/data/logs/scrape_scores_errors_cli.log" &
 fi
