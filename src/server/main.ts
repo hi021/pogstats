@@ -30,9 +30,7 @@ app.use(metricsMiddleware);
 app.use(requestTimingMiddleware);
 app.use(socketDebugMessageEndpoint); // TODO debug only
 app.use(router.routes()).use(router.allowedMethods());
-app.on("error", (e, ctx) => {
-	console.error("Server error:\n", ctx.url, e);
-});
+app.on("error", (e, ctx) => console.error("Server error:\n", ctx.url, e));
 
 server.on("upgrade", onUpgrade);
 wss.on("connection", onConnect);

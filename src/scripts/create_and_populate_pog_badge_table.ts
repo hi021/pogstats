@@ -39,7 +39,7 @@ async function createTables(client: ClientBase) {
 async function populateTables(client: ClientBase) {
 	console.log(`Populating ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables with initial values`);
 	console.log(
-		"\nWarning! This WILL FAIL when first initializing the database, as there are no players yet (pog_badges_user_fk), don't worry :)\n"
+		"\nWarning! This WILL FAIL when first initializing the database, as there are no players yet (pog_badges_user_fk), don't worry :)"
 	);
 
 	for (const badge of POG_BADGES)
@@ -57,7 +57,7 @@ async function populateTables(client: ClientBase) {
 		}
 	}
 
-	console.log(`Populated ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables with initial values`);
+	console.log(`Populated ${DB_POG_BADGES_TABLE} and ${DB_PLAYER_POG_BADGES_TABLE} tables with initial values\n`);
 }
 
 async function main() {

@@ -38,6 +38,7 @@ let sessionBatchCount = 0;
 let batchTotalScoreCount = 0;
 let batchLowestScoreId = Infinity; // assumes score ids to be monotonic
 let initialCursorScoreId: number | null = null;
+let isReconnecting = false;
 
 const agent = new https.Agent({ keepAlive: true, sessionTimeout: 900, rejectUnauthorized: DEV_ENV });
 export let scoresWsPing: NodeJS.Timeout;
@@ -48,6 +49,9 @@ function startScoresWsPing() {
 }
 
 async function reconnectScoresWs() {
+	if (isReconnecting) return;
+	isReconnecting = true;
+
 	try {
 		clearInterval(scoresWsPing);
 		await sleep(SCORES_WS_RECONNECTION_INTERVAL);
@@ -61,6 +65,8 @@ async function reconnectScoresWs() {
 	} catch (e) {
 		console.error("failed to reconnect to scores-ws\n:", e);
 		setTimeout(reconnectScoresWs, SCORES_WS_RECONNECTION_INTERVAL);
+	} finally {
+		isReconnecting = false;
 	}
 }
 
@@ -224,7 +230,6 @@ function dedupeTopScoresByUser(scores: WsScore[]) {
 	});
 }
 
-// Single temp table prevents concurrency (processing multiple beatmaps at once) I think
 async function createTempScoresTable(client: ClientBase) {
 	// Omits is_perma since it'll get calculated on insertion into the actual table
 	await queryWithTiming(

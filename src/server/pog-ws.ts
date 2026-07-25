@@ -8,7 +8,7 @@ export const BASE_POG_WS_URL = API_BASE_URL + "socket/";
 const POG_WS_SCORES_URL = BASE_POG_WS_URL + "scores";
 const POG_WS_RESTRICTIONS_URL = BASE_POG_WS_URL + "restrictions";
 
-export const wss = new WebSocketServer({ noServer: true });
+export const wss = new WebSocketServer({ noServer: true,  });
 export const wsClients = new Set<WebSocket>();
 
 export function onUpgrade(req: http.IncomingMessage, socket: stream.Duplex, head: Buffer) {
@@ -37,6 +37,4 @@ export async function socketDebugMessageEndpoint(ctx: ParameterizedContext<Defau
 		ctx.body = { sent: message };
 		return;
 	}
-
-	await next();
 }
