@@ -4,7 +4,6 @@ import { LabelValues } from "prom-client";
 import WebSocket from "ws";
 import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
-	acquireBeatmapAdvisoryLock,
 	fetchNewBeatmaps,
 	fetchNewPlayers,
 	getLastScoreId,
@@ -35,6 +34,7 @@ const batchCandidateScores = new Array<WsScore>();
 const batchCandidateBeatmapIds = new Array<number>();
 let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
 let sessionBatchCount = 0;
+let processingBatchNo: number | null = null;
 let batchTotalScoreCount = 0;
 let batchLowestScoreId = Infinity; // assumes score ids to be monotonic
 let initialCursorScoreId: number | null = null;
@@ -71,6 +71,7 @@ async function reconnectScoresWs() {
 
 export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINITIONS>) {
 	sessionBatchCount = 0;
+	processingBatchNo = null;
 	batchTotalScoreCount = 0;
 	batchCandidateScores.length = 0;
 	batchCandidateBeatmapIds.length = 0;
@@ -100,23 +101,8 @@ export function scoresWsOnError(e: Error) {
 
 export async function scoresWsOnMessage(event: WebSocket.RawData) {
 	const message = event.toString();
-	if (message === "start-batch") {
-		batchTimer = scoreBatchDuration.startTimer();
-		return;
-	}
-	if (message === "end-batch") {
-		try {
-			++sessionBatchCount;
-			await endAndSaveScoresBatch();
-			batchTimer?.({ success: "true", batchNo: sessionBatchCount });
-		} catch (e) {
-			logError("failed to process:\n", e);
-			batchTimer?.({ success: "false", batchNo: sessionBatchCount });
-			await saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
-			scoresWs.close(1011, "Failed to process batch, will attempt to reconnect with cursor score id from before the failure");
-		}
-		return;
-	}
+	if (message === "start-batch") return (batchTimer = scoreBatchDuration.startTimer());
+	if (message === "end-batch") return await endScoresBatch();
 
 	try {
 		const score = JSON.parse(message) as WsScore;
@@ -158,12 +144,32 @@ function parseCursorScoreId(cursorScoreIdCli?: string) {
 	return parsed;
 }
 
-async function endAndSaveScoresBatch(scores = batchCandidateScores) {
+async function endScoresBatch() {
+	try {
+		if (processingBatchNo)
+			return logInfo(
+				"WARNING: this batch is still being processed, but the next one is available. Skipping execution and awaiting next batch to retry"
+			);
+
+		processingBatchNo = ++sessionBatchCount;
+		await saveScoresBatch();
+		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
+		processingBatchNo = null;
+	} catch (e) {
+		logError("failed to process:\n", e);
+		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
+		processingBatchNo = null;
+		await saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
+		scoresWs.close(1011, "Failed to process batch, will attempt to reconnect with cursor score id from before the failure");
+	}
+}
+
+async function saveScoresBatch(scores = batchCandidateScores) {
 	console.log();
 	logInfo(`${batchTotalScoreCount} scores total | ${scores.length} candidate scores`);
 	if (sessionBatchCount <= 1 && initialCursorScoreId && batchLowestScoreId > initialCursorScoreId + 1)
 		console.warn(
-			`POSSIBLE DATA LOSS: gap between cursor score id (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})
+			`POSSIBLE DATA LOSS: ${batchLowestScoreId - initialCursorScoreId} score gap between cursor (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})
 Usually not an issue if the downtime was under an hour, there may have been intermediate scores from other modes or with passed = false`
 		);
 	if (!scores.length) return;
@@ -231,7 +237,7 @@ function dedupeTopScoresByUser(scores: WsScore[]) {
 }
 
 async function createTempScoresTable(client: ClientBase) {
-	// Omits is_perma since it'll get calculated on insertion into the actual table
+	// Omits is_perma since it gets calculated on insertion into the actual table
 	await queryWithTiming(
 		client,
 		"createTempScoresTable",
@@ -269,7 +275,6 @@ async function upsertBeatmapScores(
 	provenScores: BeatmapScoreFull[]
 ) {
 	if (!provenScores?.length) return [];
-	await acquireBeatmapAdvisoryLock(client, beatmapId, rulesetId, "scores_ws");
 	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update", "scores_ws");
 
 	const existingScores = await queryWithTiming<ScoreBasicData>(

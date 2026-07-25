@@ -26,6 +26,7 @@ export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number
 	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
 }
 
+// probably useless rn?
 export async function acquireBeatmapAdvisoryLock(
 	client: ClientBase,
 	beatmapId: number,
