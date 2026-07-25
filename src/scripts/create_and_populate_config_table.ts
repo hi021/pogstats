@@ -14,12 +14,12 @@ const FLAG_DEFINITIONS = Object.freeze({
 // TODO: come up with real values
 // TODO: move to redis
 const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
-	{ key: "std_min_top100", valueInt: 900 },
-	{ key: "std_min_top50", valueInt: 500 },
-	{ key: "std_min_top25", valueInt: 200 },
-	{ key: "std_min_top15", valueInt: 100 },
-	{ key: "std_min_top8", valueInt: 50 },
-	{ key: "std_min_top1", valueInt: 4 },
+	{ key: "osu_min_top100", valueInt: 900 },
+	{ key: "osu_min_top50", valueInt: 500 },
+	{ key: "osu_min_top25", valueInt: 200 },
+	{ key: "osu_min_top15", valueInt: 100 },
+	{ key: "osu_min_top8", valueInt: 50 },
+	{ key: "osu_min_top1", valueInt: 4 },
 	{ key: "taiko_min_top100", valueInt: 750 },
 	{ key: "taiko_min_top50", valueInt: 500 },
 	{ key: "taiko_min_top25", valueInt: 200 },
@@ -47,10 +47,10 @@ async function createConfigTable(client: ClientBase) {
 
 	await client.query(`
     CREATE TABLE IF NOT EXISTS ${DB_CONFIG_TABLE} (
-      key TEXT PRIMARY KEY,
-			value_int INTEGER,
-			value_text TEXT,
-			value_json JSONB
+      key 				TEXT PRIMARY KEY,
+			value_int 	INTEGER,
+			value_text 	TEXT,
+			value_json 	JSONB
     )`);
 
 	console.log(`Created ${DB_CONFIG_TABLE} table if didn't exist`);
