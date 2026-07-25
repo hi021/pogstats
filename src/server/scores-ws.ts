@@ -65,7 +65,6 @@ async function reconnectScoresWs() {
 	} catch (e) {
 		console.error("failed to reconnect to scores-ws\n:", e);
 		setTimeout(reconnectScoresWs, SCORES_WS_RECONNECTION_INTERVAL);
-	} finally {
 		isReconnecting = false;
 	}
 }
@@ -82,6 +81,7 @@ export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINI
 	console.log(`connecting to scores-ws with cursor score id: ${cursorScoreId}`);
 	scoresWs.send(cursorScoreId);
 	startScoresWsPing();
+	isReconnecting = false;
 }
 
 export function scoresWsOnClose(code: number, reason: Buffer) {
