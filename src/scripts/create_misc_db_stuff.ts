@@ -4,32 +4,36 @@ import { withDbClient } from "../db-generic.js";
 async function createMiscellaneousDBFunctions(client: ClientBase) {
 	console.log("Attempting to create miscellaneous DB functions");
 
-	// osu takes into top 1000 pp scores consideration, not just 250, but 0.1pp has never hurt anybody
+	// osu takes into top 1000 pp scores consideration, not just 250, but 0.1pp has never hurt anybody....
 	await client.query(`
-		CREATE OR REPLACE FUNCTION calc_weighted_pp_sfunc(acc real, pp real, idx integer)
-		RETURNS real
-		LANGUAGE plpgsql
-		AS $$
-		DECLARE
-				w real;
-		BEGIN
-				IF idx > 250 THEN
-					RETURN acc;
-				END IF;
-
-				w := coalesce(pp, 0) * power(0.95, idx - 1);
-				IF w < 1e-9 THEN
-					RETURN acc;
-				END IF;
-
-				RETURN acc + w;
-		END;
+		CREATE OR REPLACE FUNCTION calc_weighted_pp_ordered_sfunc(state real[], pp real)
+			RETURNS real[]
+			LANGUAGE sql
+			IMMUTABLE PARALLEL SAFE
+			AS $$
+				SELECT CASE 
+					WHEN state[2] > 250 THEN state
+					WHEN pp IS NOT NULL AND pp > 0 THEN ARRAY[state[1] + (pp * power(0.95, state[2] - 1)), state[2] + 1]
+					ELSE state
+				END;
 		$$;
 
-		CREATE OR REPLACE AGGREGATE calc_weighted_pp(real, integer) (
-			sfunc = calc_weighted_pp_sfunc,
-			stype = real,
-			initcond = 0
+		CREATE OR REPLACE FUNCTION calc_weighted_pp_ordered_final(state real[])
+			RETURNS real
+			LANGUAGE sql
+			IMMUTABLE PARALLEL SAFE
+			AS $$
+				SELECT state[1];
+		$$;
+
+		DROP AGGREGATE IF EXISTS calc_weighted_pp_ordered(real);
+
+		CREATE AGGREGATE calc_weighted_pp_ordered(real) (
+			SFUNC = calc_weighted_pp_ordered_sfunc,
+			STYPE = real[],
+			FINALFUNC = calc_weighted_pp_ordered_final,
+			INITCOND = '{0,1}',
+			PARALLEL = SAFE
 		);
 		
 		CREATE EXTENSION if not exists pg_trgm;
