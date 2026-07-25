@@ -17,6 +17,7 @@ import {
 	convertApiPlayerLookup,
 	formatMilliseconds,
 	getMinDate,
+	parseIdList,
 	rateLimit
 } from "./shared.js";
 
@@ -25,6 +26,11 @@ const FLAG_DEFINITIONS = Object.freeze({
 	minDate: {
 		cli: "--minDate <date>",
 		description: "Only scrape players whose retrieved_at is NULL or before this date (ISO 8601 or YYYY-MM-DD)",
+		takesValue: true
+	},
+	ids: {
+		cli: "--ids <ids>",
+		description: "Scrape only specific player IDs (comma-separated). If not provided, scrapes all ranking players",
 		takesValue: true
 	}
 } as const);
@@ -311,6 +317,8 @@ export async function scrapePlayers(ids?: number[]) {
 				[...miaBeatmapsUnnested.ruleset_id, ...nonMiaBeatmapsUnnested.ruleset_id],
 				"scrape_players"
 			);
+
+			// TODO: this also must trigger ranking table recalcs!
 		});
 	} catch (e) {
 		console.error("[scrape_players] failed:\n", e);
@@ -318,4 +326,12 @@ export async function scrapePlayers(ids?: number[]) {
 	}
 }
 
-if (import.meta.main) scrapePlayers();
+if (import.meta.main) {
+	try {
+		const playerIds = parseIdList(parsedFlags.ids);
+		scrapePlayers(playerIds);
+	} catch (e) {
+		console.error("[scrape_players] Failed to parse CLI arguments:\n", e);
+		process.exit(1);
+	}
+}

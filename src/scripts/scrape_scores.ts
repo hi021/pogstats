@@ -34,6 +34,7 @@ import {
 	getMinDate,
 	logError,
 	logInfo,
+	parseIdList,
 	rateLimit
 } from "./shared.js";
 
@@ -47,6 +48,12 @@ const FLAG_DEFINITIONS = Object.freeze({
 		cli: "--skipDump",
 		description: "Skip dumping the current scores table before scraping",
 		takesValue: false
+	},
+	ids: {
+		cli: "--ids <ids>",
+		description:
+			"Scrape scores only for specific beatmap IDs (comma-separated). If not provided, scrapes all ranked/approved/loved beatmaps in the db",
+		takesValue: true
 	}
 } as const);
 
@@ -199,7 +206,10 @@ async function scrapeScores() {
 		if (!SKIP_DUMP_BEFORE_SCRAPE)
 			withDbClient(async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream));
 
-		const beatmapIds = await withDbClient(async client => await getBeatmapIds(client, ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE));
+		const specifiedBeatmapIds = parseIdList(parsedFlags.ids);
+		const beatmapIds =
+			specifiedBeatmapIds ||
+			(await withDbClient(async client => await getBeatmapIds(client, ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE)));
 		logInfo(
 			infoLogStream,
 			`Found ${beatmapIds.length} beatmap IDs to process - projected time to scrape: ${formatMilliseconds((beatmapIds.length - 1) * SCRAPE_SCORE_DELAY_MS + 300)}`
@@ -221,4 +231,11 @@ async function scrapeScores() {
 	}
 }
 
-scrapeScores();
+if (import.meta.main) {
+	try {
+		scrapeScores();
+	} catch (e) {
+		console.error("[scrape_scores] Failed to parse CLI arguments:\n", e);
+		process.exit(1);
+	}
+}

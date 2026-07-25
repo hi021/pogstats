@@ -54,6 +54,18 @@ export const buildHeadersWithAuth = (token: string) => {
 	};
 };
 
+export function parseIdList(idString?: string): number[] | undefined {
+	if (!idString) return;
+
+	const ids = idString.split(",").map(id => {
+		const parsed = parseInt(id.trim(), 10);
+		if (isNaN(parsed) || parsed <= 0) throw new Error(`Invalid ID: ${id.trim()}`);
+		return parsed;
+	});
+
+	return ids;
+}
+
 export function getMinDate(value: string | undefined) {
 	if (!value) return undefined;
 	const date = new Date(value);
