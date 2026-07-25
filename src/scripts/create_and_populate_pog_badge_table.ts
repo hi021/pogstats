@@ -10,8 +10,7 @@ const POG_BADGES: Readonly<ProtoPogBadge[]> = Object.freeze([
 	{ id: 2, name: "idiot", imgUrl: "/badges/unhappi.png", playerIds: [1023489] },
 	{ id: 3, name: undefined, imgUrl: "/badges/wither.svg", playerIds: [9991650] },
 	{ id: 4, name: undefined, imgUrl: "/badges/star.svg", playerIds: [11482346] },
-	{ id: 5, name: undefined, imgUrl: "/badges/doggo.png", playerIds: [11495715] },
-	{ id: 6, name: "poge", imgUrl: "/badges/pognerchamp.png", playerIds: [14697237] }
+	{ id: 5, name: undefined, imgUrl: "/badges/doggo.png", playerIds: [11495715] }
 ]);
 
 async function createTables(client: ClientBase) {

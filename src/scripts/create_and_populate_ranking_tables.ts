@@ -3,9 +3,9 @@ import { withDbClientTransaction } from "../db-generic.js";
 import { DB_RANKING_TABLE_COMMON } from "../env.js";
 
 async function createRankingTables(client: ClientBase) {
-	console.log(`Creating osu_${DB_RANKING_TABLE_COMMON} (yes, only standard for now) if not exists`)
+	console.log(`Creating osu_${DB_RANKING_TABLE_COMMON} (yes, only standard for now) if not exists`);
 
-		await client.query(`
+	await client.query(`
 			CREATE TABLE IF NOT EXISTS osu_${DB_RANKING_TABLE_COMMON} (
 				user_id 							INTEGER PRIMARY KEY,
 				username 							TEXT NOT NULL,
@@ -66,18 +66,17 @@ async function createRankingTables(client: ClientBase) {
 				weighted_pp_1					REAL NOT NULL DEFAULT 0
 			)`);
 
-		console.log(`Created osu_${DB_RANKING_TABLE_COMMON} if didn't exist`)
+	console.log(`Created osu_${DB_RANKING_TABLE_COMMON} if didn't exist`);
 }
 
 // watch out, this takes at least a minute for standard only
-async function populateRankingTables(client: ClientBase) {
-}
+async function populateRankingTables(client: ClientBase) {}
 
 async function main() {
 	await withDbClientTransaction(async client => {
 		await createRankingTables(client);
 		await populateRankingTables(client);
-	})
+	});
 }
 
 main();
