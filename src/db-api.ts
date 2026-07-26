@@ -99,19 +99,7 @@ export async function getPositionSpreadForPlayer(client: ClientBase, playerId: n
 		client,
 		"getPositionSpreadForPlayer",
 		"pog_api_v2",
-		`
-		WITH counts AS (
-				SELECT position, COUNT(id) AS cnt
-				FROM ${DB_SCORES_TABLE}
-				WHERE user_id = $1
-					AND ruleset_id = $2
-					AND position BETWEEN 1 AND 100
-				GROUP BY position
-		),
-		arr AS (SELECT array_agg(cnt ORDER BY position) AS a FROM counts)
-
-		SELECT json_agg(COALESCE(arr.a[i], 0) ORDER BY i) AS spread
-		FROM arr, generate_series(1, 100) AS g(i)`,
+		`SELECT get_position_spread($1, $2::SMALLINT) AS spread`,
 		[playerId, rulesetId]
 	);
 
