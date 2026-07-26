@@ -1,181 +1,124 @@
-import https from "https";
 import { ClientBase } from "pg";
 import { LabelValues } from "prom-client";
-import WebSocket from "ws";
 import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
 import {
 	fetchNewBeatmaps,
 	fetchNewPlayers,
-	getLastScoreId,
+	getScoresCursor,
 	insertHistoricalPlayerSnipes,
 	recalculateScorePositionsForMaps,
-	saveLastScoreId,
+	saveScoresCursor,
 	updateBeatmapScoresRetrievalDate
 } from "../db.js";
-import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, DEV_ENV, VERBOSE } from "../env.js";
+import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE, VERBOSE } from "../env.js";
 import { queryWithTiming, recordScoreBatchCounts, scoreBatchDuration } from "../metrics.js";
+import { getOAuthToken } from "../scripts/osu_auth.js";
+import { buildHeadersWithAuth, buildScoresUrl } from "../scripts/shared.js";
 import {
 	convertApiScore,
 	ParsedFlags,
 	prepareScoresTableValuesAndParamPlaceholders,
 	RANKING_POS_THRESHOLDS,
-	sleep,
 	sortScores,
 	sortWsScores,
 	unnestObjectsIntoArrays
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
 
-const SCORES_WS_URL = "wss://ushio.chiffa.lol";
-const SCORES_WS_PING_INTERVAL = 30000;
-const SCORES_WS_RECONNECTION_INTERVAL = 10000;
+const OSU_OAUTH_TOKEN_REFRESH_INTERVAL = 22*60*60*1000;
+const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 25000;
+const SCORES_ENDPOINT_FETCH_INTERVAL = 22000;
+const SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL = 0;
+const SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL = 1100; // exponential back-off, 1100 * 2^n, up to n = 6 (max. 70400 ms)
 
-const batchCandidateScores = new Array<WsScore>();
-const batchCandidateBeatmapIds = new Array<number>();
+let scoresFetchTimeout: NodeJS.Timeout;
 let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
+let osuOAuthToken = "";
+let tokenRefreshTimeout: NodeJS.Timeout;
 let sessionBatchCount = 0;
 let processingBatchNo: number | null = null;
-let batchTotalScoreCount = 0;
-let batchLowestScoreId = Infinity; // assumes score ids to be monotonic
+let highestProcessedScoreId = 0;
+let currentCursorString: string | null = null;
 let initialCursorScoreId: number | null = null;
-let isReconnecting = false;
+let batchProcessingFailCount = 0;
 
-const agent = new https.Agent({ keepAlive: true, sessionTimeout: 900, rejectUnauthorized: DEV_ENV });
-export let scoresWsPing: NodeJS.Timeout;
-export let scoresWs = new WebSocket(SCORES_WS_URL, { agent });
-
-function startScoresWsPing() {
-	scoresWsPing = setInterval(() => scoresWs.readyState === WebSocket.OPEN && scoresWs.ping(), SCORES_WS_PING_INTERVAL);
-}
-
-async function reconnectScoresWs() {
-	if (isReconnecting) return;
-	isReconnecting = true;
-
-	try {
-		clearInterval(scoresWsPing);
-		await sleep(SCORES_WS_RECONNECTION_INTERVAL);
-		console.log("reconnecting to scores-ws");
-
-		scoresWs = new WebSocket(SCORES_WS_URL, { agent });
-		scoresWs.on("open", scoresWsOnOpen);
-		scoresWs.on("error", scoresWsOnError);
-		scoresWs.on("close", scoresWsOnClose);
-		scoresWs.on("message", scoresWsOnMessage);
-	} catch (e) {
-		console.error("failed to reconnect to scores-ws\n:", e);
-		setTimeout(reconnectScoresWs, SCORES_WS_RECONNECTION_INTERVAL);
-		isReconnecting = false;
-	}
-}
-
-export async function scoresWsOnOpen(parsedFlags: ParsedFlags<typeof FLAG_DEFINITIONS>) {
+export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG_DEFINITIONS>) {
 	sessionBatchCount = 0;
 	processingBatchNo = null;
-	batchTotalScoreCount = 0;
-	batchCandidateScores.length = 0;
-	batchCandidateBeatmapIds.length = 0;
-	batchLowestScoreId = Infinity;
-	const cursorScoreId = await getCursorScoreId(parsedFlags?.cursorScoreId);
-	initialCursorScoreId = cursorScoreId;
+	highestProcessedScoreId = 0;
+	currentCursorString = null;
+	batchProcessingFailCount = 0;
 
-	console.log(`connecting to scores-ws with cursor score id: ${cursorScoreId}`);
-	scoresWs.send(cursorScoreId);
-	startScoresWsPing();
-	isReconnecting = false;
+	const cursors = await getScoresCursors(parsedFlags?.cursorScoreId);
+	initialCursorScoreId = cursors.lastScoresId;
+
+	await refreshOAuthToken();
+
+	scoresFetchTimeout = setTimeout(() => {
+		console.log(`connecting to scores endpoint with cursor: ${cursors.scoresCursorString}`);
+		fetchScoresBatch(cursors);
+	}, SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL);
 }
 
-export function scoresWsOnClose(code: number, reason: Buffer) {
-	logError(`scores-ws connection closed with code ${code}`, reason?.toString());
-	saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
-
-	reconnectScoresWs();
-}
-
-export function scoresWsOnError(e: Error) {
-	logError(`scores-ws error:\n`, e);
-	saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
-
-	reconnectScoresWs();
-}
-
-export async function scoresWsOnMessage(event: WebSocket.RawData) {
-	const message = event.toString();
-	if (message === "start-batch") return (batchTimer = scoreBatchDuration.startTimer());
-	if (message === "end-batch") return await endScoresBatch();
-
+async function fetchScoresBatch(cursors: {scoresCursorString?: string, lastScoresId: number}) {
 	try {
-		const score = JSON.parse(message) as WsScore;
-		if (!score.id) return logError(`skipping malformed scores-ws JSON:\n`, score);
+		batchTimer = scoreBatchDuration.startTimer();
+		// TODO: only osu!standard for now...
+		const res = await fetch(buildScoresUrl(cursors.scoresCursorString, "osu"), { headers: buildHeadersWithAuth(osuOAuthToken) });
+		if (!res.ok) throw new Error(`failed to fetch scores from endpoint: ${res.status} ${res.statusText}`);
 
-		++batchTotalScoreCount;
-		if (!isCandidateScore(score)) return;
-		batchLowestScoreId = score.id < batchLowestScoreId ? score.id : batchLowestScoreId;
-		batchCandidateScores.push(score);
-		batchCandidateBeatmapIds.push(score.beatmap_id);
+		const resJson: ApiScoresResponse = await res.json();
+		// TODO: DEBUG ONLY:
+		resJson.scores.map((s, idx) => {
+			console.log(idx, s.id, s.ended_at, typeof s.ended_at);
+		});
+		cursors = await endScoresBatch(resJson.scores, resJson.cursor_string);
+		
+		batchProcessingFailCount = 0;
+		scoresFetchTimeout = setTimeout(() => fetchScoresBatch(cursors), SCORES_ENDPOINT_FETCH_INTERVAL);
 	} catch (e) {
-		logError(`failed to parse scores-ws message as JSON:\n`, e);
-		await saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
-		scoresWs.close(1003); // will attempt to reconnect, this may cause 'crash' loops for 1-2h while the offending batch is still in ushio's memory
+		++batchProcessingFailCount;
+		logError("failed to fetch:\n", e);
+		scoresFetchTimeout = setTimeout(() => fetchScoresBatch(cursors), SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL * Math.min(6, batchProcessingFailCount) ** 2);
 	}
 }
 
-function logInfo(msg: string, ...data: any[]) {
-	console.log(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, ...data);
-}
-
-function logError(msg: string, ...data: any[]) {
-	console.error(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, ...data);
-}
-
-async function getCursorScoreId(cursorScoreIdCli?: string) {
-	const parsed = parseCursorScoreId(cursorScoreIdCli);
-	return parsed == null ? await getLastScoreId("scores_ws") : parsed;
-}
-
-function parseCursorScoreId(cursorScoreIdCli?: string) {
-	if (cursorScoreIdCli == null) return null;
-
-	const parsed = parseInt(cursorScoreIdCli, 10);
-	if (isNaN(parsed) || parsed < 0) {
-		console.error(`Invalid cursor score id, must be a non-negative number: ${cursorScoreIdCli}`);
-		process.exit(9);
-	}
-	return parsed;
-}
-
-async function endScoresBatch() {
+async function endScoresBatch(scores: ApiScore[], cursorString: string) {
 	try {
 		if (processingBatchNo)
-			return logInfo(
-				"WARNING: this batch is still being processed, but the next one is available. Skipping execution and awaiting next batch to retry"
+			throw new Error(
+				`batch #${processingBatchNo} is still being processed, but the next one is available. Skipping execution and awaiting next batch to retry`
 			);
 
 		processingBatchNo = ++sessionBatchCount;
-		await saveScoresBatch();
+		await saveScoresBatch(scores, cursorString);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		processingBatchNo = null;
 	} catch (e) {
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 		processingBatchNo = null;
-		await saveLastScoreId((batchLowestScoreId || 1) - 1, "scores_ws");
-		scoresWs.close(1011, "Failed to process batch, will attempt to reconnect with cursor score id from before the failure");
+		await saveScoresCursor(highestProcessedScoreId - 1, "", "scores_ws");
 	}
 }
 
-async function saveScoresBatch(scores = batchCandidateScores) {
+async function saveScoresBatch(scores: ApiScore[], cursorString: string) {
 	console.log();
-	logInfo(`${batchTotalScoreCount} scores total | ${scores.length} candidate scores`);
-	if (sessionBatchCount <= 1 && initialCursorScoreId && batchLowestScoreId > initialCursorScoreId + 1)
-		console.warn(
-			`POSSIBLE DATA LOSS: ${batchLowestScoreId - initialCursorScoreId} score gap between cursor (${initialCursorScoreId}) and initial batch lowest score id (${batchLowestScoreId})
-Usually not an issue if the downtime was under an hour, there may have been intermediate scores from other modes or with passed = false`
-		);
+	logInfo(`${scores.length} scores`);
+// 	if (sessionBatchCount <= 1 && initialCursorScoreId && highestProcessedScoreId > initialCursorScoreId + 1)
+// 		console.warn(
+// 			`POSSIBLE DATA LOSS: ${highestProcessedScoreId - initialCursorScoreId} score gap between cursor (${initialCursorScoreId}) and initial batch lowest score id (${highestProcessedScoreId})
+// Usually not an issue if the downtime was under an hour, there may have been intermediate scores from other modes or with passed = false`
+// 		);
 	if (!scores.length) return;
 
 	const beatenScoresByMaps = await withDbClientTransaction(async client => {
-		await fetchNewBeatmaps(client, batchCandidateBeatmapIds, () => (batchCandidateBeatmapIds.length = 0), "scores_ws");
+		await fetchNewBeatmaps(
+			client,
+			scores.map(s => s.beatmap_id),
+			undefined,
+			"scores_ws"
+		);
 		const beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
 		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
 		await fetchNewPlayers(client, provenUserIds, undefined, "scores_ws");
@@ -184,7 +127,7 @@ Usually not an issue if the downtime was under an hour, there may have been inte
 	});
 
 	let totalProvenScoreCount = 0;
-	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: RulesetId; scores: WsScore[] }>();
+	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: RulesetId; scores: ApiScore[] }>();
 	for (const beatenScoresByMap of beatenScoresByMaps) {
 		const beatmapId = beatenScoresByMap.beatmap_id;
 		const rulesetId = beatenScoresByMap.ruleset_id;
@@ -200,7 +143,7 @@ Usually not an issue if the downtime was under an hour, there may have been inte
 	}
 
 	if (VERBOSE) logInfo(`found ${totalProvenScoreCount} new (proven) top 100 score(s)`);
-	recordScoreBatchCounts(batchTotalScoreCount, totalProvenScoreCount);
+	recordScoreBatchCounts(scores.length, totalProvenScoreCount);
 
 	await withDbClientTransaction(async client => {
 		for (const { beatmapId, rulesetId, scores: mapScores } of provenScoresByMaps.values()) {
@@ -211,23 +154,42 @@ Usually not an issue if the downtime was under an hour, there may have been inte
 			// TODO: send snipe info to pog-ws
 		}
 
-		saveLastScoreId(batchLowestScoreId, "scores_ws");
+		highestProcessedScoreId = scores.at(-1)?.id || highestProcessedScoreId;
+		saveScoresCursor(highestProcessedScoreId, cursorString, "scores_ws");
 	});
-	batchLowestScoreId = Infinity;
-	batchTotalScoreCount = 0;
-	scores.length = 0;
 
+	processingBatchNo = null;
 	logInfo("finished processing");
 }
 
-function isCandidateScore(score: WsScore) {
-	// only passed scores are sent anyway, not much to do here
-	// TODO: osu!standard only for now, maybe add other rulesets later
-	return score.ruleset_id == 0;
+async function refreshOAuthToken() {
+	try {
+		osuOAuthToken = await getOAuthToken();
+		tokenRefreshTimeout = setTimeout(refreshOAuthToken, OSU_OAUTH_TOKEN_REFRESH_INTERVAL);
+	} catch(e) {
+		logError("failed to refresh OAuth token:\n", e);
+		tokenRefreshTimeout = setTimeout(refreshOAuthToken, OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL);
+	}
 }
 
+async function getScoresCursors(cursorStringCli?: string) {
+	const res = await getScoresCursor("scores_ws");
+	if (cursorStringCli) res.scoresCursorString = cursorStringCli;
+	return res;
+}
+
+function logInfo(msg: string, ...data: any[]) {
+	console.log(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, ...data);
+}
+
+function logError(msg: string, ...data: any[]) {
+	console.error(`${new Date().toISOString()} [Batch #${sessionBatchCount}] ${msg}`, ...data);
+}
+
+// TODO: probably want to move these functions away and only keep http/server/api logic here
+
 // TODO?: Probably want to do it directly in the database in getBeatenScoresByMap() but brain too small
-function dedupeTopScoresByUser(scores: WsScore[]) {
+function dedupeTopScoresByUser(scores: ApiScore[]) {
 	const seenUserIds = new Set<number>();
 	return scores.filter(score => {
 		if (seenUserIds.has(score.user_id)) return false;
@@ -431,7 +393,7 @@ async function upsertBeatmapScores(
 
 // WARNING: this skips inserting scores with position > 100, so when a player gets restricted, there might be a gap or a stale score (#101 in the db but >#101 on osu) will make it into top 100
 // Does not save scores for qualified maps - fetching those is skipped in scrape_beatmaps
-async function getBeatenScoresByMap(client: ClientBase, scores: WsScore[]) {
+async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once? has not happened since....
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
 		client,

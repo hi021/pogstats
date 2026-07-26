@@ -4,8 +4,8 @@ import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
 import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
-import { BASE_POG_WS_URL, onConnect, onUpgrade, socketDebugMessageEndpoint, wss } from "./pog-ws.js";
-import { scoresWs, scoresWsOnClose, scoresWsOnError, scoresWsOnMessage, scoresWsOnOpen } from "./scores-ws.js";
+import { BASE_POG_WS_URL, onConnect, onUpgrade, socketDebugMessageEndpoint, pogWss } from "./pog-ws.js";
+import { initializeScoresFetch } from "./scores-ws.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
 	noScoresWs: {
@@ -20,38 +20,32 @@ export const FLAG_DEFINITIONS = Object.freeze({
 	}
 } as const satisfies FlagDefinitions);
 
-export const app = new Koa({ env: DEV_ENV ? "development" : "production" });
-export const server = http.createServer(app.callback());
+export const pogApiApp = new Koa({ env: DEV_ENV ? "development" : "production" });
+export const pogApiServer = http.createServer(pogApiApp.callback());
 
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
-app.use(errorHandlerMiddleware);
-app.use(metricsMiddleware);
-app.use(requestTimingMiddleware);
-app.use(socketDebugMessageEndpoint); // TODO debug only
-app.use(router.routes()).use(router.allowedMethods());
-app.on("error", (e, ctx) => console.error("Server error:\n", ctx.url, e));
+pogApiApp.use(errorHandlerMiddleware);
+pogApiApp.use(metricsMiddleware);
+pogApiApp.use(requestTimingMiddleware);
+pogApiApp.use(socketDebugMessageEndpoint); // TODO debug only
+pogApiApp.use(router.routes()).use(router.allowedMethods());
+pogApiApp.on("error", (e, ctx) => console.error("pog API error:\n", ctx.url, e));
 
-server.on("upgrade", onUpgrade);
-wss.on("connection", onConnect);
+pogApiServer.on("upgrade", onUpgrade);
+pogWss.on("connection", onConnect);
 
-if (parsedFlags?.noScoresWs) {
-	console.log("scores-ws disabled by CLI parameter");
-} else {
-	scoresWs.on("open", () => scoresWsOnOpen(parsedFlags));
-	scoresWs.on("error", scoresWsOnError);
-	scoresWs.on("close", scoresWsOnClose);
-	scoresWs.on("message", scoresWsOnMessage);
-}
+if (parsedFlags?.noScoresWs) console.log("scores fetch disabled by CLI parameter");
+ else initializeScoresFetch(parsedFlags);
 
-server.listen(SERVER_PORT, () => {
-	console.log(`Server running on http://localhost:${SERVER_PORT}`);
-	console.log(`WebSocket listening on ws://localhost:${SERVER_PORT}${BASE_POG_WS_URL}`);
+pogApiServer.listen(SERVER_PORT, () => {
+	console.log(`pog-api running on http://localhost:${SERVER_PORT}`);
+	console.log(`pog-ws running on ws://localhost:${SERVER_PORT}${BASE_POG_WS_URL}`);
 });
 
 if (METRICS_PORT && METRICS_PORT != SERVER_PORT) {
 	const metricsApp = new Koa();
 	metricsApp.use(metricsMiddleware);
 	const metricsServer = http.createServer(metricsApp.callback());
-	metricsServer.listen(METRICS_PORT, () => console.log(`Metrics endpoint running on http://localhost:${METRICS_PORT}/metrics`));
+	metricsServer.listen(METRICS_PORT, () => console.log(`pog metrics running on http://localhost:${METRICS_PORT}/metrics`));
 }

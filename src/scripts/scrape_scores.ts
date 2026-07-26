@@ -162,7 +162,7 @@ async function handleBeatmap(beatmapId: number, beatmapNo: number, headers: Reco
 		const res = await timedFetch(url, { headers }, "scrape_scores", url.hostname + url.pathname);
 		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
-		const data = (await res.json()) as ApiBeatmapScore;
+		const data = (await res.json()) as ApiBeatmapScoreResponse;
 		const convertedScores = data.scores.map((score, index) => convertApiScore(score, index + 1));
 		const playerIds = convertedScores.map(s => s.userId);
 		await withDbClientTransaction(async client => {

@@ -1,11 +1,17 @@
-interface ApiBeatmapScore {
+interface ApiBeatmapScoreResponse {
 	score_count: number;
-	scores: ApiScore[];
+	scores: ApiBeatmapScore[];
 }
 
-type WsScore = Omit<ApiScore, "user">;
+interface ApiScoresResponse {
+	scores: ApiBeatmapScore[];
+	cursor: { id: number };
+	cursor_string: string;
+}
 
-interface ApiScore {
+type ApiScore = Omit<ApiBeatmapScore, "user">;
+
+interface ApiBeatmapScore {
 	accuracy: number; // 0-1
 	beatmap_id: number;
 	best_id?: number;
@@ -22,7 +28,7 @@ interface ApiScore {
 	max_combo: number;
 	maximum_statistics: ApiScoreHitStats;
 	statistics: ApiScoreHitStats;
-	total_score_without_mods: number; // undocumented
+	total_score_without_mods?: number; // undocumented, not present for nomod scores I think
 	mods: ApiMod[];
 	passed: true;
 	pp?: number;
@@ -54,17 +60,17 @@ type ApiScoreHitType =
 	| "good"
 	| "great"
 	| "perfect"
-	| "smallTickMiss"
-	| "smallTickHit"
-	| "largeTickMiss"
-	| "largeTickHit"
-	| "smallBonus"
-	| "largeBonus"
-	| "ignoreMiss"
-	| "ignoreHit"
-	| "comboBreak"
-	| "sliderTailHit"
-	| "legacyComboIncrease";
+	| "small_tick_miss"
+	| "small_tick_hit"
+	| "large_tick_miss"
+	| "large_tick_hit"
+	| "small_bonus"
+	| "large_bonus"
+	| "ignore_miss"
+	| "ignore_hit"
+	| "combo_break"
+	| "slider_tail_hit"
+	| "legacy_combo_increase";
 
 // -------------------------------------
 

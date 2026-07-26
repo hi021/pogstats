@@ -38,7 +38,9 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "mania_min_top15", valueInt: 125 },
 	{ key: "mania_min_top8", valueInt: 50 },
 	{ key: "mania_min_top1", valueInt: 5 },
-	{ key: "last_ws_score_id", valueText: "0" },
+	{ key: "last_scores_id", valueText: "0" },
+	{ key: "scores_cursor_string", valueText: "" },
+	{ key: "beatmaps_cursor_string", valueText: "" },
 	{ key: "global_message", valueText: "" }
 ]);
 

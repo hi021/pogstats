@@ -130,9 +130,15 @@ export async function rateLimit(accessor: TimestampAccessor, delayMs: number) {
 	accessor.set(Date.now());
 }
 
+export const buildScoresUrl = (scoreCursor?: number | string, ruleset?: Ruleset) => {
+	const url = new URL(`${API_BASE_URL}/scores`);
+	if (scoreCursor != null) url.searchParams.append("cursor_string", scoreCursor.toString());
+	if (ruleset) url.searchParams.append("ruleset", ruleset);
+	return url;
+};
+
 export const buildBeatmapScoresUrl = (beatmapId: number | string, params: BeatmapScoreParams = { mode: "osu", limit: 100 }) => {
 	const url = new URL(`${API_BASE_URL}/beatmaps/${beatmapId}/scores`);
-
 	for (const [key, value] of Object.entries(params)) {
 		if (value != null) url.searchParams.append(key, String(value));
 	}
