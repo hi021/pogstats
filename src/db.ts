@@ -23,29 +23,32 @@ import { scrapePlayers } from "./scripts/scrape_players.js";
 import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 
 // Saving the lowest score id from given batch just to be safe - probably unnecessary, as the ids seem to be ordered
-export async function saveScoresCursor(scoreId?: number, cursorString?: string, source: ActionSource = "unknown") {
+export async function saveScoresCursor(
+	client: ClientBase,
+	scoreId?: number,
+	cursorString?: string,
+	source: ActionSource = "unknown"
+) {
 	const keysToUpdate: string[] = [];
 	if (scoreId != null && !isNaN(scoreId) && isFinite(scoreId)) keysToUpdate.push("last_scores_id");
 	if (cursorString) keysToUpdate.push("scores_cursor_string");
 	if (!keysToUpdate.length) return;
 
-	await withDbClient(client =>
-		queryWithTiming(
-			client,
-			"saveScoresCursor",
-			source,
-			`UPDATE ${DB_CONFIG_TABLE}
+	await queryWithTiming(
+		client,
+		"saveScoresCursor",
+		source,
+		`UPDATE ${DB_CONFIG_TABLE}
 			SET value_text = CASE key
 				WHEN 'last_scores_id' 			THEN $1
 				WHEN 'scores_cursor_string' THEN $2
 			END 
-			WHERE key IN ($3)`,
-			[scoreId, cursorString, keysToUpdate]
-		)
+			WHERE key = ANY($3::TEXT[])`,
+		[scoreId, cursorString, keysToUpdate]
 	);
 }
 
-export async function getScoresCursor(source: ActionSource = "unknown") {
+export async function getScoresCursor(source: ActionSource = "unknown"): Promise<ScoreCursors> {
 	const result = await withDbClient(client =>
 		queryWithTiming<ConfigEntry>(
 			client,
@@ -55,7 +58,7 @@ export async function getScoresCursor(source: ActionSource = "unknown") {
 		)
 	);
 
-	return { lastScoresId: Number(result.rows?.[0]?.value_text || 0), scoresCursorString: result.rows?.[1]?.value_text };
+	return { lastScoresId: Number(result.rows?.[0]?.value_text || 0), cursorString: result.rows?.[1]?.value_text };
 }
 
 export async function updateBeatmapScoresRetrievalDate(

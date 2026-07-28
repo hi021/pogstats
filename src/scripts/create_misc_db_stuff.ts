@@ -55,9 +55,8 @@ async function createMiscellaneousDBFunctions(client: ClientBase) {
 			) AS c ON c.position = g.i;
 		$$;
 
-		CREATE OR REPLACE FUNCTION calculate_weighted_count(
-			p_user_id     INTEGER,
-			p_ruleset_id  SMALLINT
+		CREATE OR REPLACE FUNCTION calc_weighted_count(
+			position_spread jsonb
 		)
 		RETURNS numeric
 		LANGUAGE plpgsql
@@ -69,7 +68,7 @@ async function createMiscellaneousDBFunctions(client: ClientBase) {
 		BEGIN
 			SELECT array_agg((elem)::integer ORDER BY ord)
 			INTO spread
-			FROM jsonb_array_elements(get_position_spread(p_user_id, p_ruleset_id)) WITH ORDINALITY AS t(elem, ord);
+			FROM jsonb_array_elements(position_spread) WITH ORDINALITY AS t(elem, ord);
 
 			FOR i IN 1..100 LOOP
 				result := result + spread[i] * weights[i];

@@ -36,7 +36,7 @@ pogApiServer.on("upgrade", onUpgrade);
 pogWss.on("connection", onConnect);
 
 if (parsedFlags?.noScoresWs) console.log("scores fetch disabled by CLI parameter");
- else initializeScoresFetch(parsedFlags);
+else initializeScoresFetch(parsedFlags);
 
 pogApiServer.listen(SERVER_PORT, () => {
 	console.log(`pog-api running on http://localhost:${SERVER_PORT}`);

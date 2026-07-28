@@ -31,6 +31,7 @@ type OsuAuthScope =
 
 type IdBatch = { batch_no: number; ids: number[] };
 type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
+type ScoreCursors = { cursorString?: string; lastScoresId: number };
 
 type ActionSource =
 	| "scrape_players"

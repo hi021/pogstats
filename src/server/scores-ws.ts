@@ -25,7 +25,7 @@ import {
 } from "../shared.js";
 import { FLAG_DEFINITIONS } from "./main.js";
 
-const OSU_OAUTH_TOKEN_REFRESH_INTERVAL = 22*60*60*1000;
+const OSU_OAUTH_TOKEN_REFRESH_INTERVAL = 22 * 60 * 60 * 1000;
 const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 25000;
 const SCORES_ENDPOINT_FETCH_INTERVAL = 22000;
 const SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL = 0;
@@ -48,6 +48,8 @@ export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG
 	highestProcessedScoreId = 0;
 	currentCursorString = null;
 	batchProcessingFailCount = 0;
+	clearTimeout(scoresFetchTimeout);
+	clearTimeout(tokenRefreshTimeout);
 
 	const cursors = await getScoresCursors(parsedFlags?.cursorScoreId);
 	initialCursorScoreId = cursors.lastScoresId;
@@ -55,35 +57,35 @@ export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG
 	await refreshOAuthToken();
 
 	scoresFetchTimeout = setTimeout(() => {
-		console.log(`connecting to scores endpoint with cursor: ${cursors.scoresCursorString}`);
+		console.log(`connecting to scores endpoint with cursor: ${cursors.cursorString}`);
 		fetchScoresBatch(cursors);
 	}, SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL);
 }
 
-async function fetchScoresBatch(cursors: {scoresCursorString?: string, lastScoresId: number}) {
+async function fetchScoresBatch(cursors: ScoreCursors) {
 	try {
 		batchTimer = scoreBatchDuration.startTimer();
 		// TODO: only osu!standard for now...
-		const res = await fetch(buildScoresUrl(cursors.scoresCursorString, "osu"), { headers: buildHeadersWithAuth(osuOAuthToken) });
+		const res = await fetch(buildScoresUrl(cursors.cursorString, "osu"), { headers: buildHeadersWithAuth(osuOAuthToken) });
 		if (!res.ok) throw new Error(`failed to fetch scores from endpoint: ${res.status} ${res.statusText}`);
 
 		const resJson: ApiScoresResponse = await res.json();
-		// TODO: DEBUG ONLY:
-		resJson.scores.map((s, idx) => {
-			console.log(idx, s.id, s.ended_at, typeof s.ended_at);
-		});
-		cursors = await endScoresBatch(resJson.scores, resJson.cursor_string);
-		
+		cursors = await endScoresBatch(resJson.scores, resJson.cursor_string, cursors.lastScoresId);
+
 		batchProcessingFailCount = 0;
 		scoresFetchTimeout = setTimeout(() => fetchScoresBatch(cursors), SCORES_ENDPOINT_FETCH_INTERVAL);
+		// TODO?: catch-up logic if over 990 scores returned?
 	} catch (e) {
 		++batchProcessingFailCount;
 		logError("failed to fetch:\n", e);
-		scoresFetchTimeout = setTimeout(() => fetchScoresBatch(cursors), SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL * Math.min(6, batchProcessingFailCount) ** 2);
+		scoresFetchTimeout = setTimeout(
+			() => fetchScoresBatch(cursors),
+			SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL * Math.min(6, batchProcessingFailCount) ** 2
+		);
 	}
 }
 
-async function endScoresBatch(scores: ApiScore[], cursorString: string) {
+async function endScoresBatch(scores: ApiScore[], cursorString: string, previousHighestScoreId: number): Promise<ScoreCursors> {
 	try {
 		if (processingBatchNo)
 			throw new Error(
@@ -91,26 +93,26 @@ async function endScoresBatch(scores: ApiScore[], cursorString: string) {
 			);
 
 		processingBatchNo = ++sessionBatchCount;
-		await saveScoresBatch(scores, cursorString);
+		await saveScoresBatch(scores, cursorString, previousHighestScoreId);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
-		processingBatchNo = null;
 	} catch (e) {
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
+	} finally {
 		processingBatchNo = null;
-		await saveScoresCursor(highestProcessedScoreId - 1, "", "scores_ws");
+		return { lastScoresId: highestProcessedScoreId, cursorString };
 	}
 }
 
-async function saveScoresBatch(scores: ApiScore[], cursorString: string) {
+async function saveScoresBatch(scores: ApiScore[], cursorString: string, previousHighestScoreId: number) {
 	console.log();
 	logInfo(`${scores.length} scores`);
-// 	if (sessionBatchCount <= 1 && initialCursorScoreId && highestProcessedScoreId > initialCursorScoreId + 1)
-// 		console.warn(
-// 			`POSSIBLE DATA LOSS: ${highestProcessedScoreId - initialCursorScoreId} score gap between cursor (${initialCursorScoreId}) and initial batch lowest score id (${highestProcessedScoreId})
-// Usually not an issue if the downtime was under an hour, there may have been intermediate scores from other modes or with passed = false`
-// 		);
 	if (!scores.length) return;
+
+	if (previousHighestScoreId && VERBOSE)
+		logInfo(
+			`${scores[0].id - previousHighestScoreId} gap in score ids between batches (${previousHighestScoreId} -> ${scores[0].id})`
+		);
 
 	const beatenScoresByMaps = await withDbClientTransaction(async client => {
 		await fetchNewBeatmaps(
@@ -155,7 +157,7 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string) {
 		}
 
 		highestProcessedScoreId = scores.at(-1)?.id || highestProcessedScoreId;
-		saveScoresCursor(highestProcessedScoreId, cursorString, "scores_ws");
+		saveScoresCursor(client, highestProcessedScoreId, cursorString, "scores_ws");
 	});
 
 	processingBatchNo = null;
@@ -166,7 +168,7 @@ async function refreshOAuthToken() {
 	try {
 		osuOAuthToken = await getOAuthToken();
 		tokenRefreshTimeout = setTimeout(refreshOAuthToken, OSU_OAUTH_TOKEN_REFRESH_INTERVAL);
-	} catch(e) {
+	} catch (e) {
 		logError("failed to refresh OAuth token:\n", e);
 		tokenRefreshTimeout = setTimeout(refreshOAuthToken, OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL);
 	}
@@ -174,7 +176,7 @@ async function refreshOAuthToken() {
 
 async function getScoresCursors(cursorStringCli?: string) {
 	const res = await getScoresCursor("scores_ws");
-	if (cursorStringCli) res.scoresCursorString = cursorStringCli;
+	if (cursorStringCli) res.cursorString = cursorStringCli;
 	return res;
 }
 
