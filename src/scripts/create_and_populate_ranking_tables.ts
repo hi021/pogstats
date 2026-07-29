@@ -1,76 +1,145 @@
 import { ClientBase } from "pg";
 import { withDbClientTransaction } from "../db-generic.js";
-import { DB_RANKING_TABLE_COMMON } from "../env.js";
+import { DB_POSITION_WEIGHTS_TABLE, DB_RANKING_ROLLUP_TABLE } from "../env.js";
 
 async function createRankingTables(client: ClientBase) {
-	console.log(`Creating osu_${DB_RANKING_TABLE_COMMON} (yes, only standard for now) if not exists`);
+	console.log(`Attempting to create ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} tables`);
 
 	await client.query(`
-			CREATE TABLE IF NOT EXISTS osu_${DB_RANKING_TABLE_COMMON} (
-				user_id 							INTEGER PRIMARY KEY,
-				username 							TEXT NOT NULL,
-				country_code 					CHAR(2) NOT NULL,
+		CREATE TABLE IF NOT EXISTS ${DB_POSITION_WEIGHTS_TABLE} (
+			position 	SMALLINT PRIMARY KEY,
+			weight 		REAL NOT NULL
+		);
 
-				count_100							INTEGER NOT NULL DEFAULT 0,
-				count_perma_100				INTEGER NOT NULL DEFAULT 0,
-				count_ss_100					INTEGER NOT NULL DEFAULT 0,
-				count_lazer_100				INTEGER NOT NULL DEFAULT 0,
-				weighted_100					REAL NOT NULL DEFAULT 0,
-				ranked_score_100			INTEGER DEFAULT 0,
-				total_pp_100					INTEGER DEFAULT 0,
-				weighted_pp_100				REAL NOT NULL DEFAULT 0,
-				
-				count_50							INTEGER NOT NULL DEFAULT 0,
-				count_perma_50				INTEGER NOT NULL DEFAULT 0,
-				count_ss_50						INTEGER NOT NULL DEFAULT 0,
-				count_lazer_50				INTEGER NOT NULL DEFAULT 0,
-				weighted_50						REAL NOT NULL DEFAULT 0,
-				ranked_score_50				INTEGER DEFAULT 0,
-				total_pp_50						INTEGER DEFAULT 0,
-				weighted_pp_50				REAL NOT NULL DEFAULT 0,
+		CREATE TABLE IF NOT EXISTS ${DB_RANKING_ROLLUP_TABLE} (
+			user_id 							INTEGER NOT NULL,
+			ruleset_id						SMALLINT NOT NULL,
+			position							SMALLINT NOT NULL,
 
-				count_25							INTEGER NOT NULL DEFAULT 0,
-				count_perma_25				INTEGER NOT NULL DEFAULT 0,
-				count_ss_25						INTEGER NOT NULL DEFAULT 0,
-				count_lazer_25				INTEGER NOT NULL DEFAULT 0,
-				weighted_25						REAL NOT NULL DEFAULT 0,
-				ranked_score_25				INTEGER DEFAULT 0,
-				total_pp_25						INTEGER DEFAULT 0,
-				weighted_pp_25				REAL NOT NULL DEFAULT 0,
-				
-				count_15							INTEGER NOT NULL DEFAULT 0,
-				count_perma_15				INTEGER NOT NULL DEFAULT 0,
-				count_ss_15						INTEGER NOT NULL DEFAULT 0,
-				count_lazer_15				INTEGER NOT NULL DEFAULT 0,
-				weighted_15						REAL NOT NULL DEFAULT 0,
-				ranked_score_15				INTEGER DEFAULT 0,
-				total_pp_15						INTEGER DEFAULT 0,
-				weighted_pp_15				REAL NOT NULL DEFAULT 0,
-				
-				count_8								INTEGER NOT NULL DEFAULT 0,
-				count_perma_8					INTEGER NOT NULL DEFAULT 0,
-				count_ss_8						INTEGER NOT NULL DEFAULT 0,
-				count_lazer_8					INTEGER NOT NULL DEFAULT 0,
-				weighted_8						REAL NOT NULL DEFAULT 0,
-				ranked_score_8				INTEGER DEFAULT 0,
-				total_pp_8						INTEGER DEFAULT 0,
-				weighted_pp_8					REAL NOT NULL DEFAULT 0,
-				
-				count_1								INTEGER NOT NULL DEFAULT 0,
-				count_perma_1					INTEGER NOT NULL DEFAULT 0,
-				count_ss_1						INTEGER NOT NULL DEFAULT 0,
-				count_lazer_1					INTEGER NOT NULL DEFAULT 0,
-				weighted_1						REAL NOT NULL DEFAULT 0,
-				ranked_score_1				INTEGER DEFAULT 0,
-				total_pp_1						INTEGER DEFAULT 0,
-				weighted_pp_1					REAL NOT NULL DEFAULT 0
-			)`);
+			count									INTEGER NOT NULL DEFAULT 0,
+			count_perma						INTEGER NOT NULL DEFAULT 0,
+			count_ss							INTEGER NOT NULL DEFAULT 0,
+			count_lazer						INTEGER NOT NULL DEFAULT 0,
+			ranked_score					INTEGER NOT NULL DEFAULT 0,
+			total_pp							INTEGER NOT NULL DEFAULT 0,
+			
+			PRIMARY KEY (user_id, ruleset_id, position)
+		);`);
 
-	console.log(`Created osu_${DB_RANKING_TABLE_COMMON} if didn't exist`);
+	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} if didn't exist`);
 }
 
-// watch out, this takes at least a minute for standard only
-async function populateRankingTables(client: ClientBase) {}
+// TODO: make this a pg function so it can be put in pg_cron
+// watch out, this takes a while, even for standard only
+async function populateRankingTables(client: ClientBase) {
+	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE} ... tables`)
+
+	await client.query(`
+		INSERT INTO ${DB_POSITION_WEIGHTS_TABLE}(position, weight) VALUES
+			(1,1),
+			(2,0.99159),
+			(3,0.98250416),
+			(4,0.97270314),
+			(5,0.96214865),
+			(6,0.95080362),
+			(7,0.93863287),
+			(8,0.92560391),
+			(9,0.9116878),
+			(10,0.89686005),
+			(11,0.88110161),
+			(12,0.86439989),
+			(13,0.84674974),
+			(14,0.82815445),
+			(15,0.80862663),
+			(16,0.78818899),
+			(17,0.76687497),
+			(18,0.74472917),
+			(19,0.72180751),
+			(20,0.69817709),
+			(21,0.67391582),
+			(22,0.64911162),
+			(23,0.62386136),
+			(24,0.59826954),
+			(25,0.57244658),
+			(26,0.546507),
+			(27,0.52056742),
+			(28,0.49474446),
+			(29,0.46915264),
+			(30,0.44390238),
+			(31,0.41909818),
+			(32,0.39483691),
+			(33,0.37120649),
+			(34,0.34828483),
+			(35,0.32613903),
+			(36,0.30482501),
+			(37,0.28438737),
+			(38,0.26485955),
+			(39,0.24626426),
+			(40,0.22861411),
+			(41,0.21191239),
+			(42,0.19615395),
+			(43,0.1813262),
+			(44,0.16741009),
+			(45,0.15438113),
+			(46,0.14221038),
+			(47,0.13086535),
+			(48,0.12031086),
+			(49,0.11050984),
+			(50,0.101424),
+			(51,0.09301445),
+			(52,0.08524223),
+			(53,0.07806876),
+			(54,0.07145615),
+			(55,0.06536758),
+			(56,0.05976745),
+			(57,0.05462158),
+			(58,0.04989737),
+			(59,0.04556382),
+			(60,0.04159164),
+			(61,0.03795319),
+			(62,0.03462256),
+			(63,0.03157546),
+			(64,0.02878925),
+			(65,0.0262428),
+			(66,0.02391654),
+			(67,0.02179226),
+			(68,0.01985317),
+			(69,0.0180837),
+			(70,0.01646952),
+			(71,0.01499742),
+			(72,0.01365523),
+			(73,0.01243177),
+			(74,0.01131678),
+			(75,0.01030084),
+			(76,0.00937531),
+			(77,0.00853229),
+			(78,0.00776452),
+			(79,0.0070654),
+			(80,0.00642885),
+			(81,0.00584934),
+			(82,0.00532181),
+			(83,0.00484165),
+			(84,0.00440463),
+			(85,0.00400692),
+			(86,0.00364499),
+			(87,0.00331566),
+			(88,0.003016),
+			(89,0.00274335),
+			(90,0.0024953),
+			(91,0.00226963),
+			(92,0.00206433),
+			(93,0.00187756),
+			(94,0.00170767),
+			(95,0.00155313),
+			(96,0.00141256),
+			(97,0.00128469),
+			(98,0.00116839),
+			(99,0.0010626),
+			(100,0.00096639)
+			`)
+
+console.log(`Populated ${DB_POSITION_WEIGHTS_TABLE} ... tables`)
+}
 
 async function main() {
 	await withDbClientTransaction(async client => {
