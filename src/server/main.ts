@@ -4,8 +4,8 @@ import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
 import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
-import { BASE_POG_WS_URL, onConnect, onUpgrade, socketDebugMessageEndpoint, pogWss } from "./pog-ws.js";
-import { initializeScoresFetch } from "./scores-ws.js";
+import { BASE_POG_WS_URL, onConnect, onUpgrade, pogWss, socketDebugMessageEndpoint } from "./pog-ws.js";
+import { initializeScoresFetch } from "./scores-fetch.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
 	noScoresWs: {

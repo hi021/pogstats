@@ -28,8 +28,10 @@ import { FLAG_DEFINITIONS } from "./main.js";
 const OSU_OAUTH_TOKEN_REFRESH_INTERVAL = 22 * 60 * 60 * 1000;
 const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 25000;
 const SCORES_ENDPOINT_FETCH_INTERVAL = 22000;
+const SCORES_ENDPOINT_CATCH_UP_INTERVAL = 4000;
 const SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL = 0;
 const SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL = 1100; // exponential back-off, 1100 * 2^n, up to n = 6 (max. 70400 ms)
+const SCORES_FETCH_CATCH_UP_THRESHOLD = 990;
 
 let scoresFetchTimeout: NodeJS.Timeout;
 let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
@@ -73,11 +75,15 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 		cursors = await endScoresBatch(resJson.scores, resJson.cursor_string, cursors.lastScoresId);
 
 		batchProcessingFailCount = 0;
-		scoresFetchTimeout = setTimeout(() => fetchScoresBatch(cursors), SCORES_ENDPOINT_FETCH_INTERVAL);
-		// TODO?: catch-up logic if over 990 scores returned?
+		scoresFetchTimeout = setTimeout(
+			() => fetchScoresBatch(cursors),
+			resJson.scores.length >= SCORES_FETCH_CATCH_UP_THRESHOLD
+				? SCORES_ENDPOINT_CATCH_UP_INTERVAL
+				: SCORES_ENDPOINT_FETCH_INTERVAL
+		);
 	} catch (e) {
 		++batchProcessingFailCount;
-		logError("failed to fetch:\n", e);
+		logError("failed to fetch/parse JSON:\n", e);
 		scoresFetchTimeout = setTimeout(
 			() => fetchScoresBatch(cursors),
 			SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL * Math.min(6, batchProcessingFailCount) ** 2
