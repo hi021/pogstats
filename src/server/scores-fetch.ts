@@ -27,35 +27,29 @@ import { FLAG_DEFINITIONS } from "./main.js";
 
 const OSU_OAUTH_TOKEN_REFRESH_INTERVAL = 22 * 60 * 60 * 1000;
 const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 25000;
-const SCORES_ENDPOINT_FETCH_INTERVAL = 22000;
-const SCORES_ENDPOINT_CATCH_UP_INTERVAL = 4000;
+// times below are for timeouts, e.g. the time between batch 1 processing end and batch 2 fetch start (so 23s would be more like 27s in practice)
+const SCORES_ENDPOINT_FETCH_INTERVAL = 23000;
+const SCORES_ENDPOINT_CATCH_UP_INTERVAL = 1100;
 const SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL = 0;
 const SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL = 1100; // exponential back-off, 1100 * 2^n, up to n = 6 (max. 70400 ms)
-const SCORES_FETCH_CATCH_UP_THRESHOLD = 990;
+const SCORES_FETCH_CATCH_UP_THRESHOLD = 985;
 
 let scoresFetchTimeout: NodeJS.Timeout;
 let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
 let osuOAuthToken = "";
 let tokenRefreshTimeout: NodeJS.Timeout;
 let sessionBatchCount = 0;
-let processingBatchNo: number | null = null;
 let highestProcessedScoreId = 0;
-let currentCursorString: string | null = null;
-let initialCursorScoreId: number | null = null;
 let batchProcessingFailCount = 0;
 
 export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG_DEFINITIONS>) {
 	sessionBatchCount = 0;
-	processingBatchNo = null;
 	highestProcessedScoreId = 0;
-	currentCursorString = null;
 	batchProcessingFailCount = 0;
 	clearTimeout(scoresFetchTimeout);
 	clearTimeout(tokenRefreshTimeout);
 
 	const cursors = await getScoresCursors(parsedFlags?.cursorScoreId);
-	initialCursorScoreId = cursors.lastScoresId;
-
 	await refreshOAuthToken();
 
 	scoresFetchTimeout = setTimeout(() => {
@@ -64,6 +58,8 @@ export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG
 	}, SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL);
 }
 
+// TODO: connection timeout ~12s
+// TODO: processing timeout ~45s
 async function fetchScoresBatch(cursors: ScoreCursors) {
 	try {
 		batchTimer = scoreBatchDuration.startTimer();
@@ -93,19 +89,12 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 
 async function endScoresBatch(scores: ApiScore[], cursorString: string, previousHighestScoreId: number): Promise<ScoreCursors> {
 	try {
-		if (processingBatchNo)
-			throw new Error(
-				`batch #${processingBatchNo} is still being processed, but the next one is available. Skipping execution and awaiting next batch to retry`
-			);
-
-		processingBatchNo = ++sessionBatchCount;
 		await saveScoresBatch(scores, cursorString, previousHighestScoreId);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 	} catch (e) {
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 	} finally {
-		processingBatchNo = null;
 		return { lastScoresId: highestProcessedScoreId, cursorString };
 	}
 }
@@ -166,7 +155,6 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 		saveScoresCursor(client, highestProcessedScoreId, cursorString, "scores_fetch");
 	});
 
-	processingBatchNo = null;
 	logInfo("finished processing");
 }
 

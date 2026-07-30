@@ -21,20 +21,6 @@ export const DEFAULT_OSU_API_HEADERS = {
 	"X-API-Version": OSU_API_VERSION
 };
 
-// I am the GOD of ajvascript
-export function buildRandomString() {
-	return String.fromCharCode(
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65),
-		Math.round(Math.random() * 25 + 65)
-	);
-}
-
 export function formatMilliseconds(ms: number) {
 	if (!ms) return "instant";
 	if (ms < 60 * 1000) return `${Math.round((ms / 1000) * 10) / 10} s`;
