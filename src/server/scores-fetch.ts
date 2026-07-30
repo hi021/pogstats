@@ -125,11 +125,11 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 			client,
 			scores.map(s => s.beatmap_id),
 			undefined,
-			"scores_ws"
+			"scores_fetch"
 		);
 		const beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
 		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
-		await fetchNewPlayers(client, provenUserIds, undefined, "scores_ws");
+		await fetchNewPlayers(client, provenUserIds, undefined, "scores_fetch");
 
 		return beatenScoresByMaps;
 	});
@@ -163,7 +163,7 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 		}
 
 		highestProcessedScoreId = scores.at(-1)?.id || highestProcessedScoreId;
-		saveScoresCursor(client, highestProcessedScoreId, cursorString, "scores_ws");
+		saveScoresCursor(client, highestProcessedScoreId, cursorString, "scores_fetch");
 	});
 
 	processingBatchNo = null;
@@ -181,7 +181,7 @@ async function refreshOAuthToken() {
 }
 
 async function getScoresCursors(cursorStringCli?: string) {
-	const res = await getScoresCursor("scores_ws");
+	const res = await getScoresCursor("scores_fetch");
 	if (cursorStringCli) res.cursorString = cursorStringCli;
 	return res;
 }
@@ -211,7 +211,7 @@ async function createTempScoresTable(client: ClientBase) {
 	await queryWithTiming(
 		client,
 		"createTempScoresTable",
-		"scores_ws",
+		"scores_fetch",
 		`
 		CREATE TEMPORARY TABLE IF NOT EXISTS ws_scores_tmp (
       position      						SMALLINT NOT NULL,
@@ -245,12 +245,12 @@ async function upsertBeatmapScores(
 	provenScores: BeatmapScoreFull[]
 ) {
 	if (!provenScores?.length) return [];
-	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update", "scores_ws");
+	await updateBeatmapScoresRetrievalDate(client, beatmapId, rulesetId, "last_scores_update", "scores_fetch");
 
 	const existingScores = await queryWithTiming<ScoreBasicData>(
 		client,
 		"upsertBeatmapScores_get_existing_scores",
-		"scores_ws",
+		"scores_fetch",
 		`SELECT s.id,
 						s.user_id AS "userId",
 						s.total_score AS "totalScore",
@@ -272,7 +272,7 @@ async function upsertBeatmapScores(
 	await queryWithTiming(
 		client,
 		"upsertBeatmapScores_insert_new_scores_into_tmp",
-		"scores_ws",
+		"scores_fetch",
 		`INSERT INTO ws_scores_tmp (${SCORE_TABLE_COLUMNS.join(",")}) VALUES ${paramGroups.join(",")}`,
 		values
 	);
@@ -280,7 +280,7 @@ async function upsertBeatmapScores(
 	await queryWithTiming(
 		client,
 		"upsertBeatmapScores_delete_beaten_user_hiscores",
-		"scores_ws",
+		"scores_fetch",
 		`DELETE FROM ${DB_SCORES_TABLE} s
 		 USING ws_scores_tmp t
 		 WHERE s.beatmap_id = $1
@@ -293,18 +293,18 @@ async function upsertBeatmapScores(
 	await queryWithTiming(
 		client,
 		"upsertBeatmapScores_insert_new_scores",
-		"scores_ws",
+		"scores_fetch",
 		`INSERT INTO ${DB_SCORES_TABLE} (${SCORE_TABLE_COLUMNS.join(",")})
 		 SELECT ${SCORE_TABLE_COLUMNS.join(",")} FROM ws_scores_tmp`
 	);
 
-	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }], "scores_ws");
+	await recalculateScorePositionsForMaps(client, [{ beatmap_id: beatmapId, ruleset_id: rulesetId }], "scores_fetch");
 
 	const insertedIds = provenScores.map(score => score.id);
 	const insertedScores = await queryWithTiming<ScoreBasicData>(
 		client,
 		"upsertBeatmapScores_get_inserted_scores",
-		"scores_ws",
+		"scores_fetch",
 		`SELECT s.id,
 						s.user_id AS "userId",
 						s.total_score AS "totalScore",
@@ -367,12 +367,12 @@ async function upsertBeatmapScores(
 		currentScores.splice(insertPosition, 0, newScore);
 	}
 
-	await insertHistoricalPlayerSnipes(client, snipes, "scores_ws");
+	await insertHistoricalPlayerSnipes(client, snipes, "scores_fetch");
 
 	const beatingScores = await queryWithTiming<BeatingScoreData>(
 		client,
 		"upsertBeatmapScores_get_beating_scores",
-		"scores_ws",
+		"scores_fetch",
 		`SELECT s.id AS score_id,
 						s.position,
 						s.grade,
@@ -406,7 +406,7 @@ async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
 		client,
 		"getBeatenScoresByMap",
-		"scores_ws",
+		"scores_fetch",
 		`
 		WITH candidates AS (
 			SELECT
