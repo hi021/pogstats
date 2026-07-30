@@ -10,7 +10,7 @@ export const DB_HOST = process.env.DB_HOST || "localhost";
 const parsedDbPort = Number(process.env.DB_PORT);
 export const DB_PORT = Number.isFinite(parsedDbPort) ? parsedDbPort : 5432;
 export const DB_USER = process.env.DB_USER;
-export const DB_PASSWORD = process.env.DB_PASSWORD;
+export const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
 export const DB_NAME = process.env.DB_NAME || "pogstats";
 
 export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";

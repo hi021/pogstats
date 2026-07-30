@@ -216,12 +216,12 @@ interface RankingPositionData {
 	user_id: number;
 	ruleset_id: RulesetId;
 	position: number;
-	count:number;
-			count_perma:number;
-			count_ss:number;
-			count_lazer:number;
-			ranked_score:number;
-			total_pp: number;
+	count: number;
+	count_perma: number;
+	count_ss: number;
+	count_lazer: number;
+	ranked_score: number;
+	total_pp: number;
 }
 
 // TODO DDL

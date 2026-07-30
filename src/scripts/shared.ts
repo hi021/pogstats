@@ -1,8 +1,8 @@
+import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { ClientBase } from "pg";
 import readline from "readline";
-import { OSU_API_VERSION, VERBOSE } from "../env.js";
+import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, OSU_API_VERSION, VERBOSE } from "../env.js";
 
 export const AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/token";
 export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
@@ -190,20 +190,14 @@ export function logError(stream: fs.WriteStream, message: string, error?: unknow
 	stream.write(`${logMessage}\n`);
 }
 
-function csvEscape(value: unknown): string {
-	if (value === null || value === undefined) return "";
-	return typeof value === "object" ? `"${JSON.stringify(value).replace(/"/g, '""')}"` : String(value);
-}
-
 export async function dumpTableToCsv(
 	tableName: string,
-	columns: readonly string[],
-	client: ClientBase,
 	infoLogStream?: fs.WriteStream,
 	customQuery?: string,
 	resultPath = "../../data"
 ) {
-	const result = await client.query(customQuery || `SELECT * FROM ${tableName}`);
+	if (!DB_USER || !DB_NAME) throw new Error("DB_USER or DB_NAME env variables are not set");
+
 	const dumpFilePath = path.resolve(
 		process.cwd(),
 		resultPath,
@@ -211,18 +205,50 @@ export async function dumpTableToCsv(
 	);
 	fs.mkdirSync(path.dirname(dumpFilePath), { recursive: true });
 
-	const stream = fs.createWriteStream(dumpFilePath, { encoding: "utf8" });
-	stream.write(`${columns.join(",")}\n`);
-	for (const row of result.rows) {
-		const line = columns.map(column => csvEscape(row[column])).join(",");
-		stream.write(`${line}\n`);
-	}
+	const query = customQuery || `SELECT * FROM ${tableName}`;
+	const psqlArgs = [
+		"-h",
+		DB_HOST,
+		"-p",
+		String(DB_PORT),
+		"-U",
+		DB_USER,
+		"-d",
+		DB_NAME,
+		"-c",
+		`COPY (${query}) TO STDOUT WITH CSV HEADER`
+	] as const;
 
-	await new Promise<void>((resolve, reject) => {
-		stream.on("finish", resolve);
-		stream.on("error", reject);
-		stream.end();
+	const psql = spawn("psql", psqlArgs, {
+		env: {
+			...process.env,
+			PGPASSWORD: DB_PASSWORD
+		},
+		stdio: ["ignore", "pipe", "pipe"],
+		shell: false
 	});
 
-	infoLogStream && logInfo(infoLogStream, `Dumped ${result.rows.length} rows from ${tableName} to ${dumpFilePath}`);
+	if (!psql.stdout || !psql.stderr) throw new Error("psql did not provide stdout/stderr streams");
+
+	const writeStream = fs.createWriteStream(dumpFilePath, { encoding: "utf8" });
+	psql.stdout.pipe(writeStream);
+
+	let stderr = "";
+	psql.stderr.on("data", (chunk: Buffer | string) => (stderr += chunk.toString()));
+
+	await Promise.all([
+		new Promise<void>((resolve, reject) => {
+			writeStream.on("finish", resolve);
+			writeStream.on("error", reject);
+		}),
+		new Promise<void>((resolve, reject) => {
+			psql.on("error", reject);
+			psql.on("close", code => {
+				if (code !== 0) reject(new Error(`psql COPY failed with code ${code}: ${stderr}`));
+				else resolve();
+			});
+		})
+	]);
+
+	infoLogStream && logInfo(infoLogStream, `Dumped table ${tableName} to ${dumpFilePath}`);
 }

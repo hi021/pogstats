@@ -32,7 +32,7 @@ async function createRankingTables(client: ClientBase) {
 // TODO: make this a pg function so it can be put in pg_cron
 // watch out, this takes a while, even for standard only
 async function populateRankingTables(client: ClientBase) {
-	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE} ... tables`)
+	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE} ... tables`);
 
 	await client.query(`
 		INSERT INTO ${DB_POSITION_WEIGHTS_TABLE}(position, weight) VALUES
@@ -136,9 +136,9 @@ async function populateRankingTables(client: ClientBase) {
 			(98,0.00116839),
 			(99,0.0010626),
 			(100,0.00096639)
-			`)
+			`);
 
-console.log(`Populated ${DB_POSITION_WEIGHTS_TABLE} ... tables`)
+	console.log(`Populated ${DB_POSITION_WEIGHTS_TABLE} ... tables`);
 }
 
 async function main() {
