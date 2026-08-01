@@ -102,7 +102,7 @@ async function createScoreTables(client: ClientBase) {
 		)`);
 	await client.query(`
 			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_scrape IS 'Meta: time of the last score scraper run over this map';
-			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_update IS 'Meta: time of the last update for the map from scores-ws';
+			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_update IS 'Meta: time of the last update for the map from scores-fetch';
 			`);
 
 	console.log(

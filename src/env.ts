@@ -10,7 +10,7 @@ export const DB_HOST = process.env.DB_HOST || "localhost";
 const parsedDbPort = Number(process.env.DB_PORT);
 export const DB_PORT = Number.isFinite(parsedDbPort) ? parsedDbPort : 5432;
 export const DB_USER = process.env.DB_USER;
-export const DB_PASSWORD = process.env.DB_PASSWORD;
+export const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
 export const DB_NAME = process.env.DB_NAME || "pogstats";
 
 export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";
@@ -27,7 +27,8 @@ export const DB_RANKING_TYPES_TABLE = process.env.DB_RANKING_TYPES_TABLE || "RAN
 export const DB_HISTORICAL_RANKINGS_TABLE = process.env.DB_HISTORICAL_RANKINGS_TABLE || "HISTORICAL_RANKINGS";
 export const DB_HISTORICAL_PLAYER_SNIPES_TABLE = process.env.DB_HISTORICAL_PLAYER_SNIPES_TABLE || "HISTORICAL_PLAYER_SNIPES";
 export const DB_PLAYER_MIA_HISTORY_TABLE = process.env.DB_PLAYER_MIA_HISTORY_TABLE || "PLAYER_MIA_HISTORY";
-export const DB_RANKING_TABLE_COMMON = process.env.DB_RANKING_TABLE_COMMON || "RANKING";
+export const DB_RANKING_ROLLUP_TABLE = process.env.DB_RANKING_ROLLUP_TABLE || "RANKING_ROLLUP";
+export const DB_POSITION_WEIGHTS_TABLE = process.env.DB_POSITION_WEIGHTS_TABLE || "POSITION_WEIGHTS";
 
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;

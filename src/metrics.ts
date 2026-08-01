@@ -3,6 +3,7 @@ import type { ClientBase, QueryResult, QueryResultRow } from "pg";
 import prom from "prom-client";
 
 // TODO: seems like this only registers metrics for the webserver but not score scrape script
+// TODO: do not collect potentially sensitive info like nodejs version?
 export const metricsRegistry = new prom.Registry();
 prom.collectDefaultMetrics({ register: metricsRegistry, prefix: "pogstats_", eventLoopMonitoringPrecision: 25 });
 
@@ -10,7 +11,7 @@ const httpRequestDuration = new prom.Histogram({
 	name: "pogstats_http_request_duration_ms",
 	help: "Duration of inbound HTTP requests in ms",
 	labelNames: ["route", "status_code", "origin"] as const,
-	buckets: [2, 10, 20, 50, 100, 250, 500, 1000, 2500, 5000, 12500],
+	buckets: [3, 15, 50, 100, 300, 750, 1500, 3750, 7500, 20000],
 	registers: [metricsRegistry]
 });
 
@@ -39,7 +40,7 @@ const missingEntityCounter = new prom.Counter({
 
 export const scoreBatchDuration = new prom.Histogram({
 	name: "pogstats_score_batch_duration_s",
-	help: "How long it takes to process a score batch in seconds",
+	help: "Score batch process duration in seconds",
 	buckets: [0.25, 1, 2, 5, 10, 25, 60],
 	labelNames: ["success", "batchNo"],
 	registers: [metricsRegistry]
@@ -47,12 +48,13 @@ export const scoreBatchDuration = new prom.Histogram({
 
 const scoreBatchCount = new prom.Histogram({
 	name: "pogstats_score_batch_count",
-	help: "Counts of score batches and proven score counts from scores-ws",
+	help: "Counts of score batches and proven score counts from scores-fetch",
 	labelNames: ["type"] as const,
-	buckets: [1, 5, 15, 250, 1000, 1500, 2000, 37500, 100000],
+	buckets: [1, 10, 30, 75, 500, 1000, 1500, 2500, 10000, 100000],
 	registers: [metricsRegistry]
 });
 
+// TODO: useless since does not provide unique count?
 export function recordMissingEntity(type: "player" | "beatmap", count = 1) {
 	missingEntityCounter.labels({ type }).inc(count);
 }

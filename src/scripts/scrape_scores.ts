@@ -5,7 +5,7 @@
 
 import fs from "fs";
 import { ClientBase } from "pg";
-import { SCORE_TABLE_COLUMNS, SCORE_TABLE_COLUMNS_ALL, withDbClient, withDbClientTransaction } from "../db-generic.js";
+import { SCORE_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import { fetchNewPlayers, updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
@@ -44,9 +44,9 @@ const FLAG_DEFINITIONS = Object.freeze({
 		description: "Only scrape beatmaps last scraped before this date (ISO 8601 or YYYY-MM-DD)",
 		takesValue: true
 	},
-	skipDump: {
-		cli: "--skipDump",
-		description: "Skip dumping the current scores table before scraping",
+	dumpTable: {
+		cli: "--dumpTable",
+		description: "Dump the current scores table into a file before scraping",
 		takesValue: false
 	},
 	ids: {
@@ -59,7 +59,7 @@ const FLAG_DEFINITIONS = Object.freeze({
 
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 const ONLY_SCRAPE_IF_SAVED_BEFORE_THIS_DATE = getMinDate(parsedFlags.minDate);
-const SKIP_DUMP_BEFORE_SCRAPE = Boolean(parsedFlags.skipDump);
+const DUMP_TABLE_BEFORE_SCRAPE = Boolean(parsedFlags.dumpTable);
 const BEATMAP_BATCH_SIZE = 30000;
 
 let infoLogStream: fs.WriteStream;
@@ -162,7 +162,7 @@ async function handleBeatmap(beatmapId: number, beatmapNo: number, headers: Reco
 		const res = await timedFetch(url, { headers }, "scrape_scores", url.hostname + url.pathname);
 		if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 
-		const data = (await res.json()) as ApiBeatmapScore;
+		const data = (await res.json()) as ApiBeatmapScoreResponse;
 		const convertedScores = data.scores.map((score, index) => convertApiScore(score, index + 1));
 		const playerIds = convertedScores.map(s => s.userId);
 		await withDbClientTransaction(async client => {
@@ -202,9 +202,7 @@ async function scrapeScores() {
 	try {
 		infoLogStream = createLogStream(SCORE_SCRAPE_LOG_PATH);
 		errorLogStream = createLogStream(SCORE_SCRAPE_ERROR_LOG_PATH);
-		// TODO: this takes up way too much memory and time in prod, just use pg_dump or postgres' COPY
-		if (!SKIP_DUMP_BEFORE_SCRAPE)
-			withDbClient(async client => await dumpTableToCsv(DB_SCORES_TABLE, SCORE_TABLE_COLUMNS_ALL, client, infoLogStream));
+		if (DUMP_TABLE_BEFORE_SCRAPE) await dumpTableToCsv(DB_SCORES_TABLE, infoLogStream);
 
 		const specifiedBeatmapIds = parseIdList(parsedFlags.ids);
 		const beatmapIds =

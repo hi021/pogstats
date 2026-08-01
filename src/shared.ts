@@ -5,7 +5,7 @@ export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko",
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
 
 export function convertApiScore(
-	apiScore: ApiScore | WsScore,
+	apiScore: ApiBeatmapScore | ApiScore,
 	position: number,
 	isScraped = true,
 	isPerma = false
@@ -239,7 +239,7 @@ export function sortScores(a: ScoreSortData, b: ScoreSortData) {
 	return a.id - b.id;
 }
 
-export function sortWsScores(a: WsScore, b: WsScore) {
+export function sortWsScores(a: ApiScore, b: ApiScore) {
 	if (a.total_score != b.total_score) return b.total_score - a.total_score;
 	if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // comparing ISO date strings is fine as long as they are of the same format
 	return a.id - b.id;

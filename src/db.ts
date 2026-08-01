@@ -1,4 +1,4 @@
-import { ClientBase, QueryResult } from "pg";
+import { ClientBase } from "pg";
 import {
 	BEATMAP_RULESET_UPDATE_DATES_TABLE_COLUMNS,
 	BEATMAP_TABLE_COLUMNS,
@@ -22,44 +22,43 @@ import { scrapeBeatmaps } from "./scripts/scrape_beatmaps.js";
 import { scrapePlayers } from "./scripts/scrape_players.js";
 import { preparePlayerSnipesTableValuesAndParamPlaceholders, unnestObjectsIntoArrays } from "./shared.js";
 
-export function buildBeatmapAdvisoryLockKey(beatmapId: number, rulesetId: number) {
-	return (BigInt(beatmapId) << 32n) | BigInt(rulesetId);
-}
-
-// probably useless rn?
-export async function acquireBeatmapAdvisoryLock(
+// Saving the lowest score id from given batch just to be safe - probably unnecessary, as the ids seem to be ordered
+export async function saveScoresCursor(
 	client: ClientBase,
-	beatmapId: number,
-	rulesetId: number,
+	scoreId?: number,
+	cursorString?: string,
 	source: ActionSource = "unknown"
 ) {
-	const lockKey = buildBeatmapAdvisoryLockKey(beatmapId, rulesetId);
-	await queryWithTiming(client, "acquireBeatmapAdvisoryLock", source, "SELECT pg_advisory_xact_lock($1)", [lockKey]);
-}
+	const keysToUpdate: string[] = [];
+	if (scoreId != null && !isNaN(scoreId) && isFinite(scoreId)) keysToUpdate.push("last_scores_id");
+	if (cursorString) keysToUpdate.push("scores_cursor_string");
+	if (!keysToUpdate.length) return;
 
-// Saving the lowest score id from given batch just to be safe - probably unnecessary, as the ids seem to be ordered
-export async function saveLastScoreId(scoreId: number, source: ActionSource = "unknown") {
-	if (isNaN(scoreId) || !isFinite(scoreId)) return;
-	await withDbClient(client =>
-		queryWithTiming(
-			client,
-			"saveLastScoreId",
-			source,
-			`UPDATE ${DB_CONFIG_TABLE} SET value_text = '${scoreId}' WHERE key = 'last_ws_score_id'`
-		)
+	await queryWithTiming(
+		client,
+		"saveScoresCursor",
+		source,
+		`UPDATE ${DB_CONFIG_TABLE}
+			SET value_text = CASE key
+				WHEN 'last_scores_id' 			THEN $1
+				WHEN 'scores_cursor_string' THEN $2
+			END 
+			WHERE key = ANY($3::TEXT[])`,
+		[scoreId, cursorString, keysToUpdate]
 	);
 }
 
-export async function getLastScoreId(source: ActionSource = "unknown") {
-	const result = await withDbClient<QueryResult<ConfigEntry>>(client =>
-		queryWithTiming(
+export async function getScoresCursor(source: ActionSource = "unknown"): Promise<ScoreCursors> {
+	const result = await withDbClient(client =>
+		queryWithTiming<ConfigEntry>(
 			client,
-			"getLastScoreId",
+			"getScoresCursor",
 			source,
-			`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'last_ws_score_id'`
+			`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key IN ('scores_cursor_string', 'last_scores_id') ORDER BY key`
 		)
 	);
-	return Number(result.rows?.[0]?.value_text || 0);
+
+	return { lastScoresId: Number(result.rows?.[0]?.value_text || 0), cursorString: result.rows?.[1]?.value_text };
 }
 
 export async function updateBeatmapScoresRetrievalDate(
@@ -87,9 +86,9 @@ export async function getInexistentPlayerIds(client: ClientBase, playerIds: numb
 			client,
 			"getInexistentPlayerIds",
 			source,
-			`WITH input_ids AS (SELECT DISTINCT unnest($1::integer[]) AS id)
+			`WITH input_ids AS (SELECT DISTINCT UNNEST($1::INTEGER[]) AS id)
 			SELECT i.id FROM input_ids i
-			LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
+				LEFT JOIN ${DB_PLAYERS_TABLE} u ON u.id = i.id
 			WHERE u.id IS NULL`,
 			[playerIds]
 		)
@@ -102,7 +101,7 @@ export async function getInexistentBeatmapIds(client: ClientBase, beatmapIds: nu
 			client,
 			"getInexistentBeatmapIds",
 			source,
-			`WITH input_ids AS (SELECT DISTINCT unnest($1::bigint[]) AS id)
+			`WITH input_ids AS (SELECT DISTINCT UNNEST($1::BIGINT[]) AS id)
 			 SELECT i.id FROM input_ids i
 				LEFT JOIN ${DB_BEATMAPS_TABLE} b ON b.id = i.id
 			 WHERE b.id IS NULL`,
@@ -193,8 +192,8 @@ export async function recalculateScorePositionsForMapIds(
 		`
    	WITH input_raw AS (
       SELECT
-        UNNEST($1::int[]) AS beatmap_id,
-        UNNEST($2::int[]) AS ruleset_id
+        UNNEST($1::INTEGER[]) AS beatmap_id,
+        UNNEST($2::INTEGER[]) AS ruleset_id
     ),
     input AS (
       SELECT beatmap_id, ruleset_id

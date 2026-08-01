@@ -31,6 +31,7 @@ type OsuAuthScope =
 
 type IdBatch = { batch_no: number; ids: number[] };
 type BeatmapRuleset = { beatmap_id: number; ruleset_id: RulesetId };
+type ScoreCursors = { cursorString?: string; lastScoresId: number };
 
 type ActionSource =
 	| "scrape_players"
@@ -39,7 +40,7 @@ type ActionSource =
 	| "import_beatmap"
 	| "pog_api_v2"
 	| "pog_ws"
-	| "scores_ws"
+	| "scores_fetch"
 	| "osu_auth"
 	| "unknown";
 
@@ -211,6 +212,18 @@ interface RankingType {
 	code: string;
 }
 
+interface RankingPositionData {
+	user_id: number;
+	ruleset_id: RulesetId;
+	position: number;
+	count: number;
+	count_perma: number;
+	count_ss: number;
+	count_lazer: number;
+	ranked_score: number;
+	total_pp: number;
+}
+
 // TODO DDL
 interface HistoricalRankingEntry {
 	rankingId: number; // FK to Ranking Type id
@@ -229,6 +242,8 @@ interface DataSource {
 	name: string;
 	comment: string;
 }
+
+// ------------------------------------------
 
 interface HistoricalPlayerSnipes {
 	id?: number;
