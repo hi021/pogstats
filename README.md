@@ -22,15 +22,15 @@ The plan is to:
 2. scrape all top 100 osu!standard scores for each map
 3. TODO: continuously listen to beatmap updates on the osu! beatmap events endpoint
 4. continuously listen to new scores on the osu! `/scores` endpoint
-    - for any beatmap not in the database try respektive's osu-beatmap-db to avoid spamming osu! API (TODO: replace it with the osu! beatmap events endpoint from 5. for higher quality up-to-date data)
+    - for any beatmap not in the database try respektive's osu-beatmap-db to avoid spamming osu! API (TODO: replace it with the osu! beatmap events endpoint from 3. for higher quality up-to-date data)
     - for any user not in the database fetch them from the osu! user lookup endpoint (TODO: may use respektive's score-rank-api for the top 10k players in ranked score)
-6. check every player with a score in the top ~105 on any leaderboard
+5. check every player with a score in the top ~105 on any beatmap
     - update any data (usernames, flags, etc.)
     - check for (un)restrictions by marking the players not returned by the API as MIA
         - (un)hide their scores from the ranking (TODO: probably should re-scrape scores on all affected beatmaps to be safe)
-7. make a bajilion cool rankings from the data
-8. save the rankings every day near midnight
-9. periodically re-run the scrape for sanity checks and any removed scores (can use the bulk users endpoint from osu! API to check for restrictions)
+6. make a bajilion cool rankings from the data
+7. save the rankings every day near midnight
+8. periodically re-run the scrape for sanity checks and any removed scores (can use the bulk users endpoint from osu! API to check for restrictions)
 
 ## the catch
 - only works with osu!standard for now
