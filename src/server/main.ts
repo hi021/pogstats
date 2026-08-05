@@ -13,9 +13,9 @@ export const FLAG_DEFINITIONS = Object.freeze({
 		description: "Does not connect to ushio, useful for hosting only the pog API",
 		takesValue: false
 	},
-	cursorScoreId: {
-		cli: "--cursorScoreId <number>",
-		description: "Resume from a specific score ID cursor instead of the last saved one",
+	scoreCursor: {
+		cli: "--scoreCursor <string>",
+		description: "Resume from a specific score cursor instead of the last saved one",
 		takesValue: true
 	}
 } as const satisfies FlagDefinitions);

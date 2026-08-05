@@ -49,7 +49,7 @@ export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG
 	clearTimeout(scoresFetchTimeout);
 	clearTimeout(tokenRefreshTimeout);
 
-	const cursors = await getScoresCursors(parsedFlags?.cursorScoreId);
+	const cursors = await getScoresCursors(parsedFlags?.scoreCursor);
 	await refreshOAuthToken();
 
 	scoresFetchTimeout = setTimeout(() => {
