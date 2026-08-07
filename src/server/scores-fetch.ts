@@ -91,6 +91,7 @@ async function endScoresBatch(scores: ApiScore[], cursorString: string, previous
 	try {
 		await saveScoresBatch(scores, cursorString, previousHighestScoreId);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
+		++sessionBatchCount;
 	} catch (e) {
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
