@@ -190,33 +190,28 @@ export async function recalculateScorePositionsForMapIds(
 		"recalculateScorePositionsForMapIds",
 		source,
 		`
-   	WITH input_raw AS (
-      SELECT
-        UNNEST($1::INTEGER[]) AS beatmap_id,
-        UNNEST($2::INTEGER[]) AS ruleset_id
-    ),
-    input AS (
-      SELECT beatmap_id, ruleset_id
-      FROM input_raw
-      GROUP BY beatmap_id, ruleset_id
-    ),
-    ranked AS (
-      SELECT
-        s.id,
-        ROW_NUMBER() OVER (
-          PARTITION BY s.beatmap_id, s.ruleset_id
-          ORDER BY s.total_score DESC, s.ended_at ASC, s.id ASC
-        ) AS pos
-      FROM ${DB_SCORES_TABLE} s
-      JOIN input i
-        ON s.beatmap_id = i.beatmap_id
-       AND s.ruleset_id = i.ruleset_id
-      WHERE s.position > 0
-    )
-    UPDATE ${DB_SCORES_TABLE} AS s
-    SET position = ranked.pos
-    FROM ranked
-    WHERE s.id = ranked.id`,
+		WITH input AS (
+			SELECT DISTINCT beatmap_id, ruleset_id
+			FROM UNNEST($1::INTEGER[], $2::INTEGER[]) AS t(beatmap_id, ruleset_id)
+		),
+		ranked AS (
+			SELECT
+				s.id,
+				ROW_NUMBER() OVER (
+					PARTITION BY s.beatmap_id, s.ruleset_id
+					ORDER BY s.total_score DESC, s.ended_at ASC, s.id ASC
+				) AS new_pos
+			FROM ${DB_SCORES_TABLE} s
+			JOIN input i
+				ON s.beatmap_id = i.beatmap_id
+			AND s.ruleset_id = i.ruleset_id
+			WHERE s.position > 0
+		)
+		UPDATE ${DB_SCORES_TABLE} AS s
+		SET position = ranked.new_pos
+		FROM ranked
+		WHERE s.id = ranked.id
+			AND s.position != ranked.new_pos`,
 		[beatmapIds, rulesetIds]
 	);
 }

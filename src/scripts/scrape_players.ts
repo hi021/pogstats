@@ -313,9 +313,10 @@ export async function scrapePlayers(ids?: number[]) {
 				: { beatmap_id: [], ruleset_id: [] };
 			const beatmapIds = [...miaBeatmapsUnnested.beatmap_id, ...nonMiaBeatmapsUnnested.beatmap_id];
 			const rulesetIds = [...miaBeatmapsUnnested.ruleset_id, ...nonMiaBeatmapsUnnested.ruleset_id];
-			console.log(`[scrape_players] recalculating positions on ${beatmapIds.length} map(s)`);
 
+			console.log(`[scrape_players] recalculating positions on ${beatmapIds.length} map(s)`);
 			await recalculateScorePositionsForMapIds(client, beatmapIds, rulesetIds, "scrape_players");
+			console.log(`[scrape_players] finished processing`);
 
 			// TODO: this also must trigger ranking table recalcs!
 		});
