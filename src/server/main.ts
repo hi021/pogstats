@@ -4,7 +4,7 @@ import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
 import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
-import { BASE_POG_WS_URL, onConnect, onUpgrade, pogWss, socketDebugMessageEndpoint } from "./pog-ws.js";
+import { BASE_POG_WS_URL, onClientError, onConnect, onError, onUpgrade, pogWss, socketDebugMessageEndpoint } from "./pog-ws.js";
 import { initializeScoresFetch } from "./scores-fetch.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
@@ -34,6 +34,8 @@ pogApiApp.on("error", (e, ctx) => console.error("pog API error:\n", ctx.url, e))
 
 pogApiServer.on("upgrade", onUpgrade);
 pogWss.on("connection", onConnect);
+pogWss.on("wsClientError", onClientError);
+pogWss.on("error", onError);
 
 if (parsedFlags?.noScoresWs) console.log("scores fetch disabled by CLI parameter");
 else initializeScoresFetch(parsedFlags);

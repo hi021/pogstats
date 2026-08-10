@@ -100,9 +100,8 @@ async function createScoreTables(client: ClientBase) {
 			CONSTRAINT beatmap_ruleset_update_dates_beatmap_fk FOREIGN KEY(beatmap_id) REFERENCES ${DB_BEATMAPS_TABLE}(id)
 		)`);
 	await client.query(`
-			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_scrape IS 'Meta: time of the last score scraper run over this map';
-			COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_update IS 'Meta: time of the last update for the map from scores-fetch';
-			`);
+		COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_scrape IS 'Meta: time of the last score scraper run over this map';
+		COMMENT ON COLUMN ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE}.last_scores_update IS 'Meta: time of the last update for the map from scores-fetch';`);
 
 	console.log(
 		`Created ${DB_SCORES_TABLE}, ${DB_HISTORICAL_PLAYER_SNIPES_TABLE}, and ${DB_BEATMAP_RULESET_UPDATE_DATES_TABLE} tables if didn't exist`

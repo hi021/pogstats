@@ -30,7 +30,7 @@ async function createRankingTables(client: ClientBase) {
 }
 
 // TODO: make this a pg function so it can be put in pg_cron
-// watch out, this takes a while, even for standard only
+// TODO: populating rollup table: watch out, this takes a while, even for standard only
 async function populateRankingTables(client: ClientBase) {
 	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE} ... tables`);
 
