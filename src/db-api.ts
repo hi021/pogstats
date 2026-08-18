@@ -1,5 +1,5 @@
 import { ClientBase, QueryResult } from "pg";
-import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
+import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_RANKING_ROLLUP_TABLE, DB_SCORES_TABLE } from "./env.js";
 import { queryWithTiming } from "./metrics.js";
 import { parsePositionThresholdAndRankingType } from "./shared.js";
 
@@ -73,6 +73,7 @@ export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: s
 	}
 }
 
+// TODO
 export async function getLiveCountRankingForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
 	const result = await queryWithTiming<PlayerLiveCountData>(
 		client,
@@ -92,6 +93,72 @@ export async function getLiveCountRankingForPlayer(client: ClientBase, playerId:
 	);
 
 	return result.rows?.[0];
+}
+
+// TODO
+export async function getFullRankingFromRollup(client: ClientBase, rulesetId: RulesetId) {
+	return await queryWithTiming<PlayerFullRankingData[]>(
+		client,
+		"getFullRankingFromRollup",
+		"pog_api_v2",
+		`with top_1 as (
+			select r.user_id, sum(r.count) as count, sum(r.count_ss) as count_ss, sum(r.count_lazer) as count_lazer, sum(r.count_perma) as count_perma, avg(r.avg_acc) as avg_acc, avg(r.avg_map_len) as avg_map_len
+			from ${DB_RANKING_ROLLUP_TABLE} r
+			where r."position" <= 1
+			and r.ruleset_id = 0
+			group by r.user_id
+		),
+		top_8 as (
+			select r.user_id, sum(r.count) as count, sum(r.count_ss) as count_ss, sum(r.count_lazer) as count_lazer, sum(r.count_perma) as count_perma, avg(r.avg_acc) as avg_acc, avg(r.avg_map_len) as avg_map_len
+			from ${DB_RANKING_ROLLUP_TABLE} r
+			where r."position" <= 8
+			and r.ruleset_id = 0
+			group by r.user_id
+		),
+		top_15 as (
+			select r.user_id, sum(r.count) as count, sum(r.count_ss) as count_ss, sum(r.count_lazer) as count_lazer, sum(r.count_perma) as count_perma, avg(r.avg_acc) as avg_acc, avg(r.avg_map_len) as avg_map_len
+			from ${DB_RANKING_ROLLUP_TABLE} r
+			where r."position" <= 15
+			and r.ruleset_id = 0
+			group by r.user_id
+		),
+		top_25 as (
+			select r.user_id, sum(r.count) as count, sum(r.count_ss) as count_ss, sum(r.count_lazer) as count_lazer, sum(r.count_perma) as count_perma, avg(r.avg_acc) as avg_acc, avg(r.avg_map_len) as avg_map_len
+			from ${DB_RANKING_ROLLUP_TABLE} r
+			where r."position" <= 25
+			and r.ruleset_id = 0
+			group by r.user_id
+		),
+		top_50 as (
+			select r.user_id, sum(r.count) as count, sum(r.count_ss) as count_ss, sum(r.count_lazer) as count_lazer, sum(r.count_perma) as count_perma, avg(r.avg_acc) as avg_acc, avg(r.avg_map_len) as avg_map_len
+			from ${DB_RANKING_ROLLUP_TABLE} r
+			where r."position" <= 50
+			and r.ruleset_id = 0
+			group by r.user_id
+		),
+		top_100 as (
+			select r.user_id, sum(r.count) as count, sum(r.count_ss) as count_ss, sum(r.count_lazer) as count_lazer, sum(r.count_perma) as count_perma, avg(r.avg_acc) as avg_acc, avg(r.avg_map_len) as avg_map_len
+			from ${DB_RANKING_ROLLUP_TABLE} r
+			where r.ruleset_id = 0
+			group by r.user_id
+		)
+		select p.id,
+					p.username,
+					p.country_code,
+					dense_rank() over (order by top_1.count desc nulls last, top_1.user_id) as top_1_position, top_1.*, 
+					dense_rank() over (order by top_8.count desc nulls last, top_8.user_id) as top_8_position, top_8.*, 
+					dense_rank() over (order by top_15.count desc nulls last, top_15.user_id) as top_15_position, top_15.*, 
+					dense_rank() over (order by top_25.count desc nulls last, top_25.user_id) as top_25_position, top_25.*, 
+					dense_rank() over (order by top_50.count desc nulls last, top_50.user_id) as top_50_position, top_50.*, 
+					dense_rank() over (order by top_100.count desc nulls last, top_100.user_id) as top_100_position, top_100.*
+		from ${DB_PLAYERS_TABLE} p
+			left join top_1 on top_1.user_id = p.id
+			left join top_8 on top_8.user_id = p.id
+			left join top_15 on top_15.user_id = p.id
+			left join top_25 on top_25.user_id = p.id
+			left join top_50 on top_50.user_id = p.id
+			join top_100 on top_100.user_id = p.id
+`)
 }
 
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
@@ -128,6 +195,93 @@ export async function getGradeSpreadForPlayer(
 		)`,
 		[playerId, rulesetId, positionThreshold]
 	);
+
+	return result.rows?.[0]?.spread ?? {};
+}
+
+// TODO: type and optimize query
+export async function getModSpreadForPlayer(
+	client: ClientBase,
+	playerId: number,
+	rulesetId: RulesetId,
+	positionThreshold: RankingPositionThreshold = 100
+) {
+	const result = await queryWithTiming<{ spread: PlayerModSpread }>(
+		client,
+		"getModSpreadForPlayer",
+		"pog_api_v2",
+		`WITH base AS (
+			SELECT
+					s.id,
+					COALESCE(
+							array_agg(DISTINCT norm_acronym ORDER BY norm_acronym)
+									FILTER (WHERE norm_acronym IS NOT NULL),
+							ARRAY[]::text[]
+					) AS mods_arr
+			FROM ${DB_SCORES_TABLE} s
+			LEFT JOIN LATERAL jsonb_array_elements(s.data->'mods') m ON true
+			LEFT JOIN LATERAL (
+					SELECT CASE m->>'acronym'
+							WHEN 'NC' THEN 'DT'
+							WHEN 'DT' THEN 'DT'
+							WHEN 'DC' THEN 'HT'
+							WHEN 'HT' THEN 'HT'
+							WHEN 'BL' THEN 'BL'
+							WHEN 'FL' THEN 'FL'
+							WHEN 'HR' THEN 'HR'
+							WHEN 'HD' THEN 'HD'
+							WHEN 'TC' THEN 'TC'
+							WHEN 'EZ' THEN 'EZ'
+							WHEN 'RX' THEN 'RX'
+							WHEN 'AP' THEN 'AP'
+							WHEN 'TD' THEN 'TD'
+							ELSE NULL
+					END AS norm_acronym
+			) n ON true
+			WHERE s.user_id = $1
+				and s.ruleset_id = $2
+				and s.position BETWEEN 1 AND $3
+			GROUP BY s.id
+	), expanded AS (
+			SELECT
+					b.id,
+					CASE
+							WHEN cardinality(mods_variant) = 0 THEN 'NM'
+							ELSE array_to_string(mods_variant, ',')
+					END AS variant_key
+			FROM base b
+			CROSS JOIN LATERAL (
+					SELECT
+							('HD' = ANY(b.mods_arr)) AS has_hd,
+							('TC' = ANY(b.mods_arr)) AS has_tc
+			) flags
+			CROSS JOIN LATERAL (
+					SELECT
+							CASE
+									WHEN NOT flags.has_hd AND NOT flags.has_tc
+											THEN ARRAY[0]          -- only full
+									WHEN flags.has_hd
+											THEN ARRAY[0,1]        -- full, -HD
+									WHEN flags.has_tc
+											THEN ARRAY[0,2]        -- full, -TC
+							END AS variants
+			) vset
+			CROSS JOIN LATERAL unnest(vset.variants) AS gs(variant_id)
+			CROSS JOIN LATERAL (
+					SELECT CASE gs.variant_id
+							WHEN 0 THEN b.mods_arr
+							WHEN 1 THEN array_remove(b.mods_arr, 'HD')
+							WHEN 2 THEN array_remove(b.mods_arr, 'TC')
+					END AS mods_variant
+			) v
+	)
+	SELECT jsonb_object_agg(variant_key, cnt) AS spread
+	FROM (
+			SELECT variant_key, COUNT(*) AS cnt
+			FROM expanded
+			GROUP BY variant_key
+	) t`, 
+ [playerId, rulesetId, positionThreshold]);
 
 	return result.rows?.[0]?.spread ?? {};
 }
