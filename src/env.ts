@@ -16,7 +16,7 @@ export const DB_NAME = process.env.DB_NAME || "pogstats";
 export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";
 export const DB_SCORES_TABLE = process.env.DB_SCORES_TABLE || "SCORES";
 export const DB_PLAYERS_TABLE = process.env.DB_PLAYERS_TABLE || "PLAYERS";
-// export const DB_PLAYER_RULESET_STATS_TABLE = process.env.DB_PLAYER_RULESET_STATS_TABLE || "PLAYER_RULESET_STATS";
+export const DB_PLAYER_RULESET_STATS_TABLE = process.env.DB_PLAYER_RULESET_STATS_TABLE || "PLAYER_RULESET_STATS";
 export const DB_PLAYER_POG_BADGES_TABLE = process.env.DB_PLAYER_POG_BADGES_TABLE || "PLAYER_POG_BADGES";
 export const DB_POG_BADGES_TABLE = process.env.DB_POG_BADGES_TABLE || "POG_BADGES";
 export const DB_BEATMAPS_TABLE = process.env.DB_BEATMAPS_TABLE || "BEATMAPS";
@@ -29,6 +29,7 @@ export const DB_HISTORICAL_PLAYER_SNIPES_TABLE = process.env.DB_HISTORICAL_PLAYE
 export const DB_PLAYER_MIA_HISTORY_TABLE = process.env.DB_PLAYER_MIA_HISTORY_TABLE || "PLAYER_MIA_HISTORY";
 export const DB_RANKING_ROLLUP_TABLE = process.env.DB_RANKING_ROLLUP_TABLE || "RANKING_ROLLUP";
 export const DB_POSITION_WEIGHTS_TABLE = process.env.DB_POSITION_WEIGHTS_TABLE || "POSITION_WEIGHTS";
+export const DB_RECALC_QUEUE_TABLE = process.env.DB_RECALC_QUEUE_TABLE || "RECALC_QUEUE";
 
 const parsedServerPort = Number(process.env.SERVER_PORT);
 export const SERVER_PORT = Number.isFinite(parsedServerPort) ? parsedServerPort : 3727;

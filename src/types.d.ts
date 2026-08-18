@@ -143,6 +143,7 @@ type PlayerInRanking = Pick<Player, "id" | "username" | "countryCode" | "teamId"
 
 type PlayerWithStats = Player & { stats: { [ruleset in Ruleset]?: PlayerRulesetStats } };
 
+// unused but would be cool :(
 interface PlayerRulesetStats {
 	playCount: number;
 	playTime: number; // in seconds
@@ -263,5 +264,6 @@ interface ConfigEntry {
 	key: string;
 	value_int?: number;
 	value_text?: string;
+	value_date?: Date;
 	value_json?: Record<string, unknown>;
 }

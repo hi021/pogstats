@@ -55,8 +55,8 @@ async function createScoreTables(client: ClientBase) {
 		COMMENT ON COLUMN ${DB_SCORES_TABLE}.data 			IS 'mods, maximum_statistics, statistics columns from the API as JSONB';`);
 
 	// TODO: verify performance, maybe add JSONB GIN, score, pp, grade after verifying ranking queries
-	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE}(beatmap_id, ruleset_id, position);
-	// ? MIA scores index? (position, user_id) WHERE position = 0?
+	// ? CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_ruleset_position_idx ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id, position);
+	// ? MIA scores index? (position, user_id) WHERE position = 0? - probably unnecessary...
 	// TODO?: for _user_position_ruleset_idx and _ss_idx indexes could move ruleset_id before position if adding other modes? - remove ruleset_id = 0 from pp_idx!!
 	await client.query(
 		`CREATE INDEX IF NOT EXISTS ${DB_SCORES_TABLE}_beatmap_id_ruleset_id_idx 	ON ${DB_SCORES_TABLE} (beatmap_id, ruleset_id);

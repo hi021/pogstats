@@ -38,6 +38,7 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "mania_min_top15", value_int: 125 },
 	{ key: "mania_min_top8", value_int: 50 },
 	{ key: "mania_min_top1", value_int: 5 },
+	{ key: "last_weighted_pp_recalc", value_date: undefined },
 	{ key: "last_scores_id", value_text: "0" },
 	{ key: "scores_cursor_string", value_text: "" },
 	{ key: "beatmaps_cursor_string", value_text: "" },
@@ -55,6 +56,7 @@ async function createConfigTable(client: ClientBase) {
       key 				TEXT PRIMARY KEY,
 			value_int 	INTEGER,
 			value_text 	TEXT,
+			value_date 	TIMESTAMPTZ,
 			value_json 	JSONB
     )`);
 
@@ -66,8 +68,14 @@ async function populateConfigTable(client: ClientBase) {
 
 	for (const config of INITIAL_CONFIG)
 		await client.query(
-			`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_json) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING`,
-			[config.key, config.value_int, config.value_text, config.value_json ? JSON.stringify(config.value_json) : null]
+			`INSERT INTO ${DB_CONFIG_TABLE} (key, value_int, value_text, value_date, value_json) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (key) DO NOTHING`,
+			[
+				config.key,
+				config.value_int,
+				config.value_text,
+				config.value_date,
+				config.value_json ? JSON.stringify(config.value_json) : null
+			]
 		);
 
 	console.log(`Populated ${DB_CONFIG_TABLE} table with initial values`);

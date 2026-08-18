@@ -1,8 +1,17 @@
 import { ClientBase } from "pg";
 import { withDbClientTransaction } from "../db-generic.js";
-import { DB_SCORES_TABLE, DB_CONFIG_TABLE, DB_POSITION_WEIGHTS_TABLE, DB_RANKING_ROLLUP_TABLE, DB_RECALC_QUEUE_TABLE } from "../env.js";
+import {
+	DB_SCORES_TABLE,
+	DB_CONFIG_TABLE,
+	DB_POSITION_WEIGHTS_TABLE,
+	DB_RANKING_ROLLUP_TABLE,
+	DB_RECALC_QUEUE_TABLE,
+	DB_PLAYER_RULESET_STATS_TABLE,
+	DB_BEATMAPS_TABLE,
+	DB_PLAYERS_TABLE
+} from "../env.js";
 
-// TODO: !! add DB_RECALC_QUEUE_TABLE to .env! also log the number of users waiting per operation_type in scores-fetch or somewhere
+// TODO: !! log the number of users waiting per operation_type in scores-fetch or somewhere
 async function createRankingTables(client: ClientBase) {
 	console.log(`Attempting to create ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} tables`);
 
@@ -23,24 +32,22 @@ async function createRankingTables(client: ClientBase) {
 			count_lazer						INTEGER NOT NULL DEFAULT 0,
 			ranked_score					BIGINT NOT NULL DEFAULT 0,
 			total_pp							INTEGER NOT NULL DEFAULT 0,
-			avg_acc							REAL NOT NULL DEFAULT 0,
+			avg_acc								REAL NOT NULL DEFAULT 0,
 			avg_map_len						REAL NOT NULL DEFAULT 0,
 			
-			PRIMARY KEY (user_id, ruleset_id, position)
+			PRIMARY KEY (user_id, ruleset_id, position),
+			CONSTRAINT ranking_rollup_user_fk FOREIGN KEY(user_id) REFERENCES ${DB_PLAYERS_TABLE} (id)
 		);
 
-		CREATE TABLE ${DB_RECALC_QUEUE_TABLE} (
-		    user_id 					INTEGER PRIMARY KEY,
-		    queued_at 					TIMESTAMPTZ DEFAULT NOW(),
+		CREATE TABLE IF NOT EXISTS ${DB_RECALC_QUEUE_TABLE} (
+			user_id 							INTEGER PRIMARY KEY,
+			queued_at 						TIMESTAMPTZ DEFAULT NOW(),
 			operation_type				TEXT NOT NULL
 		);`);
 
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
 }
 
-// TODO: !! new player stats table per ruleset_id (and position bucket?) with weighted_pp and weighted_count to use here
-// TODO: !! add used row to DB_CONFIG_TABLE
-// TODO: formatting
 async function scheduleDbQueue(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION process_weighted_pp_recalc_queue()
@@ -48,61 +55,61 @@ async function scheduleDbQueue(client: ClientBase) {
 		LANGUAGE plpgsql
 		AS $$
 		DECLARE
-		    v_lock_id CONSTANT bigint := 74809284739; 
-		    v_processed_count int;
+			v_lock_id CONSTANT BIGINT := 74809284739; 
+			v_processed_count INTEGER;
 		BEGIN
-		    IF pg_try_advisory_lock(v_lock_id) THEN
-		        BEGIN
-		            WITH batch AS (
-		                SELECT user_id
-		                FROM ${DB_RECALC_QUEUE_TABLE}
-						WHERE operation_type = 'weighted_pp'
-		                ORDER BY queued_at ASC
-		                LIMIT 3000
-		                FOR UPDATE SKIP LOCKED
-		            ),
-		            deleted_batch AS (
-		                DELETE FROM ${DB_RECALC_QUEUE_TABLE}
-		                WHERE user_id IN (SELECT user_id FROM batch)
-		                RETURNING user_id
-		            ),
-		            recalculated AS (
-		                SELECT
-		                    d.user_id,
-		                    COALESCE(calc_weighted_pp_ordered(s.pp ORDER BY s.pp DESC NULLS LAST), 0) AS new_weighted_pp
-		                FROM deleted_batch d
-		                LEFT JOIN ${DB_SCORES_TABLE} s ON s.user_id = d.user_id 
-		                                  AND s.ruleset_id = 0 
-		                                  AND s.position BETWEEN 1 AND 100
-		                GROUP BY d.user_id
-		            )
-		            UPDATE ${DB_PLAYERS_TABLE} p
-		            SET weighted_pp = r.new_weighted_pp
-		            FROM recalculated r
-		            WHERE p.id = r.user_id;
-		
-		            GET DIAGNOSTICS v_processed_count = ROW_COUNT;
-		            IF v_processed_count > 0 THEN
-		                UPDATE ${DB_CONFIG_TABLE} 
-		                SET last_weighted_pp_recalc = NOW();
-		            END IF;
-		
-		        EXCEPTION WHEN OTHERS THEN
-		            PERFORM pg_advisory_unlock(v_lock_id);
-		            RAISE;
-		        END;
-		
-		        PERFORM pg_advisory_unlock(v_lock_id);
-		    ELSE
-		        RAISE NOTICE 'Weighted PP recalc queue processing already in progress. Skipping this cycle.';
-		    END IF;
+			IF pg_try_advisory_lock(v_lock_id) THEN
+					BEGIN
+						WITH batch AS (
+							SELECT user_id
+							FROM ${DB_RECALC_QUEUE_TABLE}
+							WHERE operation_type = 'weighted_pp'
+							ORDER BY queued_at ASC
+							LIMIT 3000
+							FOR UPDATE SKIP LOCKED
+						),
+						deleted_batch AS (
+							DELETE FROM ${DB_RECALC_QUEUE_TABLE}
+							WHERE user_id IN (SELECT user_id FROM batch)
+							RETURNING user_id
+						),
+						recalculated AS (
+							SELECT
+								d.user_id,
+								COALESCE(calc_weighted_pp_ordered(s.pp ORDER BY s.pp DESC NULLS LAST), 0) AS new_weighted_pp
+							FROM deleted_batch d
+							LEFT JOIN ${DB_SCORES_TABLE} s ON s.user_id = d.user_id 
+																						 AND s.ruleset_id = 0 
+																						 AND s.position BETWEEN 1 AND 100
+							GROUP BY d.user_id
+						)
+						UPDATE ${DB_PLAYER_RULESET_STATS_TABLE} p
+						SET weighted_pp = r.new_weighted_pp
+						FROM recalculated r
+						WHERE p.id = r.user_id AND p.ruleset_id = 0;
+
+						GET DIAGNOSTICS v_processed_count = ROW_COUNT;
+						IF v_processed_count > 0 THEN
+							UPDATE ${DB_CONFIG_TABLE} 
+							SET last_weighted_pp_recalc = NOW();
+						END IF;
+	
+					EXCEPTION WHEN OTHERS THEN
+						PERFORM pg_advisory_unlock(v_lock_id);
+						RAISE;
+					END;
+	
+					PERFORM pg_advisory_unlock(v_lock_id);
+			ELSE
+					RAISE NOTICE 'Weighted PP recalc queue processing already in progress. Skipping this cycle.';
+			END IF;
 		END;
 		$$;
 
 		SELECT cron.schedule(
-		    'process_weighted_pp_queue_job',
-		    '*/5 * * * *',
-		    'SELECT process_weighted_pp_recalc_queue();'
+			'process_weighted_pp_queue_job',
+			'*/5 * *high * *',
+			'SELECT process_weighted_pp_recalc_queue();'
 		);
 	`);
 }
@@ -213,6 +220,7 @@ async function populateRankingTables(client: ClientBase) {
 			(98,0.00116839),
 			(99,0.0010626),
 			(100,0.00096639)
+		ON CONFLICT (position) DO UPDATE SET weight = EXCLUDED.weight;
 		`);
 
 	await client.query(`
@@ -232,8 +240,8 @@ async function populateRankingTables(client: ClientBase) {
 		    SUM(COALESCE(s.pp, 0))::INTEGER AS total_pp,
 		    AVG(s.accuracy)::FLOAT AS avg_acc,
 		    AVG(b.total_length)::FLOAT AS avg_map_len
-		FROM scores s
-			JOIN beatmaps b ON s.beatmap_id = b.id
+		FROM ${DB_SCORES_TABLE} s
+			JOIN ${DB_BEATMAPS_TABLE} b ON s.beatmap_id = b.id
 		WHERE s.position BETWEEN 1 AND 100
 		GROUP BY s.user_id, s.ruleset_id, s.position
 		ON CONFLICT (user_id, ruleset_id, position) DO UPDATE SET
