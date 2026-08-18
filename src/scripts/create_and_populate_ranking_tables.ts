@@ -20,8 +20,10 @@ async function createRankingTables(client: ClientBase) {
 			count_perma						INTEGER NOT NULL DEFAULT 0,
 			count_ss							INTEGER NOT NULL DEFAULT 0,
 			count_lazer						INTEGER NOT NULL DEFAULT 0,
-			ranked_score					INTEGER NOT NULL DEFAULT 0,
+			ranked_score					BIGINT NOT NULL DEFAULT 0,
 			total_pp							INTEGER NOT NULL DEFAULT 0,
+			avg_acc							REAL NOT NULL DEFAULT 0,
+			avg_map_len						REAL NOT NULL DEFAULT 0,
 			
 			PRIMARY KEY (user_id, ruleset_id, position)
 		);`);
@@ -29,10 +31,9 @@ async function createRankingTables(client: ClientBase) {
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} if didn't exist`);
 }
 
-// TODO: make this a pg function so it can be put in pg_cron
-// TODO: populating rollup table: watch out, this takes a while, even for standard only
+// watch out, this takes a while, even for standard only
 async function populateRankingTables(client: ClientBase) {
-	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE} ... tables`);
+	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} tables`);
 
 	await client.query(`
 		INSERT INTO ${DB_POSITION_WEIGHTS_TABLE}(position, weight) VALUES
@@ -136,9 +137,41 @@ async function populateRankingTables(client: ClientBase) {
 			(98,0.00116839),
 			(99,0.0010626),
 			(100,0.00096639)
-			`);
+		`);
 
-	console.log(`Populated ${DB_POSITION_WEIGHTS_TABLE} ... tables`);
+	await client.query(`
+		INSERT INTO  ${DB_RANKING_ROLLUP_TABLE}(
+		    user_id, ruleset_id, position, count, count_perma, count_ss, 
+		    count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
+		)
+		SELECT
+		    s.user_id,
+		    s.ruleset_id,
+		    s.position,
+		    COUNT(*)::INTEGER AS count,
+		    COUNT(*) FILTER (WHERE s.is_perma)::INTEGER AS count_perma,
+		    COUNT(*) FILTER (WHERE s.grade IN ('XH', 'X'))::INTEGER AS count_ss,
+		    COUNT(*) FILTER (WHERE s.is_lazer)::INTEGER AS count_lazer,
+		    SUM(COALESCE(s.classic_total_score, 0))::BIGINT AS ranked_score,
+		    SUM(COALESCE(s.pp, 0))::INTEGER AS total_pp,
+		    AVG(s.accuracy)::FLOAT AS avg_acc,
+		    AVG(b.total_length)::FLOAT AS avg_map_len
+		FROM scores s
+			JOIN beatmaps b ON s.beatmap_id = b.id
+		WHERE s.position BETWEEN 1 AND 100
+		GROUP BY s.user_id, s.ruleset_id, s.position
+		ON CONFLICT (user_id, ruleset_id, position) DO UPDATE SET
+		    count = EXCLUDED.count,
+		    count_perma = EXCLUDED.count_perma,
+		    count_ss = EXCLUDED.count_ss,
+		    count_lazer = EXCLUDED.count_lazer,
+		    ranked_score = EXCLUDED.ranked_score,
+		    total_pp = EXCLUDED.total_pp,
+		    avg_acc = EXCLUDED.avg_acc,
+		    avg_map_len = EXCLUDED.avg_map_len;
+	`);
+
+	console.log(`Populated ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} tables`);
 }
 
 async function main() {
