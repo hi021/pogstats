@@ -1,9 +1,10 @@
 import { ClientBase } from "pg";
 import { withDbClientTransaction } from "../db-generic.js";
-import { DB_POSITION_WEIGHTS_TABLE, DB_RANKING_ROLLUP_TABLE } from "../env.js";
+import { DB_SCORES_TABLE, DB_CONFIG_TABLE, DB_POSITION_WEIGHTS_TABLE, DB_RANKING_ROLLUP_TABLE, DB_RECALC_QUEUE_TABLE } from "../env.js";
 
+// TODO: !! add DB_RECALC_QUEUE_TABLE to .env! also log the number of users waiting per operation_type in scores-fetch or somewhere
 async function createRankingTables(client: ClientBase) {
-	console.log(`Attempting to create ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} tables`);
+	console.log(`Attempting to create ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} tables`);
 
 	await client.query(`
 		CREATE TABLE IF NOT EXISTS ${DB_POSITION_WEIGHTS_TABLE} (
@@ -26,17 +27,92 @@ async function createRankingTables(client: ClientBase) {
 			avg_map_len						REAL NOT NULL DEFAULT 0,
 			
 			PRIMARY KEY (user_id, ruleset_id, position)
+		);
+
+		CREATE TABLE ${DB_RECALC_QUEUE_TABLE} (
+		    user_id 					INTEGER PRIMARY KEY,
+		    queued_at 					TIMESTAMPTZ DEFAULT NOW(),
+			operation_type				TEXT NOT NULL
 		);`);
 
-	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} if didn't exist`);
+	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
 }
 
-// watch out, this takes a while, even for standard only
+// TODO: !! new player stats table per ruleset_id (and position bucket?) with weighted_pp and weighted_count to use here
+// TODO: !! add used row to DB_CONFIG_TABLE
+// TODO: formatting
+async function scheduleDbQueue(client: ClientBase) {
+	await client.query(`
+		CREATE OR REPLACE FUNCTION process_weighted_pp_recalc_queue()
+		RETURNS void
+		LANGUAGE plpgsql
+		AS $$
+		DECLARE
+		    v_lock_id CONSTANT bigint := 74809284739; 
+		    v_processed_count int;
+		BEGIN
+		    IF pg_try_advisory_lock(v_lock_id) THEN
+		        BEGIN
+		            WITH batch AS (
+		                SELECT user_id
+		                FROM ${DB_RECALC_QUEUE_TABLE}
+						WHERE operation_type = 'weighted_pp'
+		                ORDER BY queued_at ASC
+		                LIMIT 3000
+		                FOR UPDATE SKIP LOCKED
+		            ),
+		            deleted_batch AS (
+		                DELETE FROM ${DB_RECALC_QUEUE_TABLE}
+		                WHERE user_id IN (SELECT user_id FROM batch)
+		                RETURNING user_id
+		            ),
+		            recalculated AS (
+		                SELECT
+		                    d.user_id,
+		                    COALESCE(calc_weighted_pp_ordered(s.pp ORDER BY s.pp DESC NULLS LAST), 0) AS new_weighted_pp
+		                FROM deleted_batch d
+		                LEFT JOIN ${DB_SCORES_TABLE} s ON s.user_id = d.user_id 
+		                                  AND s.ruleset_id = 0 
+		                                  AND s.position BETWEEN 1 AND 100
+		                GROUP BY d.user_id
+		            )
+		            UPDATE ${DB_PLAYERS_TABLE} p
+		            SET weighted_pp = r.new_weighted_pp
+		            FROM recalculated r
+		            WHERE p.id = r.user_id;
+		
+		            GET DIAGNOSTICS v_processed_count = ROW_COUNT;
+		            IF v_processed_count > 0 THEN
+		                UPDATE ${DB_CONFIG_TABLE} 
+		                SET last_weighted_pp_recalc = NOW();
+		            END IF;
+		
+		        EXCEPTION WHEN OTHERS THEN
+		            PERFORM pg_advisory_unlock(v_lock_id);
+		            RAISE;
+		        END;
+		
+		        PERFORM pg_advisory_unlock(v_lock_id);
+		    ELSE
+		        RAISE NOTICE 'Weighted PP recalc queue processing already in progress. Skipping this cycle.';
+		    END IF;
+		END;
+		$$;
+
+		SELECT cron.schedule(
+		    'process_weighted_pp_queue_job',
+		    '*/5 * * * *',
+		    'SELECT process_weighted_pp_recalc_queue();'
+		);
+	`);
+}
+
+// watch out! this takes a while, even for standard only
 async function populateRankingTables(client: ClientBase) {
 	console.log(`Populating ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} tables`);
 
 	await client.query(`
-		INSERT INTO ${DB_POSITION_WEIGHTS_TABLE}(position, weight) VALUES
+		INSERT INTO ${DB_POSITION_WEIGHTS_TABLE} (position, weight) VALUES
 			(1,1),
 			(2,0.99159),
 			(3,0.98250416),
@@ -140,7 +216,7 @@ async function populateRankingTables(client: ClientBase) {
 		`);
 
 	await client.query(`
-		INSERT INTO  ${DB_RANKING_ROLLUP_TABLE}(
+		INSERT INTO ${DB_RANKING_ROLLUP_TABLE} (
 		    user_id, ruleset_id, position, count, count_perma, count_ss, 
 		    count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
 		)
@@ -178,6 +254,7 @@ async function main() {
 	await withDbClientTransaction(async client => {
 		await createRankingTables(client);
 		await populateRankingTables(client);
+		await scheduleDbQueue(client);
 	});
 }
 
