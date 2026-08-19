@@ -48,13 +48,14 @@ export async function getRankingForPlayer(
 	// TODO: otherwise historical ranking
 }
 
+// TODO: rethink this - maybe just don't split by ranking type?
 export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: string, rulesetId: RulesetId, playerId: number) {
 	const parsedRanking = parsePositionThresholdAndRankingType(rankingCode);
 	if (!parsedRanking) return;
 
 	switch (parsedRanking.rankingType) {
 		case "":
-			return getLiveCountRankingForPlayer(client, playerId, rulesetId);
+			return getLiveRankingForPlayer(client, playerId, rulesetId);
 		case "-weighted":
 			console.log("weighted");
 			break;
@@ -74,30 +75,73 @@ export async function getLiveRankingForPlayer(client: ClientBase, rankingCode: s
 }
 
 // TODO: move to types.d.ts
-type BucketStats<B extends PositionThreshold, CountOnly extends boolean> = CountOnly extends true 
+export type SingleBucketRankingData<B extends PositionBucket, CountOnly extends boolean> = {
+  id: number;
+  username: string;
+  country_code: string;
+  count_position: number;
+  count: number;
+} & (CountOnly extends true
+  ? {}
+  : {
+      count_ss_position: number;
+      count_ss: number;
+      count_lazer_position: number;
+      count_lazer: number;
+      count_perma_position: number;
+      count_perma: number;
+      ranked_score_position: number;
+      ranked_score: string;  // TODO: validate if string or if BIGINT converter works
+      total_pp_position: number;
+      total_pp: number;
+      avg_acc: number;
+      avg_map_len: number;
+	  // TODO: probably want these outside position buckets?
+    }) & (B extends 100
   ? {
-      [K in B as `top_${K}_position`]: number;
+      weighted_pp: number;
+      weighted_count: number;
+    }
+  : {});
+
+type MetricBucketStats<B extends number, CountOnly extends boolean> = CountOnly extends true
+  ? {
+      [K in B as `top_${K}_count_position`]: number;
       [K in B as `top_${K}_count`]: number;
     }
   : {
-      [K in B as `top_${K}_position`]: number;
+      [K in B as `top_${K}_count_position`]: number;
       [K in B as `top_${K}_count`]: number;
+      [K in B as `top_${K}_count_ss_position`]: number;
       [K in B as `top_${K}_count_ss`]: number;
+      [K in B as `top_${K}_count_lazer_position`]: number;
       [K in B as `top_${K}_count_lazer`]: number;
+      [K in B as `top_${K}_count_perma_position`]: number;
       [K in B as `top_${K}_count_perma`]: number;
-      [K in B as `top_${K}_ranked_score`]: string; // TODO: validate if string or if BIGINT converter works
+      [K in B as `top_${K}_ranked_score_position`]: number;
+      [K in B as `top_${K}_ranked_score`]: string;
+      [K in B as `top_${K}_total_pp_position`]: number;
       [K in B as `top_${K}_total_pp`]: number;
       [K in B as `top_${K}_avg_acc`]: number;
       [K in B as `top_${K}_avg_map_len`]: number;
     };
 
-type AllBucketsStats<CountOnly extends boolean> = 
-  BucketStats<1, CountOnly> &
-  BucketStats<8, CountOnly> &
-  BucketStats<15, CountOnly> &
-  BucketStats<25, CountOnly> &
-  BucketStats<50, CountOnly> &
-  BucketStats<100, CountOnly>;
+type AllBucketsStats<CountOnly extends boolean> =
+  MetricBucketStats<1, CountOnly> &
+  MetricBucketStats<8, CountOnly> &
+  MetricBucketStats<15, CountOnly> &
+  MetricBucketStats<25, CountOnly> &
+  MetricBucketStats<50, CountOnly> &
+  MetricBucketStats<100, CountOnly>;
+
+// TODO: Pick<> from Player interface
+export type FullPlayerRankingData<CountOnly extends boolean> = {
+  id: number;
+  username: string;
+  country_code: string;
+  weighted_pp: number;
+  weighted_count: number;
+} & AllBucketsStats<CountOnly>;
 
 // TODO: Pick<> from Player interface
 export type PlayerRankingData<CountOnly extends boolean> = {
@@ -107,6 +151,7 @@ export type PlayerRankingData<CountOnly extends boolean> = {
 } & AllBucketsStats<CountOnly>;
 //
 
+// TODO: move all of these into a separate file
 // TODO: import POSITION_THRESHOLDS
 function buildAggregations(countOnly: boolean) {
   return POSITION_THRESHOLDS.map(bucket => {
@@ -145,6 +190,177 @@ function buildOuterSelects(countOnly: boolean) {
     }
     return sql;
   }).join(',\n        ');
+}
+
+function buildMultiBucketAggregations(countOnly: boolean): string {
+  return BUCKETS.map(bucket => {
+    const filter = bucket === 100 ? '' : ` FILTER (WHERE r.position <= ${bucket})`;
+    let sql = `COALESCE(SUM(r.count)${filter}, 0)::INT AS top_${bucket}_count`;
+
+    if (!countOnly) {
+      sql += `,
+        COALESCE(SUM(r.count_ss)${filter}, 0)::INT AS top_${bucket}_count_ss,
+        COALESCE(SUM(r.count_lazer)${filter}, 0)::INT AS top_${bucket}_count_lazer,
+        COALESCE(SUM(r.count_perma)${filter}, 0)::INT AS top_${bucket}_count_perma,
+        COALESCE(SUM(r.ranked_score)${filter}, 0)::BIGINT AS top_${bucket}_ranked_score,
+        COALESCE(SUM(r.total_pp)${filter}, 0)::INT AS top_${bucket}_total_pp,
+        COALESCE(AVG(r.avg_acc)${filter}, 0)::REAL AS top_${bucket}_avg_acc,
+        COALESCE(AVG(r.avg_map_len)${filter}, 0)::REAL AS top_${bucket}_avg_map_len`;
+    }
+    return sql;
+  }).join(',\n        ');
+}
+
+function buildMultiBucketOuterSelects(countOnly: boolean): string {
+  return BUCKETS.map(bucket => {
+    let sql = `(DENSE_RANK() OVER (ORDER BY agg.top_${bucket}_count DESC NULLS LAST, p.id ASC))::INT AS top_${bucket}_count_position,
+        agg.top_${bucket}_count`;
+
+    if (!countOnly) {
+      sql += `,
+        (DENSE_RANK() OVER (ORDER BY agg.top_${bucket}_count_ss DESC NULLS LAST, p.id ASC))::INT AS top_${bucket}_count_ss_position,
+        agg.top_${bucket}_count_ss,
+        (DENSE_RANK() OVER (ORDER BY agg.top_${bucket}_count_lazer DESC NULLS LAST, p.id ASC))::INT AS top_${bucket}_count_lazer_position,
+        agg.top_${bucket}_count_lazer,
+        (DENSE_RANK() OVER (ORDER BY agg.top_${bucket}_count_perma DESC NULLS LAST, p.id ASC))::INT AS top_${bucket}_count_perma_position,
+        agg.top_${bucket}_count_perma,
+        (DENSE_RANK() OVER (ORDER BY agg.top_${bucket}_ranked_score DESC NULLS LAST, p.id ASC))::INT AS top_${bucket}_ranked_score_position,
+        agg.top_${bucket}_ranked_score,
+        (DENSE_RANK() OVER (ORDER BY agg.top_${bucket}_total_pp DESC NULLS LAST, p.id ASC))::INT AS top_${bucket}_total_pp_position,
+        agg.top_${bucket}_total_pp,
+        agg.top_${bucket}_avg_acc,
+        agg.top_${bucket}_avg_map_len`;
+    }
+    return sql;
+  }).join(',\n');
+}
+
+export async function getLiveRankingForPlayer<T extends boolean = true>(
+  client: ClientBase,
+  playerId: number,
+  rulesetId: RulesetId,
+  countOnly: T = true as T
+): Promise<FullPlayerRankingData<T> | null> {
+  const aggSelects = buildMultiBucketAggregations(countOnly);
+  const outerSelects = buildMultiBucketOuterSelects(countOnly);
+
+  const rollupTable = process.env.DB_RANKING_ROLLUP_TABLE || 'player_position_stats';
+  const playersTable = process.env.DB_PLAYERS_TABLE || 'players';
+  const statsTable = process.env.DB_PLAYER_RULESET_STATS_TABLE || 'player_ruleset_stats';
+
+  const query = `
+    WITH agg AS (
+        SELECT
+            r.user_id,
+            ${aggSelects}
+        FROM ${rollupTable} r
+        WHERE r.ruleset_id = $1
+        GROUP BY r.user_id
+    ),
+    ranked AS (
+        SELECT 
+            p.id,
+            p.username,
+            p.country_code,
+            COALESCE(prs.weighted_pp, 0)::FLOAT AS weighted_pp,
+            COALESCE(prs.weighted_count, 0)::INT AS weighted_count,
+            ${outerSelects}
+        FROM ${playersTable} p
+        JOIN agg ON agg.user_id = p.id
+        LEFT JOIN ${statsTable} prs ON prs.user_id = p.id AND prs.ruleset_id = $1
+    )
+    SELECT * 
+    FROM ranked 
+    WHERE id = $2;
+  `;
+
+  const res = await client.query(query, [rulesetId, playerId]);
+  return res.rows[0] || null;
+}
+
+export async function getPaginatedRankingForBucket<
+  B extends PositionThreshold,
+  T extends boolean = false
+>(
+  client: ClientBase,
+  rulesetId: RulesetId,
+  bucket: B,
+  lowerBound: number,
+  upperBound: number,
+  countOnly: T = false as T
+): Promise<SingleBucketRankingData<B, T>[]> {
+  // Hard cap at 10,000 players max
+  const MAX_LIMIT = 10000;
+  const safeLower = Math.max(1, lowerBound);
+  const safeUpper = Math.min(MAX_LIMIT, upperBound);
+  const limit = Math.max(0, safeUpper - safeLower + 1);
+  const offset = safeLower - 1;
+
+  if (limit === 0) return [];
+
+  const positionCondition = bucket == 100 ? '' : `AND r.position <= ${bucket}`;
+  const isTop100 = bucket == 100;
+
+  let aggSelects = `COALESCE(SUM(r.count), 0)::INT AS count`;
+  let outerSelects = `(DENSE_RANK() OVER (ORDER BY agg.count DESC NULLS LAST, p.id ASC))::INT AS count_position,
+        agg.count`;
+
+  if (!countOnly) {
+    aggSelects += `,
+      COALESCE(SUM(r.count_ss), 0)::INT AS count_ss,
+      COALESCE(SUM(r.count_lazer), 0)::INT AS count_lazer,
+      COALESCE(SUM(r.count_perma), 0)::INT AS count_perma,
+      COALESCE(SUM(r.ranked_score), 0)::BIGINT AS ranked_score,
+      COALESCE(SUM(r.total_pp), 0)::INT AS total_pp,
+      COALESCE(AVG(r.avg_acc), 0)::REAL AS avg_acc,
+      COALESCE(AVG(r.avg_map_len), 0)::REAL AS avg_map_len`;
+
+    outerSelects += `,
+      (DENSE_RANK() OVER (ORDER BY agg.count_ss DESC NULLS LAST, p.id ASC))::INT AS count_ss_position,
+      agg.count_ss,
+      (DENSE_RANK() OVER (ORDER BY agg.count_lazer DESC NULLS LAST, p.id ASC))::INT AS count_lazer_position,
+      agg.count_lazer,
+      (DENSE_RANK() OVER (ORDER BY agg.count_perma DESC NULLS LAST, p.id ASC))::INT AS count_perma_position,
+      agg.count_perma,
+      (DENSE_RANK() OVER (ORDER BY agg.ranked_score DESC NULLS LAST, p.id ASC))::INT AS ranked_score_position,
+      agg.ranked_score,
+      (DENSE_RANK() OVER (ORDER BY agg.total_pp DESC NULLS LAST, p.id ASC))::INT AS total_pp_position,
+      agg.total_pp,
+      agg.avg_acc,
+      agg.avg_map_len`;
+  }
+
+	// TODO: probably want these outside the bucket
+  if (isTop100) {
+    outerSelects += `,
+      COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
+      COALESCE(prs.weighted_count, 0)::INT AS weighted_count`;
+  }
+
+  const query = `
+    WITH agg AS (
+        SELECT
+            r.user_id,
+            ${aggSelects}
+        FROM ${DB_RANKING_ROLLUP_TABLE} r
+        WHERE r.ruleset_id = $1
+        ${positionCondition}
+        GROUP BY r.user_id
+    )
+    SELECT
+        p.id,
+        p.username,
+        p.country_code,
+        ${outerSelects}
+    FROM ${DB_PLAYERS_TABLE} p
+    JOIN agg ON agg.user_id = p.id
+    ${isTop100 ? `LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1` : ''}
+    ORDER BY agg.count DESC NULLS LAST, p.id ASC
+    LIMIT $2 OFFSET $3;
+  `;
+
+  const res = await client.query(query, [rulesetId, limit, offset]);
+  return res.rows;
 }
 
 export async function getLiveRankingForPlayer<T extends boolean = true>(
