@@ -77,24 +77,24 @@ export function convertApiPlayerLookup(player: ApiUserLookup, retrievedAt: Date,
 export function convertApiBeatmap(map: ApiBeatmapDbBeatmap, retrievedAt: Date): Beatmap {
 	return {
 		id: map.beatmap_id,
-		beatmapsetId: map.beatmapset_id,
+		beatmapset_id: map.beatmapset_id,
 		status: map.approved,
 		artist: map.artist,
 		title: map.title,
 		version: map.version,
 		creator: map.creator,
-		creatorId: map.creator_id,
-		rulesetId: map.mode,
-		approvedDate: new Date(map.approved_date),
-		starRating: map.star_rating,
-		totalLength: map.total_length,
+		creator_id: map.creator_id,
+		ruleset_id: map.mode,
+		approved_date: new Date(map.approved_date),
+		star_rating: map.star_rating,
+		total_length: map.total_length,
 		bpm: map.bpm,
 		cs: map.cs,
 		od: map.od,
 		ar: map.ar,
 		hp: map.hp,
 		packs: map.packs,
-		updatedAt: retrievedAt
+		updated_at: retrievedAt
 	};
 }
 

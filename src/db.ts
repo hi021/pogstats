@@ -354,24 +354,24 @@ export async function upsertBeatmapBatch(
 		) ON CONFLICT (id) DO UPDATE SET ${buildUpdateAssignmentsString(BEATMAP_TABLE_COLUMNS)}`,
 		[
 			arrays.id,
-			arrays.beatmapsetId,
+			arrays.beatmapset_id,
 			arrays.status,
 			arrays.artist,
 			arrays.title,
 			arrays.version,
 			arrays.creator,
-			arrays.creatorId,
-			arrays.rulesetId,
-			arrays.approvedDate,
-			arrays.starRating,
-			arrays.totalLength,
+			arrays.creator_id,
+			arrays.ruleset_id,
+			arrays.approved_date,
+			arrays.star_rating,
+			arrays.total_length,
 			arrays.bpm,
 			arrays.cs,
 			arrays.od,
 			arrays.ar,
 			arrays.hp,
 			arrays.packs,
-			arrays.updatedAt
+			arrays.updated_at
 		]
 	);
 }

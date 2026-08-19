@@ -97,7 +97,7 @@ const BATCH_SIZE = 15500;
 
 function convertRowToBeatmap(row: string, updatedAt: Date) {
 	const columns = row.split(SEPARATOR);
-	const beatmap: Partial<Beatmap> = { updatedAt };
+	const beatmap: Partial<Beatmap> = { updated_at: updatedAt };
 
 	for (const [key, { column, type }] of Object.entries(OUTPUT_COLUMNS)) {
 		const index = INPUT_COLUMN_INDEX_BY_NAME[column];

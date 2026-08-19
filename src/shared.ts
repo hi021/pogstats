@@ -103,7 +103,8 @@ export function parsePositionThresholdAndRankingType(rankingCode?: string) {
 	if (!positionThreshold) return;
 
 	const rankingType = rankingCode.slice(positionThresholdString.length);
-	return { positionThreshold, rankingType };
+	const parsedRankingType = rankingType ? rankingType.slice(1) : rankingType;
+	return { positionThreshold, rankingType: parsedRankingType };
 }
 
 export function parseInteger(num: unknown, min = 1, max?: number) {
@@ -183,17 +184,17 @@ export function prepareBeatmapTableValuesAndParamPlaceholders(beatmaps: Beatmap[
 		const offset = index * BEATMAP_TABLE_COLUMNS_ALL.length;
 		values.push(
 			beatmap.id,
-			beatmap.beatmapsetId,
+			beatmap.beatmapset_id,
 			beatmap.status,
 			beatmap.artist,
 			beatmap.title,
 			beatmap.version,
 			beatmap.creator,
-			beatmap.creatorId,
-			beatmap.rulesetId,
-			beatmap.approvedDate,
-			beatmap.starRating,
-			beatmap.totalLength,
+			beatmap.creator_id,
+			beatmap.ruleset_id,
+			beatmap.approved_date,
+			beatmap.star_rating,
+			beatmap.total_length,
 			beatmap.bpm,
 			beatmap.cs,
 			beatmap.od,
@@ -346,4 +347,20 @@ export function getErrorMessage(e: unknown) {
 	} catch {
 		return "unknown_error";
 	}
+}
+
+export function isDateInvalid(date: string) {
+	return !date || isNaN(Date.parse(date)) || date == "0000-00-00";
+}
+
+export function isToday(date: Date) {
+	const today = new Date();
+	return date.getDate() == today.getDate() && date.getMonth() == today.getMonth() && date.getFullYear() == today.getFullYear();
+}
+
+export function isAfterDate(a: Date, b: Date) {
+	const aDate = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+	const bDate = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+
+	return aDate > bDate;
 }

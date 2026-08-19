@@ -133,6 +133,8 @@ interface Player {
 	isFromOsuApi: boolean; // meta
 	isMia: boolean; // meta - missing in action, as in not returned by the API and probably restricted
 	// TODO?: maybe poggers stats, e.g. peak/lowest for each ranking type, etc.
+	weightedPp?: number; // meta, recalced in the background
+	weightedCount?: number; // meta
 }
 
 type MissingPlayer = Player & { username: "<POGSTATS::UNKNOWN>"; countryCode: "XX"; isMia: true };
@@ -182,24 +184,24 @@ interface PogBadge {
 
 interface Beatmap {
 	id: number;
-	beatmapsetId: number;
+	beatmapset_id: number;
 	status: BeatmapStatusId;
 	artist: string;
 	title: string;
 	version: string; // diff name
 	creator: string;
-	creatorId: number;
-	rulesetId: RulesetId;
-	approvedDate: Date;
-	starRating: number;
-	totalLength: number; // in seconds
+	creator_id: number;
+	ruleset_id: RulesetId;
+	approved_date: Date;
+	star_rating: number;
+	total_length: number; // in seconds
 	bpm: number;
 	cs: number;
 	od: number;
 	ar: number;
 	hp: number;
 	packs: string; // comma-separated, e.g. "R92,S255,T49", TODO: separate junction table if needed for queries
-	updatedAt: Date; // meta
+	updated_at: Date; // meta
 }
 
 // ------------------------------------------

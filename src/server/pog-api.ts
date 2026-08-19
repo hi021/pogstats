@@ -5,11 +5,11 @@ import {
 	getEasiestBeatmapsWithoutPermaScore,
 	getGradeSpreadForPlayer,
 	getPlayerIdByIdOrName,
-	getPositionSpreadForPlayer,
-	getRankingForPlayer
+	getPositionSpreadForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
 import { getRulesetId, parseBeatmapStatusIds, parseInteger } from "../shared.js";
+import { getRankingForPlayer } from "../db-api-ranking.js";
 
 export const API_BASE_URL = "/api/v2/";
 const API_PLAYER_BASE_URL = "player/:idOrName";
@@ -71,10 +71,17 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread", async (ctx, next) => 
 	ctx.body = spread;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/:ranking{/:date}", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/:rankings{/:date}", async (ctx, next) => {
+	// TODO: error handlin
 	const ranking = await withDbClient(
 		async client =>
-			await getRankingForPlayer(client, ctx.params.ranking, ctx.state.rulesetId, ctx.state.playerId, ctx.params.date)
+			await getRankingForPlayer(
+				client,
+				ctx.params.rankings.split(","),
+				ctx.state.rulesetId,
+				ctx.state.playerId,
+				ctx.params.date
+			)
 	);
 	if (!ranking) ctx.throw(400, "Invalid ranking");
 
