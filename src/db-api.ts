@@ -35,6 +35,25 @@ export async function getPlayerIdById(client: ClientBase, id: string | number) {
 // TODO: move to redis
 export async function getRankingId(client: ClientBase, rulesetId: RulesetId, code: string) {}
 
+// TODO: better typing (maybe based on the full parameter too)
+export async function getPlayerInfo(client: ClientBase, playerId: number, full = true) {
+	const result = await queryWithTiming<Player>(
+		client,
+		"getPlayerInfo",
+		"pog_api_v2",
+		`SELECT
+			p.id,
+			p.username,
+			p.country_code
+			${full ? ', p.is_active, p.team_id, p.cover_url' : ''}
+		FROM ${DB_PLAYERS_TABLE} p
+		WHERE p.id = $1`,
+		[playerId]
+	);
+
+	return result.rows?.[0];
+}
+
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
 	const result = await queryWithTiming<{ spread: PlayerPositionSpread }>(
 		client,
