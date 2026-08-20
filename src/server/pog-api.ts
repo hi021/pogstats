@@ -5,7 +5,8 @@ import {
 	getEasiestBeatmapsWithoutPermaScore,
 	getGradeSpreadForPlayer,
 	getPlayerIdByIdOrName,
-	getPositionSpreadForPlayer
+	getPositionSpreadForPlayer,
+	getModSpreadForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
 import { getRulesetId, parseBeatmapStatusIds, parseInteger } from "../shared.js";
@@ -62,9 +63,20 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) 
 	ctx.body = spread;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread{/:position}", async (ctx, next) => {
+	const posThreshold = parseInteger(ctx.params.position, 1) || 100;
 	const spread = await withDbClient(
-		async client => await getGradeSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId)
+		async client => await getGradeSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
+	);
+
+	ctx.headers["Content-Type"] = "application/json";
+	ctx.body = spread;
+});
+
+router.get(API_PLAYER_BASE_URL + "/:ruleset/mod-spread{/:position}", async (ctx, next) => {
+	const posThreshold = parseInteger(ctx.params.position, 1) || 100;
+	const spread = await withDbClient(
+		async client => await getModSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
 	ctx.headers["Content-Type"] = "application/json";
