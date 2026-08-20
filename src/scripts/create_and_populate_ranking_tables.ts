@@ -48,13 +48,15 @@ async function createRankingTables(client: ClientBase) {
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
 }
 
+// have to truncate to avoid ghost rows :/
 async function createRankingRollupRecalcFunction(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION recalc_ranking_rollup()
 		RETURNS void
 		LANGUAGE sql
 		AS $$
-		DECLARE
+			TRUNCATE TABLE ${DB_RANKING_ROLLUP_TABLE};
+
 			INSERT INTO ${DB_RANKING_ROLLUP_TABLE} (
 				user_id, ruleset_id, position, count, count_perma, count_ss, 
 				count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
@@ -74,16 +76,7 @@ async function createRankingRollupRecalcFunction(client: ClientBase) {
 			FROM ${DB_SCORES_TABLE} s
 				JOIN ${DB_BEATMAPS_TABLE} b ON s.beatmap_id = b.id
 			WHERE s.position BETWEEN 1 AND 100
-			GROUP BY s.user_id, s.ruleset_id, s.position
-			ON CONFLICT (user_id, ruleset_id, position) DO UPDATE SET
-				count = EXCLUDED.count,
-				count_perma = EXCLUDED.count_perma,
-				count_ss = EXCLUDED.count_ss,
-				count_lazer = EXCLUDED.count_lazer,
-				ranked_score = EXCLUDED.ranked_score,
-				total_pp = EXCLUDED.total_pp,
-				avg_acc = EXCLUDED.avg_acc,
-				avg_map_len = EXCLUDED.avg_map_len
+			GROUP BY s.user_id, s.ruleset_id, s.position;
 		$$`);
 }
 
