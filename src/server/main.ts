@@ -28,8 +28,8 @@ const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta
 pogApiApp.use(errorHandlerMiddleware);
 pogApiApp.use(metricsMiddleware);
 pogApiApp.use(requestTimingMiddleware);
-pogApiApp.use(socketDebugMessageEndpoint); // TODO debug only
 pogApiApp.use(router.routes()).use(router.allowedMethods());
+pogApiApp.use(socketDebugMessageEndpoint); // TODO debug only
 pogApiApp.on("error", (e, ctx) => console.error("pog API error:\n", ctx.url, e));
 
 pogApiServer.on("upgrade", onUpgrade);
