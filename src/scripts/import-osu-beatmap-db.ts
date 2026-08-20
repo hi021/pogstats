@@ -62,22 +62,22 @@ const OUTPUT_COLUMNS: Readonly<
 	Record<keyof Omit<Beatmap, "updatedAt">, { column: keyof ApiBeatmapDbBeatmap; type: "number" | "string" | "date" }>
 > = Object.freeze({
 	id: { column: "beatmap_id", type: "number" },
-	beatmapsetId: { column: "beatmapset_id", type: "number" },
+	beatmapset_id: { column: "beatmapset_id", type: "number" },
 	status: { column: "approved", type: "number" },
-	totalLength: { column: "total_length", type: "number" },
+	total_length: { column: "total_length", type: "number" },
 	version: { column: "version", type: "string" },
 	artist: { column: "artist", type: "string" },
 	title: { column: "title", type: "string" },
 	creator: { column: "creator", type: "string" },
-	creatorId: { column: "creator_id", type: "number" },
-	rulesetId: { column: "mode", type: "number" },
+	creator_id: { column: "creator_id", type: "number" },
+	ruleset_id: { column: "mode", type: "number" },
 	cs: { column: "cs", type: "number" },
 	od: { column: "od", type: "number" },
 	ar: { column: "ar", type: "number" },
 	hp: { column: "hp", type: "number" },
-	approvedDate: { column: "approved_date", type: "date" },
+	approved_date: { column: "approved_date", type: "date" },
 	bpm: { column: "bpm", type: "number" },
-	starRating: { column: "star_rating", type: "number" },
+	star_rating: { column: "star_rating", type: "number" },
 	packs: { column: "packs", type: "string" }
 });
 
