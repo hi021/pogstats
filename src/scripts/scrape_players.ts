@@ -314,14 +314,18 @@ export async function scrapePlayers(ids?: number[]) {
 			const beatmapIds = [...miaBeatmapsUnnested.beatmap_id, ...nonMiaBeatmapsUnnested.beatmap_id];
 			const rulesetIds = [...miaBeatmapsUnnested.ruleset_id, ...nonMiaBeatmapsUnnested.ruleset_id];
 
-			console.log(`[scrape_players] recalculating positions on ${beatmapIds.length} map(s)`);
+			console.log(`[scrape_players] Recalculating positions on ${beatmapIds.length} map(s)`);
 			await recalculateScorePositionsForMapIds(client, beatmapIds, rulesetIds, "scrape_players");
-			console.log(`[scrape_players] finished processing`);
 
-			// TODO: this also must trigger ranking table recalcs!
+			console.log(`[scrape_players] Recalculating ranking rollup`);
+			await client.query("SELECT recalc_ranking_rollup()");
+			console.log(`[scrape_players] Finished processing`);
+
+			// WARNING: restricted players can set new scores, but they are probably not broadcast on /scores
+			// the ranking could be off until the next score scrape in case of unrestrictions!
 		});
 	} catch (e) {
-		console.error("[scrape_players] failed:\n", e);
+		console.error("[scrape_players] Failed:\n", e);
 		throw new Error("scrape_players failed with above error.");
 	}
 }

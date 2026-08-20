@@ -1,6 +1,6 @@
 import http from "http";
 import type { DefaultContext, DefaultState, Next, ParameterizedContext } from "koa";
-import stream, { Stream } from "node:stream";
+import { Stream } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import { API_BASE_URL } from "./pog-api.js";
 
@@ -14,7 +14,7 @@ export const rankingClients = new Set<WebSocket>();
 export const playerClients = new Set<WebSocket>();
 export const scoreClients = new Set<WebSocket>();
 
-export function onUpgrade(req: http.IncomingMessage, socket: stream.Duplex, head: Buffer) {
+export function onUpgrade(req: http.IncomingMessage, socket: Stream.Duplex, head: Buffer) {
 	if (req.url?.startsWith(BASE_POG_WS_URL)) pogWss.handleUpgrade(req, socket, head, ws => pogWss.emit("connection", ws, req));
 	else socket.destroy();
 }

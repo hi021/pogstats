@@ -1,14 +1,14 @@
 import { ClientBase } from "pg";
 import { withDbClientTransaction } from "../db-generic.js";
 import {
-	DB_SCORES_TABLE,
+	DB_BEATMAPS_TABLE,
 	DB_CONFIG_TABLE,
+	DB_PLAYER_RULESET_STATS_TABLE,
+	DB_PLAYERS_TABLE,
 	DB_POSITION_WEIGHTS_TABLE,
 	DB_RANKING_ROLLUP_TABLE,
 	DB_RECALC_QUEUE_TABLE,
-	DB_PLAYER_RULESET_STATS_TABLE,
-	DB_BEATMAPS_TABLE,
-	DB_PLAYERS_TABLE
+	DB_SCORES_TABLE
 } from "../env.js";
 
 // TODO: !! log the number of users waiting per operation_type in scores-fetch or somewhere
@@ -46,6 +46,45 @@ async function createRankingTables(client: ClientBase) {
 		);`);
 
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
+}
+
+async function createRankingRollupRecalcFunction(client: ClientBase) {
+	await client.query(`
+		CREATE OR REPLACE FUNCTION recalc_ranking_rollup()
+		RETURNS void
+		LANGUAGE sql
+		AS $$
+		DECLARE
+			INSERT INTO ${DB_RANKING_ROLLUP_TABLE} (
+				user_id, ruleset_id, position, count, count_perma, count_ss, 
+				count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
+			)
+			SELECT
+				s.user_id,
+				s.ruleset_id,
+				s.position,
+				COUNT(*)::INTEGER AS count,
+				COUNT(*) FILTER (WHERE s.is_perma)::INTEGER AS count_perma,
+				COUNT(*) FILTER (WHERE s.grade IN ('XH', 'X'))::INTEGER AS count_ss,
+				COUNT(*) FILTER (WHERE s.is_lazer)::INTEGER AS count_lazer,
+				SUM(COALESCE(s.classic_total_score, 0))::BIGINT AS ranked_score,
+				SUM(COALESCE(s.pp, 0))::INTEGER AS total_pp,
+				AVG(s.accuracy)::REAL AS avg_acc,
+				AVG(b.total_length)::REAL AS avg_map_len
+			FROM ${DB_SCORES_TABLE} s
+				JOIN ${DB_BEATMAPS_TABLE} b ON s.beatmap_id = b.id
+			WHERE s.position BETWEEN 1 AND 100
+			GROUP BY s.user_id, s.ruleset_id, s.position
+			ON CONFLICT (user_id, ruleset_id, position) DO UPDATE SET
+				count = EXCLUDED.count,
+				count_perma = EXCLUDED.count_perma,
+				count_ss = EXCLUDED.count_ss,
+				count_lazer = EXCLUDED.count_lazer,
+				ranked_score = EXCLUDED.ranked_score,
+				total_pp = EXCLUDED.total_pp,
+				avg_acc = EXCLUDED.avg_acc,
+				avg_map_len = EXCLUDED.avg_map_len
+		$$`);
 }
 
 async function scheduleDbQueue(client: ClientBase) {
@@ -221,39 +260,8 @@ async function populateRankingTables(client: ClientBase) {
 			(99,0.0010626),
 			(100,0.00096639)
 		ON CONFLICT (position) DO UPDATE SET weight = EXCLUDED.weight;
-		`);
 
-	await client.query(`
-		INSERT INTO ${DB_RANKING_ROLLUP_TABLE} (
-		    user_id, ruleset_id, position, count, count_perma, count_ss, 
-		    count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
-		)
-		SELECT
-		    s.user_id,
-		    s.ruleset_id,
-		    s.position,
-		    COUNT(*)::INTEGER AS count,
-		    COUNT(*) FILTER (WHERE s.is_perma)::INTEGER AS count_perma,
-		    COUNT(*) FILTER (WHERE s.grade IN ('XH', 'X'))::INTEGER AS count_ss,
-		    COUNT(*) FILTER (WHERE s.is_lazer)::INTEGER AS count_lazer,
-		    SUM(COALESCE(s.classic_total_score, 0))::BIGINT AS ranked_score,
-		    SUM(COALESCE(s.pp, 0))::INTEGER AS total_pp,
-		    AVG(s.accuracy)::FLOAT AS avg_acc,
-		    AVG(b.total_length)::FLOAT AS avg_map_len
-		FROM ${DB_SCORES_TABLE} s
-			JOIN ${DB_BEATMAPS_TABLE} b ON s.beatmap_id = b.id
-		WHERE s.position BETWEEN 1 AND 100
-		GROUP BY s.user_id, s.ruleset_id, s.position
-		ON CONFLICT (user_id, ruleset_id, position) DO UPDATE SET
-		    count = EXCLUDED.count,
-		    count_perma = EXCLUDED.count_perma,
-		    count_ss = EXCLUDED.count_ss,
-		    count_lazer = EXCLUDED.count_lazer,
-		    ranked_score = EXCLUDED.ranked_score,
-		    total_pp = EXCLUDED.total_pp,
-		    avg_acc = EXCLUDED.avg_acc,
-		    avg_map_len = EXCLUDED.avg_map_len;
-	`);
+		SELECT recalc_ranking_rollup();`);
 
 	console.log(`Populated ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE} tables`);
 }
@@ -261,6 +269,7 @@ async function populateRankingTables(client: ClientBase) {
 async function main() {
 	await withDbClientTransaction(async client => {
 		await createRankingTables(client);
+		await createRankingRollupRecalcFunction(client);
 		await populateRankingTables(client);
 		await scheduleDbQueue(client);
 	});
