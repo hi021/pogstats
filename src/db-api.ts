@@ -84,74 +84,54 @@ export async function getModSpreadForPlayer(
 		"getModSpreadForPlayer",
 		"pog_api_v2",
 		`WITH base AS (
-			SELECT
-				s.id,
-				COALESCE(
-					array_agg(DISTINCT norm_acronym ORDER BY norm_acronym) FILTER (WHERE norm_acronym IS NOT NULL),
-					ARRAY[]::text[]
-				) AS mods_arr
-			FROM ${DB_SCORES_TABLE} s
-			LEFT JOIN LATERAL jsonb_array_elements(s.data->'mods') m ON true
-			LEFT JOIN LATERAL (
-				SELECT CASE m->>'acronym'
-					WHEN 'NC' THEN 'DT'
-					WHEN 'DT' THEN 'DT'
-					WHEN 'DC' THEN 'HT'
-					WHEN 'HT' THEN 'HT'
-					WHEN 'BL' THEN 'BL'
-					WHEN 'FL' THEN 'FL'
-					WHEN 'HR' THEN 'HR'
-					WHEN 'HD' THEN 'HD'
-					WHEN 'TC' THEN 'TC'
-					WHEN 'EZ' THEN 'EZ'
-					WHEN 'RX' THEN 'RX'
-					WHEN 'AP' THEN 'AP'
-					WHEN 'TD' THEN 'TD'
-					ELSE NULL
-				END AS norm_acronym
-			) n ON true
-			WHERE s.user_id = $1
-				and s.ruleset_id = $2
-				and s.position BETWEEN 1 AND $3
-			GROUP BY s.id
-		), expanded AS (
-				SELECT
-					b.id,
-					CASE
-						WHEN cardinality(mods_variant) = 0 THEN 'NM'
-						ELSE array_to_string(mods_variant, ',')
-					END AS variant_key
-				FROM base b
-				CROSS JOIN LATERAL (
-					SELECT
-						('HD' = ANY(b.mods_arr)) AS has_hd,
-						('TC' = ANY(b.mods_arr)) AS has_tc
-				) flags
-				CROSS JOIN LATERAL (
-					SELECT
-						CASE
-							WHEN NOT flags.has_hd AND NOT flags.has_tc
-								THEN ARRAY[0]          -- full only
-							WHEN flags.has_hd
-								THEN ARRAY[0,1]        -- full, -HD
-							WHEN flags.has_tc
-								THEN ARRAY[0,2]        -- full, -TC
-						END AS variants
-				) vset
-				CROSS JOIN LATERAL unnest(vset.variants) AS gs(variant_id)
-				CROSS JOIN LATERAL (
-					SELECT CASE gs.variant_id
-						WHEN 0 THEN b.mods_arr
-						WHEN 1 THEN array_remove(b.mods_arr, 'HD')
-						WHEN 2 THEN array_remove(b.mods_arr, 'TC')
-					END AS mods_variant
-				) v
+		    SELECT
+		        ARRAY(
+		            SELECT DISTINCT CASE m->>'acronym'
+		                WHEN 'NC' THEN 'DT'
+		                WHEN 'DC' THEN 'HT'
+		                WHEN 'DT' THEN 'DT'
+		                WHEN 'HT' THEN 'HT'
+		                WHEN 'BL' THEN 'BL'
+		                WHEN 'FL' THEN 'FL'
+		                WHEN 'HR' THEN 'HR'
+		                WHEN 'HD' THEN 'HD'
+		                WHEN 'TC' THEN 'TC'
+		                WHEN 'EZ' THEN 'EZ'
+		                WHEN 'RX' THEN 'RX'
+		                WHEN 'AP' THEN 'AP'
+		                WHEN 'TD' THEN 'TD'
+		            END AS acronym
+		            FROM jsonb_array_elements(s.data->'mods') AS m
+		            WHERE m->>'acronym' IN ('NC', 'DC', 'DT', 'HT', 'BL', 'FL', 'HR', 'HD', 'TC', 'EZ', 'RX', 'AP', 'TD')
+		            ORDER BY acronym
+		        ) AS mods_arr
+		    FROM ${DB_SCORES_TABLE} s
+		    WHERE s.user_id = $1
+		      AND s.ruleset_id = $2
+		      AND s.position BETWEEN 1 AND $3
+		),
+		expanded AS (
+		    SELECT
+		        CASE
+		            WHEN cardinality(v.mod_var) = 0 THEN 'NM'
+		            ELSE array_to_string(v.mod_var, ',')
+		        END AS variant_key
+		    FROM base b
+		    CROSS JOIN LATERAL (
+		        SELECT b.mods_arr AS mod_var
+		        UNION ALL
+		        SELECT array_remove(b.mods_arr, 'HD')
+		        WHERE 'HD' = ANY(b.mods_arr)
+		        UNION ALL
+		        SELECT array_remove(b.mods_arr, 'TC')
+		        WHERE 'TC' = ANY(b.mods_arr)
+		    ) v
 		)
 		SELECT jsonb_object_agg(variant_key, cnt) AS spread
 		FROM (
-			SELECT variant_key, COUNT(*) AS cnt
-			FROM expanded
-			GROUP BY variant_key
+		    SELECT variant_key, COUNT(*) AS cnt
+		    FROM expanded
+		    GROUP BY variant_key
 		) t`,
 		[playerId, rulesetId, positionThreshold]
 	);
