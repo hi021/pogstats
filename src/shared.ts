@@ -109,9 +109,9 @@ export function parsePositionThresholdAndRankingType(rankingCode?: string) {
 
 export function parseInteger(num: unknown, min?: number, max?: number) {
 	if (num == null || (typeof num != "string" && typeof num != "number")) return null;
-	const n = parseInt(num, 10);
+	const n = parseInt(num.toString(), 10);
 	if (isNaN(n) || !isFinite(n)) return null;
-	if ((min != null && num < min) || (max != null && num > max)) return null;
+	if ((min != null && n < min) || (max != null && n > max)) return null;
 	return n;
 }
 
