@@ -107,8 +107,8 @@ export function parsePositionThresholdAndRankingType(rankingCode?: string) {
 	return { positionThreshold, rankingType: parsedRankingType };
 }
 
-export function parseInteger(num: unknown, min = 1, max?: number) {
-	if (num == null || typeof num != "string" || typeof num != "number") return null;
+export function parseInteger(num: unknown, min?: number, max?: number) {
+	if (num == null || (typeof num != "string" && typeof num != "number")) return null;
 	const n = parseInt(num, 10);
 	if (isNaN(n) || !isFinite(n)) return null;
 	if ((min != null && num < min) || (max != null && num > max)) return null;
