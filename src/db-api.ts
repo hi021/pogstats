@@ -51,7 +51,7 @@ export async function getGradeSpreadForPlayer(
 	client: ClientBase,
 	playerId: number,
 	rulesetId: RulesetId,
-	positionThreshold: RankingPositionThreshold = 100
+	positionThreshold = 100
 ) {
 	const result = await queryWithTiming<{ spread: PlayerGradeSpread }>(
 		client,
@@ -77,7 +77,7 @@ export async function getModSpreadForPlayer(
 	client: ClientBase,
 	playerId: number,
 	rulesetId: RulesetId,
-	positionThreshold: RankingPositionThreshold = 100
+	positionThreshold = 100
 ) {
 	const result = await queryWithTiming<{ spread: PlayerModSpread }>(
 		client,
