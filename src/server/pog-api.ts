@@ -6,7 +6,8 @@ import {
 	getGradeSpreadForPlayer,
 	getPlayerIdByIdOrName,
 	getPositionSpreadForPlayer,
-	getModSpreadForPlayer
+	getModSpreadForPlayer,
+	getPlayerInfo
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
 import { getRulesetId, parseBeatmapStatusIds, parseInteger } from "../shared.js";
@@ -52,7 +53,15 @@ const rulesetIdByNameMiddleware: Middleware = async (ctx, next) => {
 router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
 router.use(API_PLAYER_BASE_URL + "/:ruleset", rulesetIdByNameMiddleware);
 
-// player info
+router.get(API_PLAYER_BASE_URL, async (ctx, next) => {
+	// TODO?: boolean parse helper function?
+	const data = await withDbClient(
+		async client => await getPlayerInfo(client, ctx.state.playerId, ctx.query.full == "true")
+	);
+
+	ctx.headers["Content-Type"] = "application/json";
+	ctx.body = data;
+});
 
 router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) => {
 	const spread = await withDbClient(
