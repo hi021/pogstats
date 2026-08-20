@@ -57,9 +57,8 @@ export function onError(e: Error) {
 }
 
 // TODO Placeholder
-// TODO method == "GET" breaks all routes..?
 export async function socketDebugMessageEndpoint(ctx: ParameterizedContext<DefaultState, DefaultContext, any>, next: Next) {
-	if (ctx.path == BASE_POG_WS_URL && ctx.method == "POST") {
+	if (ctx.path == BASE_POG_WS_URL && ctx.method == "GET") {
 		const message = "Hello from pog server!";
 		for (const client of rankingClients) client.send(message);
 

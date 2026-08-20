@@ -55,9 +55,7 @@ router.use(API_PLAYER_BASE_URL + "/:ruleset", rulesetIdByNameMiddleware);
 
 router.get(API_PLAYER_BASE_URL, async (ctx, next) => {
 	// TODO?: boolean parse helper function?
-	const data = await withDbClient(
-		async client => await getPlayerInfo(client, ctx.state.playerId, ctx.query.full == "true")
-	);
+	const data = await withDbClient(async client => await getPlayerInfo(client, ctx.state.playerId, ctx.query.full == "true"));
 
 	ctx.headers["Content-Type"] = "application/json";
 	ctx.body = data;
@@ -75,7 +73,8 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) 
 router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread{/:position}", async (ctx, next) => {
 	const posThreshold = parseInteger(ctx.params.position, 1) || 100;
 	const spread = await withDbClient(
-		async client => await getGradeSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
+		async client =>
+			await getGradeSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
 	ctx.headers["Content-Type"] = "application/json";
@@ -85,7 +84,8 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread{/:position}", async (ct
 router.get(API_PLAYER_BASE_URL + "/:ruleset/mod-spread{/:position}", async (ctx, next) => {
 	const posThreshold = parseInteger(ctx.params.position, 1) || 100;
 	const spread = await withDbClient(
-		async client => await getModSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
+		async client =>
+			await getModSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
 	ctx.headers["Content-Type"] = "application/json";

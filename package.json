@@ -38,7 +38,7 @@
   "devDependencies": {
     "@types/koa": "^3.0.3",
     "@types/node": "^26.2.0",
-    "@types/pg": "^8.21.0",
+    "@types/pg": "^8.23.1",
     "@types/ws": "^8.18.1",
     "typescript": "^7.0.2"
   }

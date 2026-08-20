@@ -59,7 +59,7 @@ const INPUT_COLUMNS: Readonly<Array<keyof ApiBeatmapDbBeatmap>> = Object.freeze(
 ] as const);
 
 const OUTPUT_COLUMNS: Readonly<
-	Record<keyof Omit<Beatmap, "updatedAt">, { column: keyof ApiBeatmapDbBeatmap; type: "number" | "string" | "date" }>
+	Record<keyof Omit<Beatmap, "updated_at">, { column: keyof ApiBeatmapDbBeatmap; type: "number" | "string" | "date" }>
 > = Object.freeze({
 	id: { column: "beatmap_id", type: "number" },
 	beatmapset_id: { column: "beatmapset_id", type: "number" },

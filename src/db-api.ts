@@ -45,7 +45,7 @@ export async function getPlayerInfo(client: ClientBase, playerId: number, full =
 			p.id,
 			p.username,
 			p.country_code
-			${full ? ', p.is_active, p.team_id, p.cover_url' : ''}
+			${full ? ", p.is_active, p.team_id, p.cover_url" : ""}
 		FROM ${DB_PLAYERS_TABLE} p
 		WHERE p.id = $1`,
 		[playerId]

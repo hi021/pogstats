@@ -23,7 +23,7 @@ export async function getLiveRankingForPlayer(
 	playerId: number
 ) {
 	if (!rankingCodes?.length || rankingCodes.length > 25) return;
-  
+
 	const parsedRankings = rankingCodes.map(parsePositionThresholdAndRankingType);
 	const positionThresholds: RankingPositionThreshold[] = [];
 	const rankingTypes: string[] = [];

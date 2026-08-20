@@ -229,14 +229,14 @@ interface RankingPositionData {
 
 // TODO DDL
 interface HistoricalRankingEntry {
-	rankingId: number; // FK to Ranking Type id
+	ranking_id: number; // FK to Ranking Type id
 	date: Date;
-	userId: number;
+	user_id: number;
 	position: number;
 	value: number; // top50 count, total pp, etc.
-	previousEntryId: number; // FK to the same table - same rankingId and userId, but earlier date
-	updatedAt: Date;
-	sourceId?: number; // FK to Data Source id
+	previous_entry_id: number; // FK to the same table - same rankingId and userId, but earlier date
+	updated_at: Date;
+	source_id?: number; // FK to Data Source id
 }
 
 // TODO DDL
