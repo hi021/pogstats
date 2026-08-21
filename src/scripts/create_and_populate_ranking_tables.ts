@@ -48,12 +48,11 @@ async function createRankingTables(client: ClientBase) {
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
 }
 
-// TODO: acquire the same lock before processing scores-fetch batch!!!!
 async function createRankingRollupRecalcFunction(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION recalc_ranking_rollup()
 		RETURNS void
-		LANGUAGE sql
+		LANGUAGE plpgsql
 		AS $$
 		BEGIN
 			PERFORM pg_advisory_lock(7271);
@@ -82,11 +81,13 @@ async function createRankingRollupRecalcFunction(client: ClientBase) {
 				GROUP BY s.user_id, s.ruleset_id, s.position;
 
 				DROP TABLE ${DB_RANKING_ROLLUP_TABLE};
-    			ALTER TABLE ranking_rollup_tmp RENAME TO ${DB_RANKING_ROLLUP_TABLE};
+				ALTER TABLE ranking_rollup_tmp RENAME TO ${DB_RANKING_ROLLUP_TABLE};
+
 			EXCEPTION WHEN OTHERS THEN
-        		PERFORM pg_advisory_unlock(7271);
-       			RAISE;
-    		END;
+				PERFORM pg_advisory_unlock(7271);
+				RAISE;
+			END;
+
     		PERFORM pg_advisory_unlock(7271);
 		END;
 		$$`);

@@ -1,6 +1,6 @@
 import { ClientBase } from "pg";
 import { LabelValues } from "prom-client";
-import { SCORE_TABLE_COLUMNS, withDbClientTransaction } from "../db-generic.js";
+import { SCORE_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import {
 	fetchNewBeatmaps,
 	fetchNewPlayers,
@@ -89,6 +89,7 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 
 async function endScoresBatch(scores: ApiScore[], cursorString: string, previousHighestScoreId: number): Promise<ScoreCursors> {
 	try {
+		await withDbClient(async (client) => await lockRankingRollupTable(client));
 		await saveScoresBatch(scores, cursorString, previousHighestScoreId);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		++sessionBatchCount;
@@ -96,6 +97,7 @@ async function endScoresBatch(scores: ApiScore[], cursorString: string, previous
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 	} finally {
+		await withDbClient(async (client) => await unlockRankingRollupTable(client));
 		return { lastScoresId: highestProcessedScoreId, cursorString };
 	}
 }
@@ -312,6 +314,8 @@ async function upsertBeatmapScores(
 	const beatenScoresMap = new Map<number, BeatenScoreData[]>();
 	const snipes: HistoricalPlayerSnipes[] = [];
 
+	// TODO: ranking rollup table update should be done in a separate transaction
+
 	// TODO?: move this logic into postgres temporary tables, but idk no perf issues for now
 	for (const newScore of insertedScores.rows) {
 		const existingUserScoreIndex = currentScores.findIndex(s => s.userId == newScore.userId);
@@ -448,4 +452,12 @@ async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 	);
 
 	return scoreList.rows;
+}
+
+async function lockRankingRollupTable(client: ClientBase) {
+	await client.query("SELECT pg_advisory_lock(7271)");
+}
+
+async function unlockRankingRollupTable(client: ClientBase) {
+	await client.query("SELECT pg_advisory_unlock(7271)");
 }
