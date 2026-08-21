@@ -48,35 +48,47 @@ async function createRankingTables(client: ClientBase) {
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
 }
 
-// have to truncate to avoid ghost rows :/
+// TODO: acquire the same lock before processing scores-fetch batch!!!!
 async function createRankingRollupRecalcFunction(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION recalc_ranking_rollup()
 		RETURNS void
 		LANGUAGE sql
 		AS $$
-			TRUNCATE TABLE ${DB_RANKING_ROLLUP_TABLE};
+		BEGIN
+			PERFORM pg_advisory_lock(7271);
+			BEGIN
+				CREATE TABLE ranking_rollup_tmp (LIKE ${DB_RANKING_ROLLUP_TABLE} INCLUDING ALL);
+	
+				INSERT INTO ranking_rollup_tmp (
+					user_id, ruleset_id, position, count, count_perma, count_ss, 
+					count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
+				)
+				SELECT
+					s.user_id,
+					s.ruleset_id,
+					s.position,
+					COUNT(*)::INTEGER AS count,
+					COUNT(*) FILTER (WHERE s.is_perma)::INTEGER AS count_perma,
+					COUNT(*) FILTER (WHERE s.grade IN ('XH', 'X'))::INTEGER AS count_ss,
+					COUNT(*) FILTER (WHERE s.is_lazer)::INTEGER AS count_lazer,
+					SUM(COALESCE(s.classic_total_score, 0))::BIGINT AS ranked_score,
+					SUM(COALESCE(s.pp, 0))::INTEGER AS total_pp,
+					AVG(s.accuracy)::REAL AS avg_acc,
+					AVG(b.total_length)::REAL AS avg_map_len
+				FROM ${DB_SCORES_TABLE} s
+					JOIN ${DB_BEATMAPS_TABLE} b ON s.beatmap_id = b.id
+				WHERE s.position BETWEEN 1 AND 100
+				GROUP BY s.user_id, s.ruleset_id, s.position;
 
-			INSERT INTO ${DB_RANKING_ROLLUP_TABLE} (
-				user_id, ruleset_id, position, count, count_perma, count_ss, 
-				count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
-			)
-			SELECT
-				s.user_id,
-				s.ruleset_id,
-				s.position,
-				COUNT(*)::INTEGER AS count,
-				COUNT(*) FILTER (WHERE s.is_perma)::INTEGER AS count_perma,
-				COUNT(*) FILTER (WHERE s.grade IN ('XH', 'X'))::INTEGER AS count_ss,
-				COUNT(*) FILTER (WHERE s.is_lazer)::INTEGER AS count_lazer,
-				SUM(COALESCE(s.classic_total_score, 0))::BIGINT AS ranked_score,
-				SUM(COALESCE(s.pp, 0))::INTEGER AS total_pp,
-				AVG(s.accuracy)::REAL AS avg_acc,
-				AVG(b.total_length)::REAL AS avg_map_len
-			FROM ${DB_SCORES_TABLE} s
-				JOIN ${DB_BEATMAPS_TABLE} b ON s.beatmap_id = b.id
-			WHERE s.position BETWEEN 1 AND 100
-			GROUP BY s.user_id, s.ruleset_id, s.position;
+				DROP TABLE ${DB_RANKING_ROLLUP_TABLE};
+    			ALTER TABLE ranking_rollup_tmp RENAME TO ${DB_RANKING_ROLLUP_TABLE};
+			EXCEPTION WHEN OTHERS THEN
+        		PERFORM pg_advisory_unlock(7271);
+       			RAISE;
+    		END;
+    		PERFORM pg_advisory_unlock(7271);
+		END;
 		$$`);
 }
 
