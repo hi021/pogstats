@@ -30,10 +30,12 @@ const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 25000;
 // times below are for timeouts, e.g. the time between batch 1 processing end and batch 2 fetch start (so 23s would be more like 27s in practice)
 const SCORES_ENDPOINT_FETCH_INTERVAL = 23000;
 const SCORES_ENDPOINT_CATCH_UP_INTERVAL = 1100;
+const SCORES_ENDPOINT_CONNECTION_TIMEOUT = 12000;
 const SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL = 0;
 const SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL = 1100; // exponential back-off, 1100 * 2^n, up to n = 6 (max. 70400 ms)
-const SCORES_FETCH_CATCH_UP_THRESHOLD = 985;
+const SCORES_FETCH_CATCH_UP_THRESHOLD = 990;
 
+const requestController = new AbortController();
 let scoresFetchTimeout: NodeJS.Timeout;
 let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
 let osuOAuthToken = "";
@@ -58,17 +60,26 @@ export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG
 	}, SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL);
 }
 
-// TODO: connection timeout ~12s
-// TODO: processing timeout ~45s
 async function fetchScoresBatch(cursors: ScoreCursors) {
+	const requestTimeout = setTimeout(() => {
+		requestController.abort();
+		logError(
+			`scores endpoint request timed out after ${SCORES_ENDPOINT_CONNECTION_TIMEOUT}ms without response; retrying with the same cursor`
+		);
+	}, SCORES_ENDPOINT_CONNECTION_TIMEOUT);
+
 	try {
 		batchTimer = scoreBatchDuration.startTimer();
+
 		// TODO: only osu!standard for now...
-		const res = await fetch(buildScoresUrl(cursors.cursorString, "osu"), { headers: buildHeadersWithAuth(osuOAuthToken) });
+		const res = await fetch(buildScoresUrl(cursors.cursorString, "osu"), {
+			headers: buildHeadersWithAuth(osuOAuthToken),
+			signal: requestController.signal
+		});
 		if (!res.ok) throw new Error(`failed to fetch scores from endpoint: ${res.status} ${res.statusText}`);
 
 		const resJson: ApiScoresResponse = await res.json();
-		cursors = await endScoresBatch(resJson.scores, resJson.cursor_string, cursors.lastScoresId);
+		cursors = await processScoresBatch(resJson.scores, resJson.cursor_string, cursors.lastScoresId);
 
 		batchProcessingFailCount = 0;
 		scoresFetchTimeout = setTimeout(
@@ -78,18 +89,26 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 				: SCORES_ENDPOINT_FETCH_INTERVAL
 		);
 	} catch (e) {
-		++batchProcessingFailCount;
 		logError("failed to fetch/parse JSON:\n", e);
+
+		++batchProcessingFailCount;
 		scoresFetchTimeout = setTimeout(
 			() => fetchScoresBatch(cursors),
 			SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL * Math.min(6, batchProcessingFailCount) ** 2
 		);
+	} finally {
+		clearTimeout(requestTimeout);
 	}
 }
 
-async function endScoresBatch(scores: ApiScore[], cursorString: string, previousHighestScoreId: number): Promise<ScoreCursors> {
+// TODO: add ~120s database timeout
+async function processScoresBatch(
+	scores: ApiScore[],
+	cursorString: string,
+	previousHighestScoreId: number
+): Promise<ScoreCursors> {
 	try {
-		await withDbClient(async (client) => await lockRankingRollupTable(client));
+		await withDbClient(async client => await lockRankingRollupTable(client));
 		await saveScoresBatch(scores, cursorString, previousHighestScoreId);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		++sessionBatchCount;
@@ -97,7 +116,7 @@ async function endScoresBatch(scores: ApiScore[], cursorString: string, previous
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 	} finally {
-		await withDbClient(async (client) => await unlockRankingRollupTable(client));
+		await withDbClient(async client => await unlockRankingRollupTable(client));
 		return { lastScoresId: highestProcessedScoreId, cursorString };
 	}
 }
