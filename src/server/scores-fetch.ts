@@ -101,7 +101,6 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 	}
 }
 
-// TODO: add ~120s database timeout
 async function processScoresBatch(
 	scores: ApiScore[],
 	cursorString: string,
@@ -420,6 +419,9 @@ async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 		"getBeatenScoresByMap",
 		"scores_fetch",
 		`
+		BEGIN;
+		SET LOCAL statement_timeout = 30000;
+
 		WITH candidates AS (
 			SELECT
 				candidate_id,
@@ -466,7 +468,9 @@ async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 			s_agg.max_position < 100 OR
 			s_agg.min_top100_score < c.candidate_score
 		)
-		GROUP BY c.candidate_beatmap_id, c.candidate_ruleset_id`,
+		GROUP BY c.candidate_beatmap_id, c.candidate_ruleset_id;
+		
+		COMMIT;`,
 		[arrays.id, arrays.ruleset_id, arrays.beatmap_id, arrays.user_id, arrays.total_score]
 	);
 

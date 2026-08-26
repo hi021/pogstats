@@ -1,17 +1,17 @@
 import Router from "@koa/router";
 import { Middleware } from "koa";
+import { getRankingForPlayer } from "../db-api-ranking.js";
 import {
 	getBeatmapCount,
 	getEasiestBeatmapsWithoutPermaScore,
 	getGradeSpreadForPlayer,
-	getPlayerIdByIdOrName,
-	getPositionSpreadForPlayer,
 	getModSpreadForPlayer,
-	getPlayerInfo
+	getPlayerIdByIdOrName,
+	getPlayerInfo,
+	getPositionSpreadForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
 import { getRulesetId, parseBeatmapStatusIds, parseInteger } from "../shared.js";
-import { getRankingForPlayer } from "../db-api-ranking.js";
 
 export const API_BASE_URL = "/api/v2/";
 const API_PLAYER_BASE_URL = "player/:idOrName";

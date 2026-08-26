@@ -64,7 +64,7 @@ export function recordScoreBatchCounts(totalScores: number, provenScores: number
 	scoreBatchCount.labels({ type: "proven" }).observe(provenScores);
 }
 
-export function timeDbQuery<T extends Record<string, unknown>>(
+export async function timeDbQuery<T extends Record<string, unknown>>(
 	queryName: string,
 	source: ActionSource,
 	callback: () => Promise<QueryResult<T>>
@@ -74,7 +74,11 @@ export function timeDbQuery<T extends Record<string, unknown>>(
 		source: normalizeLabel(source)
 	});
 
-	return callback().finally(() => timer());
+	try {
+		return await callback();
+	} finally {
+		return timer();
+	}
 }
 
 export async function queryWithTiming<T extends QueryResultRow>(
