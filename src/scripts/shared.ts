@@ -123,6 +123,12 @@ export const buildScoresUrl = (scoreCursor?: number | string, ruleset?: Ruleset)
 	return url;
 };
 
+export const buildBeatmapsetsEventsUrl = (cursorString?: string) => {
+	const url = new URL(`${API_BASE_URL}/beatmapsets/events`);
+	if (cursorString) url.searchParams.append("cursor_string", cursorString);
+	return url;
+};
+
 export const buildBeatmapScoresUrl = (beatmapId: number | string, params: BeatmapScoreParams = { mode: "osu", limit: 100 }) => {
 	const url = new URL(`${API_BASE_URL}/beatmaps/${beatmapId}/scores`);
 	for (const [key, value] of Object.entries(params)) {

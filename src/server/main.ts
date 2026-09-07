@@ -3,19 +3,30 @@ import Koa from "koa";
 import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
 import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";
+import { initializeBeatmapsetsFetch } from "./beatmapsets-fetch.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
 import { BASE_POG_WS_URL, onClientError, onConnect, onError, onUpgrade, pogWss, socketDebugMessageEndpoint } from "./pog-ws.js";
 import { initializeScoresFetch } from "./scores-fetch.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
-	noScoresWs: {
-		cli: "--noScoresWs",
-		description: "Does not connect to ushio, useful for hosting only the pog API",
+	noScoresFetch: {
+		cli: "--noScoresFetch",
+		description: "Does not connect to the scores endpoint, useful for hosting only the pog API",
 		takesValue: false
 	},
 	scoreCursor: {
 		cli: "--scoreCursor <string>",
 		description: "Resume from a specific score cursor instead of the last saved one",
+		takesValue: true
+	},
+	noBeatmapsetsFetch: {
+		cli: "--noBeatmapsetsFetch",
+		description: "Does not connect to the osu! beatmapsets events endpoint",
+		takesValue: false
+	},
+	beatmapsetsCursor: {
+		cli: "--beatmapsetsCursor <string>",
+		description: "Resume from a specific beatmapsets cursor instead of the last saved one",
 		takesValue: true
 	}
 } as const satisfies FlagDefinitions);
@@ -37,8 +48,10 @@ pogWss.on("connection", onConnect);
 pogWss.on("wsClientError", onClientError);
 pogWss.on("error", onError);
 
-if (parsedFlags?.noScoresWs) console.log("scores fetch disabled by CLI parameter");
+if (parsedFlags?.noScoresFetch) console.log("scores fetch disabled by CLI parameter");
 else initializeScoresFetch(parsedFlags);
+if (parsedFlags?.noBeatmapsetsFetch) console.log("beatmapsets fetch disabled by CLI parameter");
+else initializeBeatmapsetsFetch(parsedFlags?.beatmapsetsCursor);
 
 pogApiServer.listen(SERVER_PORT, () => {
 	console.log(`pog-api running on http://localhost:${SERVER_PORT}`);

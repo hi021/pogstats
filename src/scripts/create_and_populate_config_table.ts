@@ -40,7 +40,7 @@ const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "last_weighted_pp_recalc", value_date: undefined },
 	{ key: "last_scores_id", value_text: "0" },
 	{ key: "scores_cursor_string", value_text: "" },
-	{ key: "beatmaps_cursor_string", value_text: "" },
+	{ key: "beatmapsets_cursor_string", value_text: "" },
 	{
 		key: "global_message",
 		value_text: "still very very alpha! also the domain is changing from poggers.ltd to poggers.moe (running costs woopsie)!!"

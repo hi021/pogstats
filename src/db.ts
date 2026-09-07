@@ -61,6 +61,33 @@ export async function getScoresCursor(source: ActionSource = "unknown"): Promise
 	return { lastScoresId: Number(result.rows?.[0]?.value_text || 0), cursorString: result.rows?.[1]?.value_text };
 }
 
+export async function saveBeatmapsetsCursor(client: ClientBase, cursorString?: string, source: ActionSource = "unknown") {
+	if (!cursorString) return;
+
+	await queryWithTiming(
+		client,
+		"saveBeatmapsetsCursor",
+		source,
+		`UPDATE ${DB_CONFIG_TABLE}
+			SET value_text = $1
+			WHERE key = 'beatmapsets_cursor_string'`,
+		[cursorString]
+	);
+}
+
+export async function getBeatmapsetsCursor(source: ActionSource = "unknown") {
+	const result = await withDbClient(client =>
+		queryWithTiming<ConfigEntry>(
+			client,
+			"getBeatmapsetsCursor",
+			source,
+			`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key = 'beatmapsets_cursor_string'`
+		)
+	);
+
+	return result.rows?.[0]?.value_text;
+}
+
 export async function updateBeatmapScoresRetrievalDate(
 	client: ClientBase,
 	beatmapId: number,

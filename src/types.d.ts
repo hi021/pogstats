@@ -41,6 +41,7 @@ type ActionSource =
 	| "pog_api_v2"
 	| "pog_ws"
 	| "scores_fetch"
+	| "beatmapsets_fetch"
 	| "osu_auth"
 	| "unknown";
 
