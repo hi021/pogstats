@@ -259,8 +259,8 @@ export function printHelp<Defs extends FlagDefinitions>(
 	console.log(`Usage: node ${usageName} [flags]\n`);
 	console.log("Optional flags:");
 	for (const def of Object.values(flagDefinitions) as FlagDefinition[])
-		console.log(`  ${def.cli.padEnd(24)} ${def.description}`);
-	console.log("  --help                   Show this help message");
+		console.log(`  ${def.cli.padEnd(30)} ${def.description}`);
+	console.log("  --help                         Show this help message");
 }
 
 export function parseArgs<Defs extends FlagDefinitions>(

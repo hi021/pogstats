@@ -26,7 +26,7 @@ import {
 import { FLAG_DEFINITIONS } from "./main.js";
 
 const OSU_OAUTH_TOKEN_REFRESH_INTERVAL = 22 * 60 * 60 * 1000;
-const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 25000;
+const OSU_OAUTH_TOKEN_PANIC_REFRESH_INTERVAL = 60000;
 // times below are for timeouts, e.g. the time between batch 1 processing end and batch 2 fetch start (so 23s would be more like 27s in practice)
 const SCORES_ENDPOINT_FETCH_INTERVAL = 23000;
 const SCORES_ENDPOINT_CATCH_UP_INTERVAL = 1100;

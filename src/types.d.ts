@@ -8,6 +8,7 @@ type RankingPositionThreshold = 100 | 50 | 25 | 15 | 8 | 1;
 type RankingPositionThresholdName = `Top ${RankingPositionThreshold}`;
 type RankingPositionThresholdCode = `top${RankingPositionThreshold}`;
 type BeatmapStatusId = -2 | -1 | 0 | 1 | 2 | 3 | 4; // -2 - graveyard, -1 - wip, 0 - pending, 1 - ranked, 2 - approved, 3 - qualified, 4 - loved
+type BeatmapStatus = "graveyard" | "wip" | "pending" | "ranked" | "approved" | "qualified" | "loved";
 interface BeatmapScoreParams {
 	mode?: Ruleset;
 	mods?: string;
