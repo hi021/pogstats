@@ -3,34 +3,6 @@ import { getBeatmapsetsCursor, saveBeatmapsetsCursor } from "../db.js";
 import { getOAuthToken } from "../scripts/osu_auth.js";
 import { buildBeatmapsetsEventsUrl, buildHeadersWithAuth } from "../scripts/shared.js";
 
-type BeatmapsetsFetchEventType =
-	| BeatmapsetsFetchStatusChangeEventType
-	| BeatmapsetsFetchMetadataChangeEventType
-	| "nominate"
-	| "qualify"
-	| "disqualify"
-	| "kudosu_allow"
-	| "kudosu_deny"
-	| "kudosu_gain"
-	| "kudosu_lost"
-	| "kudosu_recalculate"
-	| "issue_resolve"
-	| "issue_reopen"
-	| "discussion_lock"
-	| "discussion_unlock"
-	| "discussion_delete"
-	| "discussion_restore"
-	| "discussion_post_delete"
-	| "discussion_post_restore"
-	| "nomination_reset"
-	| "nomination_reset_received"
-	| "nsfw_toggle"
-	| "offset_edit";
-
-type BeatmapsetsFetchStatusChangeEventType = "love" | "remove_from_loved" | "approve" | "rank";
-
-type BeatmapsetsFetchMetadataChangeEventType = "genre_edit" | "language_edit" | "tags_edit" | "beatmap_owner_change";
-
 const STATUS_CHANGE_TYPES: readonly BeatmapsetsFetchStatusChangeEventType[] = Object.freeze([
 	"love",
 	"remove_from_loved",
@@ -102,19 +74,19 @@ async function fetchBeatmapsetsBatch(cursorString?: string) {
 		});
 		if (!response.ok) throw new Error(`failed to fetch beatmapset events: ${response.status} ${response.statusText}`);
 
-		const responseJson = await response.json();
+		const responseJson: ApiBeatmapsetsFetchResponse = await response.json();
 		const events = filterEvents(responseJson.events);
 		logInfo(`${responseJson.events?.length} beatmapset events | ${events.length} relevant`);
 
 		console.log("__\n" + responseJson.events?.map((e: any) => e.id).join("\n")); // TODO: debug only
-		const nextCursorString = responseJson.events?.[0]?.id || cursorString;
+		const nextCursorString = responseJson.events?.[0]?.id?.toString() || cursorString;
 		if (events.length) {
 			console.log(JSON.stringify(events, undefined, 2)); // TODO: debug only
 			processEvents(events);
 		}
-		
-		if(nextCursorString != cursorString)
-		await withDbClient(client => saveBeatmapsetsCursor(client, nextCursorString, "beatmapsets_fetch"));
+
+		if (nextCursorString && nextCursorString != cursorString)
+			await withDbClient(client => saveBeatmapsetsCursor(client, nextCursorString, "beatmapsets_fetch"));
 		beatmapsetsFetchTimeout = setTimeout(() => fetchBeatmapsetsBatch(nextCursorString), BEATMAPSETS_ENDPOINT_FETCH_INTERVAL);
 		++sessionBatchCount;
 	} catch (e) {
@@ -124,7 +96,7 @@ async function fetchBeatmapsetsBatch(cursorString?: string) {
 }
 
 // TODO: check the "types" search param, maybe can filter out some events on the osu!api side instead of doing it here
-function filterEvents(events: any[]) {
+function filterEvents(events: BeatmapsetsFetchEvent[]) {
 	const relevantEvents = [];
 	for (const event of events ?? []) {
 		if (!KNOWN_EVENT_TYPES.includes(event.type as BeatmapsetsFetchEventType)) {
@@ -148,7 +120,7 @@ function filterEvents(events: any[]) {
 	return relevantEvents;
 }
 
-function processEvents(events: any[]) {
+function processEvents(events: BeatmapsetsFetchEvent[]) {
 	// TODO
 }
 

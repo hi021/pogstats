@@ -74,7 +74,7 @@ type ApiScoreHitType =
 
 // -------------------------------------
 
-interface ApiUser {
+interface ApiUserBasic {
 	avatar_url: string;
 	country_code: string;
 	default_group?: string;
@@ -88,8 +88,9 @@ interface ApiUser {
 	pm_friends_only: boolean;
 	profile_colour: string | null;
 	username: string;
+}
 
-	// extended:
+interface ApiUser extends ApiUserBasic {
 	account_history?: ApiUserAccountHistory[];
 	active_tournament_banner?: ApiProfileBanner;
 	active_tournament_banners?: ApiProfileBanner[];
@@ -323,3 +324,137 @@ interface ApiBeatmapDbResponseObject {
 }
 
 type ApiBeatmapDbResponse = ApiBeatmapDbResponseObject | ApiBeatmapDbResponseObject[]; // array only if providing multiple ids
+
+interface ApiBeatmapsetsFetchResponse {
+	events: BeatmapsetsFetchEvent[];
+	reviewsConfig: {
+		max_blocks: number;
+	};
+	users: Array<ApiUserBasic & { groups?: ApiUserGroup[] }>;
+}
+
+interface BeatmapsetsFetchEvent {
+	id: number;
+	type: BeatmapsetsFetchEventType;
+	created_at: string;
+	user_id: number;
+
+	comment?: {
+		beatmap_discussion_id: number | null;
+		beatmap_discussion_post_id: number | null;
+
+		old?: string;
+		new?: string;
+
+		new_vote?: {
+			user_id: number;
+			score: number;
+		};
+		votes?: Array<{
+			user_id: number;
+			score: number;
+		}>;
+	};
+
+	// TODO: try to unify with existing type?
+	beatmapset: {
+		anime_cover: boolean;
+		artist: string;
+		artist_unicode: string;
+		covers: {
+			cover: string;
+			"cover@2x": string;
+			card: string;
+			"card@2x": string;
+			list: string;
+			"list@2x": string;
+			slimcover: string;
+			"slimcover@2x": string;
+		};
+		creator: string;
+		favourite_count: number;
+		genre_id: number;
+		hype: {
+			current: number;
+			required: number;
+		};
+		id: number;
+		language_id: number;
+		nsfw: boolean;
+		offset: number;
+		play_count: number;
+		preview_url: string;
+		source: string;
+		spotlight: boolean;
+		status: string;
+		title: string;
+		title_unicode: string;
+		track_id: number | null;
+		user_id: number;
+		video: boolean;
+
+		user: ApiUserBasic;
+
+		discussion?: BeatmapsetsFetchEventDiscussion;
+	};
+}
+
+interface BeatmapsetsFetchEventDiscussion {
+	id: number;
+	beatmapset_id: number;
+	beatmap_id: number;
+	user_id: number;
+	deleted_by_id: number | null;
+	message_type: string;
+	parent_id: number | null;
+	timestamp: number;
+	resolved: boolean;
+	can_be_resolved: boolean;
+	can_grant_kudosu: boolean;
+	created_at: string;
+	updated_at: string;
+	deleted_at: string | null;
+	last_post_at: string;
+	kudosu_denied: boolean;
+
+	starting_post: {
+		beatmapset_discussion_id: number;
+		created_at: string;
+		deleted_at: string | null;
+		deleted_by_id: number | null;
+		id: number;
+		last_editor_id: number;
+		message: string;
+		system: boolean;
+		updated_at: string;
+		user_id: number;
+	};
+}
+
+type BeatmapsetsFetchEventType =
+	| BeatmapsetsFetchStatusChangeEventType
+	| BeatmapsetsFetchMetadataChangeEventType
+	| "nominate"
+	| "qualify"
+	| "disqualify"
+	| "kudosu_allow"
+	| "kudosu_deny"
+	| "kudosu_gain"
+	| "kudosu_lost"
+	| "kudosu_recalculate"
+	| "issue_resolve"
+	| "issue_reopen"
+	| "discussion_lock"
+	| "discussion_unlock"
+	| "discussion_delete"
+	| "discussion_restore"
+	| "discussion_post_delete"
+	| "discussion_post_restore"
+	| "nomination_reset"
+	| "nomination_reset_received"
+	| "nsfw_toggle"
+	| "offset_edit";
+
+type BeatmapsetsFetchStatusChangeEventType = "love" | "remove_from_loved" | "approve" | "rank";
+
+type BeatmapsetsFetchMetadataChangeEventType = "genre_edit" | "language_edit" | "tags_edit" | "beatmap_owner_change";
