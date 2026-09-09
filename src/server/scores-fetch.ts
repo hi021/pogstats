@@ -76,6 +76,7 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 			headers: buildHeadersWithAuth(osuOAuthToken),
 			signal: requestController.signal
 		});
+		clearTimeout(requestTimeout);
 		if (!res.ok) throw new Error(`failed to fetch scores from endpoint: ${res.status} ${res.statusText}`);
 
 		const resJson: ApiScoresResponse = await res.json();
@@ -414,14 +415,13 @@ async function upsertBeatmapScores(
 // Does not save scores for qualified maps - fetching those is skipped in scrape_beatmaps
 async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once? has not happened since....
+
+	await client.query("SET LOCAL statement_timeout = 30000");
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(
 		client,
 		"getBeatenScoresByMap",
 		"scores_fetch",
 		`
-		BEGIN;
-		SET LOCAL statement_timeout = 30000;
-
 		WITH candidates AS (
 			SELECT
 				candidate_id,
@@ -469,8 +469,7 @@ async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 			s_agg.min_top100_score < c.candidate_score
 		)
 		GROUP BY c.candidate_beatmap_id, c.candidate_ruleset_id;
-		
-		COMMIT;`,
+		`,
 		[arrays.id, arrays.ruleset_id, arrays.beatmap_id, arrays.user_id, arrays.total_score]
 	);
 
