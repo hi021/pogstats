@@ -1,5 +1,5 @@
+import { LabelValues } from "@prometheus-io/client";
 import { ClientBase } from "pg";
-import { LabelValues } from "prom-client";
 import { SCORE_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import {
 	fetchNewBeatmaps,

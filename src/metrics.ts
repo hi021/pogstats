@@ -1,6 +1,6 @@
+import prom from "@prometheus-io/client";
 import type { Middleware } from "koa";
 import type { ClientBase, QueryResult, QueryResultRow } from "pg";
-import prom from "prom-client";
 
 // TODO: seems like this only registers metrics for the webserver but not score scrape script
 // TODO: do not collect potentially sensitive info like nodejs version?
@@ -41,7 +41,7 @@ const missingEntityCounter = new prom.Counter({
 export const scoreBatchDuration = new prom.Histogram({
 	name: "pogstats_score_batch_duration_s",
 	help: "Score batch process duration in seconds",
-	buckets: [0.25, 1, 2, 5, 10, 25, 60],
+	buckets: [1, 2, 5, 10, 25, 60],
 	labelNames: ["success", "batchNo"],
 	registers: [metricsRegistry]
 });
