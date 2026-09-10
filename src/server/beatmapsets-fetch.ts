@@ -58,6 +58,7 @@ export function abortBeatmapsetsFetch() {
 	clearTimeout(tokenRefreshTimeout);
 }
 
+// TODO: idk what to do with this, this endpoint is so shit
 export async function initializeBeatmapsetsFetch(cursorStringCli?: string) {
 	sessionBatchCount = 0;
 	clearTimeout(beatmapsetsFetchTimeout);

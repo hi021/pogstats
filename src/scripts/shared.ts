@@ -121,6 +121,7 @@ export const buildScoresUrl = (scoreCursor?: number | string, ruleset?: Ruleset)
 	return url;
 };
 
+// TODO: try min_date?
 export const buildBeatmapsetsEventsUrl = (cursorString?: string) => {
 	const url = new URL(`${API_BASE_URL}/beatmapsets/events`);
 	if (cursorString) url.searchParams.append("cursor_string", cursorString);

@@ -1,13 +1,13 @@
 import http from "http";
 import Koa from "koa";
-import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
 import { closePool } from "../db-generic.js";
+import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
 import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";
-import { initializeBeatmapsetsFetch, abortBeatmapsetsFetch } from "./beatmapsets-fetch.js";
+import { abortBeatmapsetsFetch, initializeBeatmapsetsFetch } from "./beatmapsets-fetch.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
 import { BASE_POG_WS_URL, onClientError, onConnect, onError, onUpgrade, pogWss, socketDebugMessageEndpoint } from "./pog-ws.js";
-import { initializeScoresFetch, abortScoresFetch } from "./scores-fetch.js";
+import { abortScoresFetch, initializeScoresFetch } from "./scores-fetch.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
 	noScoresFetch: {

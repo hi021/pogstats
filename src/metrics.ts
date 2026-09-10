@@ -11,7 +11,7 @@ const httpRequestDuration = new prom.Histogram({
 	name: "pogstats_http_request_duration_ms",
 	help: "Duration of inbound HTTP requests in ms",
 	labelNames: ["route", "status_code", "origin"] as const,
-	buckets: [3, 15, 50, 100, 300, 750, 1500, 3750, 7500, 20000],
+	buckets: [10, 75, 150, 375, 750, 1500, 3750, 10000, 37500],
 	registers: [metricsRegistry]
 });
 
@@ -27,13 +27,13 @@ const outboundRequestDuration = new prom.Histogram({
 	name: "pogstats_outbound_request_duration_ms",
 	help: "Duration of outbound HTTP requests in ms",
 	labelNames: ["route", "status_code", "source"] as const,
-	buckets: [2, 10, 20, 50, 100, 250, 500, 1000, 2500, 5000, 12500],
+	buckets: [10, 75, 150, 375, 750, 1500, 3750, 10000, 37500],
 	registers: [metricsRegistry]
 });
 
 const missingEntityCounter = new prom.Counter({
 	name: "pogstats_missing_entity_total",
-	help: "Count of missing player and beatmap ids discovered during processing",
+	help: "Count of missing players and beatmaps discovered during processing",
 	labelNames: ["type"] as const,
 	registers: [metricsRegistry]
 });
@@ -48,7 +48,7 @@ export const scoreBatchDuration = new prom.Histogram({
 
 const scoreBatchCount = new prom.Histogram({
 	name: "pogstats_score_batch_count",
-	help: "Counts of score batches and proven score counts from scores-fetch",
+	help: "Count of score batches per proven score bucket from scores-fetch",
 	labelNames: ["type"] as const,
 	buckets: [1, 10, 30, 75, 500, 1000, 1500, 2500, 10000, 100000],
 	registers: [metricsRegistry]
@@ -130,12 +130,11 @@ export const requestTimingMiddleware: Middleware = async (ctx, next) => {
 	await next();
 	const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
 
-	// TODO: should be a normalized route template (e.g. /api/v2/player/:idOrName) instead of full ctx.path (e.g. /api/v2/player/WubBoobBolf)
 	httpRequestDuration
 		.labels({
-			route: normalizeLabel(ctx.path),
+			route: normalizeLabel(typeof ctx._matchedRoute == "string" ? ctx._matchedRoute : ctx.path),
 			status_code: String(ctx.status || 404),
-			origin: classifyOrigin(ctx.request.headers["user-agent"])
+			origin: classifyOrigin(ctx.request.get("user-agent"))
 		})
 		.observe(durationMs);
 };
