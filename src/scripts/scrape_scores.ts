@@ -128,6 +128,7 @@ async function mergeSingleBeatmapScoresIntoExisting(client: ClientBase, scrapedS
 	const finalScores = [...mergedById.values()].sort(sortScores);
 	const { values, paramGroups } = prepareScoresTableValuesAndParamPlaceholders(finalScores);
 
+	// TODO?: (INSERT ... ON CONFLICT DO UPDATE) instead of DELETE + INSERT
 	await queryWithTiming(
 		client,
 		"mergeSingleBeatmapScoresIntoExisting_delete_scores",
@@ -215,6 +216,7 @@ async function scrapeScores() {
 
 		const beatmapBatches = splitIntoBatches(beatmapIds, BEATMAP_BATCH_SIZE);
 		for (const batch of beatmapBatches) {
+			// TODO: Refresh OAuth token on 401
 			const headers = buildHeadersWithAuth(await getOAuthToken());
 			for (let i = 0; i < batch.ids.length; ++i) {
 				const beatmapNo = (batch.batch_no - 1) * BEATMAP_BATCH_SIZE + i + 1;
@@ -231,7 +233,7 @@ async function scrapeScores() {
 
 if (import.meta.main) {
 	try {
-		scrapeScores();
+		await scrapeScores();
 	} catch (e) {
 		console.error("[scrape_scores] Failed to parse CLI arguments:\n", e);
 		process.exit(1);

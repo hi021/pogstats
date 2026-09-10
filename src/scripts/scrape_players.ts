@@ -258,6 +258,8 @@ export async function scrapePlayers(ids?: number[]) {
 					5000 * 8 ** (failCount - 1)
 				);
 
+				// TODO: do not mutate failedBatches inside the loop
+				// can iterate over a copy `[...failedBatches], or collect successes and filter after the loop maybe
 				for (const batch of failedBatches) {
 					try {
 						await processPlayerBatch(batch, miaPlayers, headers);
@@ -333,7 +335,7 @@ export async function scrapePlayers(ids?: number[]) {
 if (import.meta.main) {
 	try {
 		const playerIds = parseIdList(parsedFlags.ids);
-		scrapePlayers(playerIds);
+		await scrapePlayers(playerIds);
 	} catch (e) {
 		console.error("[scrape_players] Failed to parse CLI arguments:\n", e);
 		process.exit(1);

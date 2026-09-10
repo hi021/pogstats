@@ -98,6 +98,7 @@ export async function getModSpreadForPlayer(
 	rulesetId: RulesetId,
 	positionThreshold = 100
 ) {
+	// this could benefit from storing extracted mod arrays as a separate indexed column in scores table
 	const result = await queryWithTiming<{ spread: PlayerModSpread }>(
 		client,
 		"getModSpreadForPlayer",
@@ -158,7 +159,7 @@ export async function getModSpreadForPlayer(
 	return result.rows?.[0]?.spread ?? {};
 }
 
-// TODO?: materialized view that updates every few minutes?
+// TODO?: materialized view that updates every ~30 minutes?
 export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, rulesetId: RulesetId, positionThreshold: number) {
 	const result = await queryWithTiming<BeatmapWithoutPermaScore>(
 		client,

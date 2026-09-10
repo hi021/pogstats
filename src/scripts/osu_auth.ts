@@ -8,6 +8,7 @@ export async function getOAuthToken(grantType = "client_credentials", code?: str
 	if (!OSU_CLIENT_ID || !OSU_CLIENT_SECRET)
 		throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET must be set in the environment variables.");
 
+	// TODO?: try sending the body as JSON instead, so no secrets can show up in stack traces?
 	const body = `client_id=${OSU_CLIENT_ID}&client_secret=${OSU_CLIENT_SECRET}&grant_type=${grantType}&scope=public${code ? `&code=${code}` : ""}`;
 	const response = await timedFetch(
 		AUTH_ENDPOINT,

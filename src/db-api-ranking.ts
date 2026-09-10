@@ -44,9 +44,9 @@ export async function getLiveRankingForPlayer(
       GROUP BY r.user_id
     ),
     ranked AS (
-      SELECT 
+      SELECT
           p.id,
-          p.username,rollupTable
+          p.username,
           p.country_code,
           COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
           COALESCE(prs.weighted_count, 0)::INT AS weighted_count,
@@ -55,8 +55,8 @@ export async function getLiveRankingForPlayer(
         JOIN agg ON agg.user_id = p.id
         LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1
     )
-    SELECT * 
-    FROM ranked 
+    SELECT *
+    FROM ranked
     WHERE id = $2;
   `;
 
@@ -69,6 +69,7 @@ export async function getLiveRankingForPlayer(
 /////
 
 // TODO
+// TODO: parameterize positionThresholds ($N)
 function buildMultiBucketAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
 		.map(bucket => {
@@ -130,7 +131,7 @@ export async function getPaginatedRankingForBucket(
 
 	if (limit <= 0 || limit >= 1000) return [];
 
-	const positionCondition = positionThreshold == 100 ? "" : `AND r.position <= ${positionThreshold}`;
+	const positionCondition = positionThreshold == 100 ? "" : `AND r.position <= $4`;
 
 	let aggSelects = `COALESCE(SUM(r.count), 0)::INT AS count`;
 	let outerSelects = `(DENSE_RANK() OVER (ORDER BY agg.count DESC NULLS LAST, p.id ASC))::INT AS count_position,
@@ -184,13 +185,18 @@ export async function getPaginatedRankingForBucket(
     LIMIT $2 OFFSET $3;
   `;
 
-	const res = await client.query(query, [rulesetId, limit, offset]);
+	const res = await client.query(
+		query,
+		positionThreshold == 100 ? [rulesetId, limit, offset] : [rulesetId, limit, offset, positionThreshold]
+	);
 	return res.rows;
 }
 
 // TODO join to player_ruleset_stats to get weighted_pp and weighted_count
 // TODO use buildAggregations()
-// TODO validate whether dense_rank really is more performant than rank
+// TODO validate whether dense_rank() really is more performant than rank()
+// TODO figure out limits
+// TODO do not sort and rank in Postgres, use ZREVRANK in valkey
 export async function getFullRankingFromRollup(client: ClientBase, rulesetId: RulesetId) {
 	return await queryWithTiming<FullPlayerRankingData[]>(
 		client,
@@ -199,7 +205,7 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
 		`WITH agg AS (
       SELECT
         r.user_id,
-        
+
         SUM(r.count) FILTER (WHERE r.position <= 1) AS top_1_count,
         SUM(r.count_ss) FILTER (WHERE r.position <= 1) AS top_1_count_ss,
         SUM(r.count_lazer) FILTER (WHERE r.position <= 1) AS top_1_count_lazer,

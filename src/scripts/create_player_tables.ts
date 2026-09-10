@@ -48,7 +48,7 @@ async function createTables(client: ClientBase) {
 	  CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (
 			user_id 				INTEGER NOT NULL,
 			ruleset_id 			SMALLINT NOT NULL,
-			
+
 			weighted_count	INTEGER NOT NULL DEFAULT 0,
 			weighted_ratio	REAL NOT NULL DEFAULT 0,
 			weighted_pp			REAL NOT NULL DEFAULT 0,

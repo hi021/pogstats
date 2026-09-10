@@ -54,11 +54,15 @@ export async function getScoresCursor(source: ActionSource = "unknown"): Promise
 			client,
 			"getScoresCursor",
 			source,
-			`SELECT value_text FROM ${DB_CONFIG_TABLE} WHERE key IN ('scores_cursor_string', 'last_scores_id') ORDER BY key`
+			`SELECT key, value_text FROM ${DB_CONFIG_TABLE} WHERE key IN ('scores_cursor_string', 'last_scores_id')`
 		)
 	);
 
-	return { lastScoresId: Number(result.rows?.[0]?.value_text || 0), cursorString: result.rows?.[1]?.value_text };
+	const map = new Map(result.rows?.map(row => [row.key, row.value_text]));
+	return {
+		lastScoresId: Number(map.get("last_scores_id") || 0),
+		cursorString: map.get("scores_cursor_string") as string | undefined
+	};
 }
 
 export async function saveBeatmapsetsCursor(client: ClientBase, cursorString?: string, source: ActionSource = "unknown") {

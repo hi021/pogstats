@@ -2,6 +2,7 @@ import { ClientBase } from "pg";
 import { withDbClient } from "../db-generic.js";
 import { DB_SCORES_TABLE } from "../env.js";
 
+// TODO: get_position_spread() can be replaced to simply read counts from the ranking rollup table
 async function createMiscellaneousDBFunctions(client: ClientBase) {
 	console.log("Attempting to create miscellaneous DB functions");
 
@@ -54,7 +55,7 @@ async function createMiscellaneousDBFunctions(client: ClientBase) {
 				GROUP BY position
 			) AS c ON c.position = g.i;
 		$$;
-		
+
 		CREATE EXTENSION if not exists pg_trgm;
 		CREATE EXTENSION if not exists pg_cron;
 		CREATE EXTENSION if not exists timescaledb;

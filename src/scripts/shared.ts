@@ -43,13 +43,11 @@ export const buildHeadersWithAuth = (token: string) => {
 export function parseIdList(idString?: string): number[] | undefined {
 	if (!idString) return;
 
-	const ids = idString.split(",").map(id => {
+	return idString.split(",").map(id => {
 		const parsed = parseInt(id.trim(), 10);
 		if (isNaN(parsed) || parsed <= 0) throw new Error(`Invalid ID: ${id.trim()}`);
 		return parsed;
 	});
-
-	return ids;
 }
 
 export function getMinDate(value: string | undefined) {
@@ -135,12 +133,6 @@ export const buildBeatmapScoresUrl = (beatmapId: number | string, params: Beatma
 		if (value != null) url.searchParams.append(key, String(value));
 	}
 
-	return url;
-};
-
-export const buildUsersUrl = (userIds: Array<number | string>) => {
-	const url = new URL(`${API_BASE_URL}/users`);
-	url.searchParams.append("ids[]", userIds.join(","));
 	return url;
 };
 

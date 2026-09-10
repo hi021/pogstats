@@ -53,6 +53,11 @@ let beatmapsetsFetchTimeout: NodeJS.Timeout;
 let osuOAuthToken = "";
 let tokenRefreshTimeout: NodeJS.Timeout;
 
+export function abortBeatmapsetsFetch() {
+	clearTimeout(beatmapsetsFetchTimeout);
+	clearTimeout(tokenRefreshTimeout);
+}
+
 export async function initializeBeatmapsetsFetch(cursorStringCli?: string) {
 	sessionBatchCount = 0;
 	clearTimeout(beatmapsetsFetchTimeout);

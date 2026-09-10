@@ -38,6 +38,7 @@ export function onConnect(ws: WebSocket, req: http.IncomingMessage) {
 	}
 
 	ws.on("message", msg => {
+		// DEBUG STUB
 		console.log("Received:", msg.toString());
 	});
 

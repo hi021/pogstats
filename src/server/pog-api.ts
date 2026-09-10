@@ -53,46 +53,46 @@ const rulesetIdByNameMiddleware: Middleware = async (ctx, next) => {
 router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
 router.use(API_PLAYER_BASE_URL + "/:ruleset", rulesetIdByNameMiddleware);
 
-router.get(API_PLAYER_BASE_URL, async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL, async ctx => {
 	// TODO?: boolean parse helper function?
 	const data = await withDbClient(async client => await getPlayerInfo(client, ctx.state.playerId, ctx.query.full == "true"));
 
-	ctx.headers["Content-Type"] = "application/json";
+	ctx.type = "application/json";
 	ctx.body = data;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/position-spread", async ctx => {
 	const spread = await withDbClient(
 		async client => await getPositionSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId)
 	);
 
-	ctx.headers["Content-Type"] = "application/json";
+	ctx.type = "application/json";
 	ctx.body = spread;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread{/:position}", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/grade-spread{/:position}", async ctx => {
 	const posThreshold = parseInteger(ctx.params.position, 1) || 100;
 	const spread = await withDbClient(
 		async client =>
 			await getGradeSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
-	ctx.headers["Content-Type"] = "application/json";
+	ctx.type = "application/json";
 	ctx.body = spread;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/mod-spread{/:position}", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/mod-spread{/:position}", async ctx => {
 	const posThreshold = parseInteger(ctx.params.position, 1) || 100;
 	const spread = await withDbClient(
 		async client =>
 			await getModSpreadForPlayer(client, ctx.state.playerId, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
-	ctx.headers["Content-Type"] = "application/json";
+	ctx.type = "application/json";
 	ctx.body = spread;
 });
 
-router.get(API_PLAYER_BASE_URL + "/:ruleset/:rankings{/:date}", async (ctx, next) => {
+router.get(API_PLAYER_BASE_URL + "/:ruleset/:rankings{/:date}", async ctx => {
 	// TODO: error handlin
 	const ranking = await withDbClient(
 		async client =>
@@ -106,7 +106,7 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/:rankings{/:date}", async (ctx, next
 	);
 	if (!ranking) ctx.throw(400, "Invalid ranking");
 
-	ctx.headers["Content-Type"] = "application/json";
+	ctx.type = "application/json";
 	ctx.body = ranking;
 });
 
@@ -121,18 +121,18 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/:rankings{/:date}", async (ctx, next
 //// BEATMAPS ROUTES
 router.use(API_BEATMAPS_BASE_URL + "/:ruleset", rulesetIdByNameMiddleware);
 
-router.get(API_BEATMAPS_BASE_URL + "/:ruleset/no-perma{/:position}", async (ctx, next) => {
+router.get(API_BEATMAPS_BASE_URL + "/:ruleset/no-perma{/:position}", async ctx => {
 	const posThreshold = parseInteger(ctx.params.position, 1) || 1;
 	const beatmaps = await withDbClient(
 		async client =>
 			await getEasiestBeatmapsWithoutPermaScore(client, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
 	);
 
-	ctx.headers["Content-Type"] = "application/json";
+	ctx.type = "application/json";
 	ctx.body = beatmaps;
 });
 
-router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async (ctx, next) => {
+router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async ctx => {
 	const statusIds = parseBeatmapStatusIds(ctx.params.statuses);
 	const count = await withDbClient(
 		async client => await getBeatmapCount(client, ctx.state.rulesetId, statusIds.length ? statusIds : [1, 2, 4])

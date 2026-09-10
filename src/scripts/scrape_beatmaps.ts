@@ -106,7 +106,7 @@ export async function scrapeBeatmaps(ids?: number[]) {
 			scrapedCount += convertedBeatmaps.length;
 			await withDbClientTransaction(async client => {
 				await createTempBeatmapsTable(client);
-				await upsertBeatmapBatch(client, convertedBeatmaps, "scrape_beatmaps_tmp", "scrape_players");
+				await upsertBeatmapBatch(client, convertedBeatmaps, "scrape_beatmaps_tmp", "scrape_beatmaps");
 				await insertBeatmapBatch(client);
 			});
 		} catch (e) {
@@ -125,4 +125,4 @@ export async function scrapeBeatmaps(ids?: number[]) {
 // no I guess not?? seems to be working...
 
 // this does nothing for now
-if (import.meta.main) scrapeBeatmaps();
+if (import.meta.main) await scrapeBeatmaps();

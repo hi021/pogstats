@@ -1,12 +1,13 @@
 import http from "http";
 import Koa from "koa";
 import { DEV_ENV, METRICS_PORT, SERVER_PORT } from "../env.js";
+import { closePool } from "../db-generic.js";
 import { metricsMiddleware, requestTimingMiddleware } from "../metrics.js";
 import { FlagDefinitions, parseArgs } from "../shared.js";
-import { initializeBeatmapsetsFetch } from "./beatmapsets-fetch.js";
+import { initializeBeatmapsetsFetch, abortBeatmapsetsFetch } from "./beatmapsets-fetch.js";
 import { errorHandlerMiddleware, router } from "./pog-api.js";
 import { BASE_POG_WS_URL, onClientError, onConnect, onError, onUpgrade, pogWss, socketDebugMessageEndpoint } from "./pog-ws.js";
-import { initializeScoresFetch } from "./scores-fetch.js";
+import { initializeScoresFetch, abortScoresFetch } from "./scores-fetch.js";
 
 export const FLAG_DEFINITIONS = Object.freeze({
 	noScoresFetch: {
@@ -33,6 +34,8 @@ export const FLAG_DEFINITIONS = Object.freeze({
 
 export const pogApiApp = new Koa({ env: DEV_ENV ? "development" : "production" });
 export const pogApiServer = http.createServer(pogApiApp.callback());
+let metricsServer: http.Server | null = null;
+let shuttingDown = false;
 
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
@@ -61,6 +64,27 @@ pogApiServer.listen(SERVER_PORT, () => {
 if (METRICS_PORT && METRICS_PORT != SERVER_PORT) {
 	const metricsApp = new Koa();
 	metricsApp.use(metricsMiddleware);
-	const metricsServer = http.createServer(metricsApp.callback());
+	metricsServer = http.createServer(metricsApp.callback());
 	metricsServer.listen(METRICS_PORT, () => console.log(`pog metrics running on http://localhost:${METRICS_PORT}/metrics`));
 }
+
+async function gracefulShutdown(signal: string) {
+	if (shuttingDown) return;
+	shuttingDown = true;
+	console.log(`\n${signal} received, shutting down...`);
+
+	abortScoresFetch();
+	abortBeatmapsetsFetch();
+	pogApiServer.close();
+	metricsServer?.close();
+	pogWss.close();
+
+	await new Promise(resolve => setTimeout(resolve, 1000));
+	await closePool();
+
+	console.log("Shutdown complete.");
+	process.exit(0);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

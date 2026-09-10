@@ -77,7 +77,7 @@ export async function timeDbQuery<T extends Record<string, unknown>>(
 	try {
 		return await callback();
 	} finally {
-		return timer();
+		timer();
 	}
 }
 
@@ -114,7 +114,7 @@ export async function timedFetch(
 		statusCode = String(res.status);
 		return res;
 	} finally {
-		const durationMs = Number(process.hrtime.bigint() - start) / 1e9;
+		const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
 		outboundRequestDuration
 			.labels({
 				route: normalizeLabel(route),
@@ -130,6 +130,7 @@ export const requestTimingMiddleware: Middleware = async (ctx, next) => {
 	await next();
 	const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
 
+	// TODO: should be a normalized route template (e.g. /api/v2/player/:idOrName) instead of full ctx.path (e.g. /api/v2/player/WubBoobBolf)
 	httpRequestDuration
 		.labels({
 			route: normalizeLabel(ctx.path),

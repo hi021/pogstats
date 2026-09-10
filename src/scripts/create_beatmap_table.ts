@@ -1,15 +1,8 @@
-import { Client } from "pg";
-import { DB_BEATMAPS_TABLE, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "../env.js";
+import { ClientBase } from "pg";
+import { DB_BEATMAPS_TABLE } from "../env.js";
+import { withDbClientTransaction } from "../db-generic.js";
 
-const client = new Client({
-	host: DB_HOST,
-	port: DB_PORT,
-	user: DB_USER,
-	password: DB_PASSWORD,
-	database: DB_NAME
-});
-
-async function createTables() {
+async function createTables(client: ClientBase) {
 	// only beatmaps table for now, osu-beatmap-db has no info on beatmapsets, but all important data is in the beatmap itself
 	console.log(`Attempting to create ${DB_BEATMAPS_TABLE} table`);
 
@@ -46,12 +39,9 @@ async function createTables() {
 
 async function main() {
 	try {
-		await client.connect();
-		await createTables();
+		await withDbClientTransaction(async client => await createTables(client));
 	} catch (e) {
 		console.error("Error creating table:\n", e);
-	} finally {
-		await client.end();
 	}
 }
 

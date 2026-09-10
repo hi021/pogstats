@@ -152,7 +152,7 @@ export function prepareScoresTableValuesAndParamPlaceholders(scores: BeatmapScor
 	const paramGroups = scores.map((score, index) => {
 		const offset = index * SCORE_TABLE_COLUMNS.length;
 		values.push(
-			(score.position = index + 1),
+			index + 1,
 			score.isScraped,
 			score.retrievedAt,
 			score.isLazer,
@@ -242,7 +242,7 @@ export function sortScores(a: ScoreSortData, b: ScoreSortData) {
 
 export function sortWsScores(a: ApiScore, b: ApiScore) {
 	if (a.total_score != b.total_score) return b.total_score - a.total_score;
-	if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // comparing ISO date strings is fine as long as they are of the same format
+	if (a.ended_at != b.ended_at) return a.ended_at > b.ended_at ? 1 : -1; // scary, can use new Date(a.ended_at).getTime(), but comparing ISO date strings is fine as long as they are of the same format
 	return a.id - b.id;
 }
 

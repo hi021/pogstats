@@ -1,10 +1,11 @@
 import dotenv from "dotenv";
+import path from "node:path";
 
-dotenv.config({ path: "../../.env", quiet: true });
+dotenv.config({ path: path.resolve(import.meta.dirname, "..", ".env"), quiet: true });
 
 export const OSU_CLIENT_ID = process.env.OSU_CLIENT_ID;
 export const OSU_CLIENT_SECRET = process.env.OSU_CLIENT_SECRET;
-export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260720";
+export const OSU_API_VERSION = process.env.OSU_API_VERSION || "20260930";
 
 export const DB_HOST = process.env.DB_HOST || "localhost";
 const parsedDbPort = Number(process.env.DB_PORT);

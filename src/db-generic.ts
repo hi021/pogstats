@@ -160,7 +160,7 @@ export async function withDbClient<T>(callback: (client: PoolClient) => Promise<
 	try {
 		return await callback(client);
 	} finally {
-		client.release();
+		client?.release();
 	}
 }
 
@@ -183,19 +183,9 @@ export async function closePool() {
 }
 
 export function buildUpdateAssignmentsString(columns: readonly string[]) {
-	let assignments = "";
-	for (const i in columns) {
-		if (i != "0") assignments += ",";
-		assignments += `${columns[i]} = EXCLUDED.${columns[i]}`;
-	}
-	return assignments;
+	return columns.map(col => `${col} = EXCLUDED.${col}`).join(",");
 }
 
 export function buildUpdateCoalesceAssignmentsString(columns: readonly string[], table: string) {
-	let assignments = "";
-	for (const i in columns) {
-		if (i != "0") assignments += ",";
-		assignments += `${columns[i]} = COALESCE(EXCLUDED.${columns[i]}, ${table}.${columns[i]})`;
-	}
-	return assignments;
+	return columns.map(col => `${col} = COALESCE(EXCLUDED.${col}, ${table}.${col})`).join(",");
 }

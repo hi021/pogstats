@@ -32,10 +32,9 @@ const SCORES_ENDPOINT_FETCH_INTERVAL = 23000;
 const SCORES_ENDPOINT_CATCH_UP_INTERVAL = 1100;
 const SCORES_ENDPOINT_CONNECTION_TIMEOUT = 12000;
 const SCORES_ENDPOINT_INITIAL_FETCH_INTERVAL = 2750;
-const SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL = 1100; // exponential back-off, 1100 * 2^n, up to n = 6 (max. 70400 ms)
+const SCORES_ENDPOINT_BASE_PANIC_FETCH_INTERVAL = 1100; // exponential back-off, 1100 * n^2, up to n = 6 (max. 39600 ms)
 const SCORES_FETCH_CATCH_UP_THRESHOLD = 990;
 
-const requestController = new AbortController();
 let scoresFetchTimeout: NodeJS.Timeout;
 let batchTimer: (labels?: LabelValues<"success" | "batchNo">) => number;
 let osuOAuthToken = "";
@@ -43,6 +42,13 @@ let tokenRefreshTimeout: NodeJS.Timeout;
 let sessionBatchCount = 0;
 let highestProcessedScoreId = 0;
 let batchProcessingFailCount = 0;
+let requestController: AbortController | null = null;
+
+export function abortScoresFetch() {
+	clearTimeout(scoresFetchTimeout);
+	clearTimeout(tokenRefreshTimeout);
+	requestController?.abort();
+}
 
 export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG_DEFINITIONS>) {
 	sessionBatchCount = 0;
@@ -61,8 +67,9 @@ export async function initializeScoresFetch(parsedFlags: ParsedFlags<typeof FLAG
 }
 
 async function fetchScoresBatch(cursors: ScoreCursors) {
+	requestController = new AbortController();
 	const requestTimeout = setTimeout(() => {
-		requestController.abort();
+		requestController?.abort();
 		logError(
 			`scores endpoint request timed out after ${SCORES_ENDPOINT_CONNECTION_TIMEOUT}ms without response; retrying with the same cursor`
 		);
@@ -99,6 +106,7 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 		);
 	} finally {
 		clearTimeout(requestTimeout);
+		requestController = null;
 	}
 }
 
@@ -116,6 +124,7 @@ async function processScoresBatch(
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 	} finally {
+		// TODO!! advisory lock is acquired on a different pooled client, so I think this does not work
 		await withDbClient(async client => await unlockRankingRollupTable(client));
 		return { lastScoresId: highestProcessedScoreId, cursorString };
 	}
@@ -132,6 +141,7 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 		);
 
 	const beatenScoresByMaps = await withDbClientTransaction(async client => {
+		// TODO!! API calls should be made outside DB transactions
 		await fetchNewBeatmaps(
 			client,
 			scores.map(s => s.beatmap_id),
@@ -174,7 +184,7 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 		}
 
 		highestProcessedScoreId = scores.at(-1)?.id || highestProcessedScoreId;
-		saveScoresCursor(client, highestProcessedScoreId, cursorString, "scores_fetch");
+		await saveScoresCursor(client, highestProcessedScoreId, cursorString, "scores_fetch");
 	});
 
 	logInfo("finished processing");
@@ -334,8 +344,8 @@ async function upsertBeatmapScores(
 	const snipes: HistoricalPlayerSnipes[] = [];
 
 	// TODO: ranking rollup table update should be done in a separate transaction
-
-	// TODO?: move this logic into postgres temporary tables, but idk no perf issues for now
+	// TODO?: this looks ass slow, I wanna move this logic into Postgres temporary tables, but im too dumb, idk no perf issues for now
+	// sorted data structure or a Map keyed by userId could reduce lookup time
 	for (const newScore of insertedScores.rows) {
 		const existingUserScoreIndex = currentScores.findIndex(s => s.userId == newScore.userId);
 		if (existingUserScoreIndex != -1) currentScores.splice(existingUserScoreIndex, 1);
@@ -413,6 +423,7 @@ async function upsertBeatmapScores(
 
 // WARNING: this skips inserting scores with position > 100, so when a player gets restricted, there might be a gap or a stale score (#101 in the db but >#101 on osu) will make it into top 100
 // Does not save scores for qualified maps - fetching those is skipped in scrape_beatmaps
+// TODO?: do not use two LATERAL JOINs and optimize the query?
 async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
 	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once? has not happened since....
 

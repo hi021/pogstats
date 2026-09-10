@@ -11,7 +11,7 @@ import {
 	DB_SCORES_TABLE
 } from "../env.js";
 
-// TODO: !! log the number of users waiting per operation_type in scores-fetch or somewhere
+// TODO!!: log the number of users waiting per operation_type in scores-fetch or somewhere
 async function createRankingTables(client: ClientBase) {
 	console.log(`Attempting to create ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} tables`);
 
@@ -34,7 +34,7 @@ async function createRankingTables(client: ClientBase) {
 			total_pp							INTEGER NOT NULL DEFAULT 0,
 			avg_acc								REAL NOT NULL DEFAULT 0,
 			avg_map_len						REAL NOT NULL DEFAULT 0,
-			
+
 			PRIMARY KEY (user_id, ruleset_id, position),
 			CONSTRAINT ranking_rollup_user_fk FOREIGN KEY(user_id) REFERENCES ${DB_PLAYERS_TABLE} (id)
 		);
@@ -48,6 +48,8 @@ async function createRankingTables(client: ClientBase) {
 	console.log(`Created ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} if didn't exist`);
 }
 
+// TODO: Validate whether TRUNCATE + INSERT is faster than DROP + RENAME
+// TODO: otherwise reinstate the FK Constraint if recreating the table
 async function createRankingRollupRecalcFunction(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION recalc_ranking_rollup()
@@ -58,7 +60,7 @@ async function createRankingRollupRecalcFunction(client: ClientBase) {
 			PERFORM pg_advisory_lock(7271);
 			BEGIN
 				CREATE TABLE ranking_rollup_tmp (LIKE ${DB_RANKING_ROLLUP_TABLE} INCLUDING ALL);
-	
+
 				INSERT INTO ranking_rollup_tmp (
 					user_id, ruleset_id, position, count, count_perma, count_ss, 
 					count_lazer, ranked_score, total_pp, avg_acc, avg_map_len
@@ -100,7 +102,7 @@ async function scheduleDbQueue(client: ClientBase) {
 		LANGUAGE plpgsql
 		AS $$
 		DECLARE
-			v_lock_id CONSTANT BIGINT := 74809284739; 
+			v_lock_id CONSTANT BIGINT := 74809284739;
 			v_processed_count INTEGER;
 		BEGIN
 			IF pg_try_advisory_lock(v_lock_id) THEN
@@ -131,19 +133,19 @@ async function scheduleDbQueue(client: ClientBase) {
 						UPDATE ${DB_PLAYER_RULESET_STATS_TABLE} p
 						SET weighted_pp = r.new_weighted_pp
 						FROM recalculated r
-						WHERE p.id = r.user_id AND p.ruleset_id = 0;
+						WHERE p.user_id = r.user_id AND p.ruleset_id = 0;
 
 						GET DIAGNOSTICS v_processed_count = ROW_COUNT;
 						IF v_processed_count > 0 THEN
-							UPDATE ${DB_CONFIG_TABLE} 
+							UPDATE ${DB_CONFIG_TABLE}
 							SET last_weighted_pp_recalc = NOW();
 						END IF;
-	
+
 					EXCEPTION WHEN OTHERS THEN
 						PERFORM pg_advisory_unlock(v_lock_id);
 						RAISE;
 					END;
-	
+
 					PERFORM pg_advisory_unlock(v_lock_id);
 			ELSE
 					RAISE NOTICE 'Weighted PP recalc queue processing already in progress. Skipping this cycle.';
@@ -153,7 +155,7 @@ async function scheduleDbQueue(client: ClientBase) {
 
 		SELECT cron.schedule(
 			'process_weighted_pp_queue_job',
-			'*/5 * *high * *',
+			'*/5 * * * *',
 			'SELECT process_weighted_pp_recalc_queue();'
 		);
 	`);
