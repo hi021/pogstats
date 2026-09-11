@@ -64,10 +64,6 @@ export async function getLiveRankingForPlayer(
 	return res?.rows[0];
 }
 
-/////
-// TODO: store the ranking positions in the player ruleset stats table.....
-/////
-
 // TODO
 // TODO: parameterize positionThresholds ($N)
 function buildMultiBucketAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {

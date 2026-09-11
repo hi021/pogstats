@@ -1,29 +1,6 @@
 import { Pool, PoolClient, types } from "pg";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER } from "./env.js";
 
-// TODO: build from SCORE_TABLE_COLUMNS
-export const SCORE_TABLE_COLUMNS_ALL = Object.freeze([
-	"position",
-	"is_scraped",
-	"retrieved_at",
-	"is_lazer",
-	"is_perma",
-	"id",
-	"user_id",
-	"ruleset_id",
-	"beatmap_id",
-	"grade",
-	"accuracy",
-	"max_combo",
-	"total_score",
-	"classic_total_score",
-	"total_score_without_mods",
-	"is_perfect_combo",
-	"pp",
-	"ended_at",
-	"data"
-]);
-
 export const SCORE_TABLE_COLUMNS = Object.freeze([
 	"position",
 	"is_scraped",
@@ -43,6 +20,12 @@ export const SCORE_TABLE_COLUMNS = Object.freeze([
 	"pp",
 	"ended_at",
 	"data"
+]);
+
+export const SCORE_TABLE_COLUMNS_ALL = Object.freeze([
+	...SCORE_TABLE_COLUMNS.slice(0, 4),
+	"is_perma",
+	...SCORE_TABLE_COLUMNS.slice(4)
 ]);
 
 export const PLAYER_TABLE_COLUMNS = Object.freeze([

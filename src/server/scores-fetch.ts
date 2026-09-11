@@ -116,7 +116,6 @@ async function processScoresBatch(
 	previousHighestScoreId: number
 ): Promise<ScoreCursors> {
 	try {
-		await withDbClient(async client => await lockRankingRollupTable(client));
 		await saveScoresBatch(scores, cursorString, previousHighestScoreId);
 		batchTimer?.({ success: "true", batchNo: sessionBatchCount });
 		++sessionBatchCount;
@@ -124,8 +123,6 @@ async function processScoresBatch(
 		logError("failed to process:\n", e);
 		batchTimer?.({ success: "false", batchNo: sessionBatchCount });
 	} finally {
-		// TODO!! advisory lock is acquired on a different pooled client, so I think this does not work
-		await withDbClient(async client => await unlockRankingRollupTable(client));
 		return { lastScoresId: highestProcessedScoreId, cursorString };
 	}
 }
@@ -141,18 +138,24 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 		);
 
 	const beatenScoresByMaps = await withDbClientTransaction(async client => {
-		// TODO!! API calls should be made outside DB transactions
-		await fetchNewBeatmaps(
-			client,
-			scores.map(s => s.beatmap_id),
-			undefined,
-			"scores_fetch"
-		);
-		const beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
-		const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
-		await fetchNewPlayers(client, provenUserIds, undefined, "scores_fetch");
+		await lockRankingRollupTable(client);
+		try {
+			// TODO!! API calls should be made outside DB transactions
+			await fetchNewBeatmaps(
+				client,
+				scores.map(s => s.beatmap_id),
+				undefined,
+				"scores_fetch"
+			);
 
-		return beatenScoresByMaps;
+			const beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
+			const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
+			await fetchNewPlayers(client, provenUserIds, undefined, "scores_fetch");
+
+			return beatenScoresByMaps;
+		} finally {
+			await unlockRankingRollupTable(client);
+		}
 	});
 
 	let totalProvenScoreCount = 0;
