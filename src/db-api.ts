@@ -1,4 +1,5 @@
-import { ClientBase, QueryResult } from "pg";
+import { ClientBase } from "pg";
+import { cachePlayer, getCachedPlayerId, getCachedPlayerUsername } from "./cache.js";
 import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
 import { queryWithTiming } from "./metrics.js";
 
@@ -12,27 +13,37 @@ export async function getPlayerIdByName(client: ClientBase, name: string) {
 	return await getPlayerIdByLowercaseName(client, name.trim().toLowerCase());
 }
 
-// TODO: move to redis
 export async function getPlayerIdByLowercaseName(client: ClientBase, name: string) {
-	const result: QueryResult<{ id: number }> = await client.query(
-		`SELECT id FROM ${DB_PLAYERS_TABLE} WHERE LOWER(username) = $1`,
-		[name]
-	);
-	return (result?.rows?.[0]?.id ?? null) as number | null;
+	const cachedPlayerId = await getCachedPlayerId(name);
+	if (cachedPlayerId) return cachedPlayerId;
+
+	const result = await client.query<{ id: number }>(`SELECT id FROM ${DB_PLAYERS_TABLE} WHERE LOWER(username) = $1`, [name]);
+
+	const playerId = result?.rows?.[0]?.id as number | undefined;
+	if (playerId) await cachePlayer(playerId, name);
+	return playerId;
 }
 
-// TODO: move to redis
 // validates if id is a real number and the player exists in the database
 export async function getPlayerIdById(client: ClientBase, id: string | number) {
 	try {
-		const result: QueryResult<{ id: number }> = await client.query(`SELECT id FROM ${DB_PLAYERS_TABLE} WHERE id = $1`, [id]);
-		return result?.rows?.[0]?.id;
+		const cachedUsername = await getCachedPlayerUsername(id);
+		if (cachedUsername) return Number(id);
+
+		const result = await client.query<{ id: number; username: string }>(
+			`SELECT id, LOWER(username) AS username FROM ${DB_PLAYERS_TABLE} WHERE id = $1`,
+			[id]
+		);
+
+		const playerId = result?.rows?.[0]?.id ?? null;
+		if (playerId) await cachePlayer(playerId, result.rows[0].username);
+		return playerId;
 	} catch (e) {
 		return null; // assume the id wasn't a valid number
 	}
 }
 
-// TODO: move to redis
+// TODO: move to redis (but later, skip for now)
 export async function getRankingId(client: ClientBase, rulesetId: RulesetId, code: string) {}
 
 // TODO: better typing (maybe based on the full parameter too)

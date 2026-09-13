@@ -14,6 +14,11 @@ export const DB_USER = process.env.DB_USER;
 export const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
 export const DB_NAME = process.env.DB_NAME || "pogstats";
 
+const parsedValkeyPort = Number(process.env.VALKEY_PORT);
+export const VALKEY_PORT = Number.isFinite(parsedValkeyPort) ? parsedValkeyPort : 6379;
+export const VALKEY_HOST = process.env.VALKEY_HOST || "127.0.0.1";
+export const VALKEY_PASSWORD = process.env.VALKEY_PASSWORD ?? "";
+
 export const DB_CONFIG_TABLE = process.env.DB_CONFIG_TABLE || "CONFIG";
 export const DB_SCORES_TABLE = process.env.DB_SCORES_TABLE || "SCORES";
 export const DB_PLAYERS_TABLE = process.env.DB_PLAYERS_TABLE || "PLAYERS";
