@@ -1,6 +1,6 @@
 import { ClientBase } from "pg";
 import { withDbClient } from "../db-generic.js";
-import { DB_SCORES_TABLE } from "../env.js";
+import { DB_RANKING_ROLLUP_TABLE } from "../env.js";
 
 // TODO: get_position_spread() can be replaced to simply read counts from the ranking rollup table
 async function createMiscellaneousDBFunctions(client: ClientBase) {
@@ -47,12 +47,11 @@ async function createMiscellaneousDBFunctions(client: ClientBase) {
 			SELECT jsonb_agg(COALESCE(c.cnt, 0) ORDER BY g.i)
 			FROM generate_series(1, 100) AS g(i)
 			LEFT JOIN (
-				SELECT position, COUNT(*) AS cnt
-				FROM ${DB_SCORES_TABLE}
+				SELECT position, count AS cnt
+				FROM ${DB_RANKING_ROLLUP_TABLE}
 				WHERE user_id = p_user_id
 					AND ruleset_id = p_ruleset_id
 					AND position BETWEEN 1 AND 100
-				GROUP BY position
 			) AS c ON c.position = g.i;
 		$$;
 

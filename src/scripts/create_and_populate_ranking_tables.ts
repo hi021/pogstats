@@ -49,7 +49,7 @@ async function createRankingTables(client: ClientBase) {
 }
 
 // TODO: Validate whether TRUNCATE + INSERT is faster than DROP + RENAME
-// TODO: otherwise reinstate the FK Constraint if recreating the table
+// TODO!: otherwise reinstate the FK Constraint if recreating the table
 async function createRankingRollupRecalcFunction(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION recalc_ranking_rollup()

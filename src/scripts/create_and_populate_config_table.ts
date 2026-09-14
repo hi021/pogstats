@@ -11,7 +11,6 @@ const FLAG_DEFINITIONS = Object.freeze({
 	}
 } as const);
 
-// TODO?: move to valkey (I'll probably keep it in pg since it gets referenced from there)
 const INITIAL_CONFIG: Readonly<ConfigEntry[]> = Object.freeze([
 	{ key: "osu_min_top100", value_int: 1725 },
 	{ key: "osu_min_top50", value_int: 900 },
