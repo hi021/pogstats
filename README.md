@@ -6,10 +6,11 @@ Multitude of both live and historical osu!standard stats for leaderboard farmers
 
 This is a WIP back-end for [poggers](https://github.com/hi021/poggers) (also WIP), that:
 - scrapes data (scores, users) from the osu! API,
-- listens to the endpoint with all new osu! scores,
-- processes them and persists relevant osu! scores that make it on the leaderboard updating all stats along the way,
+- listens to the endpoint with all new osu! scores and beatmaps,
+- processes them and persists relevant osu! scores that make it on the leaderboard updating all user stats and leaderboards along the way,
+- once a day stores a snapshot of the leaderboard for historical charts,
 - hosts a websocket with updates about all scores, snipes, and players,
-- hosts an open JSON API for the poggers front-end with a bingibillion stats (docs will exist at some point...)
+- hosts an open RESTful API for the poggers front-end with a bingibillion stats (docs will exist at some point...)
 
 ## the why
 For years I've been running [poggers](https://poggers.moe) collecting historical data for osu! leaderboard rankings relying on osu!Stats' slow, unreliable, and limited API.\
@@ -19,10 +20,10 @@ osu!'s API introduced an endpoint that broadcasts all achieved scores in the gam
 
 ## the how
 1. get a CSV dump of all currently ranked, loved, and approved beatmaps for osu!standard
-    - convert into the right schema and upload it into postgres
-2. TODO: beatmap-fetch: continuously listen to beatmap updates on the osu! beatmap events endpoint
+    - convert into the right schema and upload it into Postgres
+2. beatmapset-fetch: continuously listen to beatmap updates on the osu! beatmapset events endpoint (TBD, this endpoint suckk)
 3. scores-fetch: continuously listen to new scores on the osu! `/scores` endpoint
-    - for any beatmap not in the database try respektive's osu-beatmap-db to avoid spamming osu! API (TODO: replace it with the osu! beatmap events endpoint from 2. for higher quality up-to-date data)
+    - for any beatmap not in the database try respektive's osu-beatmap-db to avoid spamming osu! API (TODO: replace it with the osu! beatmap events endpoint from 2. for higher quality up-to-date data?)
     - for any user not in the database fetch them from the osu! user lookup endpoint (TODO: may use respektive's score-rank-api for the top 10k players in ranked score)
     - TODO: surgically update ranking rollup and player ruleset stats tables with the new scores
     - TODO: figure out if restricted players' scores are broadcast on this endpoint
@@ -39,14 +40,14 @@ osu!'s API introduced an endpoint that broadcasts all achieved scores in the gam
 
 ## the catch
 - only works with osu!standard for now\
-the code mostly supports other modes but I'm mostly limited on the infrastructure side - scraping all scores including converts would take over 9 days, not to mention the need to store 50 million+ more rows,
-- there probably never will be an endpoint that lets you monitor user (un)restrictions in real time, so a full scrape that looks for such happens once a day. This means that the live stats may be ever so slightly off,
-- this thing has to work with buttloads of data at once and, as mentioned, is limited by the puny 2 GB RAM/50 GB storage I have available for this entire project, so some stats (e.g. weighted pp) may be continuously updated in the background putting an asterisk next to the LIVE (also the server will explode if the API usage gets too high lol)
+the code mostly supports other modes, but I'm limited on the infrastructure side - scraping all scores including converts would take over 9 days, not to mention the need to work with >50 million more rows,
+- there probably never will be an osu! endpoint that lets you monitor user (un)restrictions in real time, so a full scrape that looks for such happens once a day. This, among others, means the live stats may be ever so slightly off,
+- this thing has to work with buttloads of data at once and, as mentioned, is limited by the puny 2 GB RAM/50 GB storage I have available for the entire project, so some stats (e.g. weighted pp) may be continuously updated in the background putting an asterisk next to the LIVE (also the server will explode if the API usage gets too high lol)
 
 ## the supply-chain attack vector
 postgres 18 with timescaledb\
 nodejs v26 (v22+ should work) with koa 3 and ws for the server\
-hoping for valkey and a golang rewrite one day.. (EDIT: whoops this grew to be surprisingly complex I don't think I can do that)\
+valkey 9 with ioredis 6\
 
 relies on:
 - [osu! API v2](https://osu.ppy.sh/docs),
