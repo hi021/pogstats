@@ -290,6 +290,7 @@ export async function scrapePlayers(ids?: number[]) {
 
 		console.log(`[scrape_players] Finished saving ${scrapedPlayerCount} players\n`);
 
+		// TODO?: Do not check MIA/unMIA if only fetching specific players - can cause deadlock if called from scores-fetch
 		await withDbClientTransaction(async client => {
 			const miaPlayerIds = [...miaPlayers.keys()];
 			if (miaPlayerIds.length)

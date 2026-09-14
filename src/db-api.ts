@@ -171,7 +171,16 @@ export async function getModSpreadForPlayer(
 }
 
 // TODO?: materialized view that updates every ~30 minutes?
-export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, rulesetId: RulesetId, positionThreshold: number) {
+export async function getEasiestBeatmapsWithoutPermaScore(
+	client: ClientBase,
+	rulesetId: RulesetId,
+	positionThreshold: number,
+	page = 1
+) {
+	const PAGE_SIZE = 100;
+	const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+	const offset = (safePage - 1) * PAGE_SIZE;
+
 	const result = await queryWithTiming<BeatmapWithoutPermaScore>(
 		client,
 		"getEasiestBeatmapsWithoutPermaScore",
@@ -205,8 +214,9 @@ export async function getEasiestBeatmapsWithoutPermaScore(client: ClientBase, ru
 		WHERE b.star_rating < 2.7
 			AND b.od <= 4.5
 			AND b.ar <= 6
-			AND s.position <= $2`,
-		[rulesetId, positionThreshold]
+			AND s.position <= $2
+			LIMIT $3 OFFSET $4`,
+		[rulesetId, positionThreshold, PAGE_SIZE, offset]
 	);
 
 	return result.rows;

@@ -33,6 +33,7 @@ export async function getLiveRankingForPlayer(
 		rankingTypes.push(parsed.rankingType);
 	}
 
+	// TODO: use valkey ZREVRANK instead of pg DENSE_RANK
 	const aggSelects = buildMultiBucketAggregations(rankingTypes, positionThresholds);
 	const outerSelects = buildMultiBucketOuterSelects(rankingTypes, positionThresholds);
 
@@ -66,6 +67,7 @@ export async function getLiveRankingForPlayer(
 
 // TODO
 // TODO: parameterize positionThresholds ($N)
+// TODO!: avg_acc and avg_map_len are not weighted by the number of scores
 function buildMultiBucketAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
 		.map(bucket => {

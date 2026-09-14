@@ -47,7 +47,7 @@ the code mostly supports other modes, but I'm limited on the infrastructure side
 ## the supply-chain attack vector
 postgres 18 with timescaledb\
 nodejs v26 (v22+ should work) with koa 3 and ws for the server\
-valkey 9 with ioredis 6\
+valkey 9 with ioredis 6
 
 relies on:
 - [osu! API v2](https://osu.ppy.sh/docs),

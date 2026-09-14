@@ -229,7 +229,7 @@ export async function dumpTableToCsv(
 		new Promise<void>((resolve, reject) => {
 			psql.on("error", reject);
 			psql.on("close", code => {
-				if (code !== 0) reject(new Error(`psql COPY failed with code ${code}: ${stderr}`));
+				if (code != 0) reject(new Error(`psql COPY failed with code ${code}: ${stderr}`));
 				else resolve();
 			});
 		})

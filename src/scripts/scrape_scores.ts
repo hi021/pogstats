@@ -106,6 +106,7 @@ async function mergeSingleBeatmapScoresIntoExisting(client: ClientBase, scrapedS
 				mergedById.set(existingByIdScore.id, existingByIdScore);
 				continue;
 			}
+
 			logInfo(
 				infoLogStream,
 				`[${beatmapId}] Overwriting recalculated score #${existingByIdScore.id} in ruleset ${existingByIdScore.rulesetId} (${existingByIdScore.totalScore} -> ${score.totalScore})`

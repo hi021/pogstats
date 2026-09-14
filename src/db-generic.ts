@@ -162,7 +162,7 @@ export async function withDbClientTransaction<T>(callback: (client: PoolClient) 
 }
 
 export async function closePool() {
-	dbPool.end();
+	await dbPool.end();
 }
 
 export function buildUpdateAssignmentsString(columns: readonly string[]) {

@@ -9,7 +9,8 @@ const POG_WS_RANKINGS_URL = BASE_POG_WS_URL + "rankings"; // for ranking updates
 const POG_WS_PLAYERS_URL = BASE_POG_WS_URL + "players"; // after player scrape
 const POG_WS_SCORES_URL = BASE_POG_WS_URL + "scores";
 
-export const pogWss = new WebSocketServer({ noServer: true });
+// TODO: idle timeouts & connection limits
+export const pogWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 export const rankingClients = new Set<WebSocket>();
 export const playerClients = new Set<WebSocket>();
 export const scoreClients = new Set<WebSocket>();

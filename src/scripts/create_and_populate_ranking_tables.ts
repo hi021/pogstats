@@ -138,7 +138,8 @@ async function scheduleDbQueue(client: ClientBase) {
 						GET DIAGNOSTICS v_processed_count = ROW_COUNT;
 						IF v_processed_count > 0 THEN
 							UPDATE ${DB_CONFIG_TABLE}
-							SET last_weighted_pp_recalc = NOW();
+							SET value_date = NOW()
+							WHERE key = 'last_weighted_pp_recalc';
 						END IF;
 
 					EXCEPTION WHEN OTHERS THEN
