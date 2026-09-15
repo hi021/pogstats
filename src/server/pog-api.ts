@@ -1,6 +1,6 @@
 import Router from "@koa/router";
 import { Middleware } from "koa";
-import { getRankingForPlayer } from "../db-api-ranking.js";
+import { getFullRankingFromRollup, getRankingForPlayer } from "../db-api-ranking.js";
 import {
 	getBeatmapCount,
 	getEasiestBeatmapsWithoutPermaScore,
@@ -48,6 +48,8 @@ const rulesetIdByNameMiddleware: Middleware = async (ctx, next) => {
 
 //// RANKING ROUTES
 // ...
+
+// TODO: call getFullRankingFromRollup
 
 //// PLAYER ROUTES
 router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);

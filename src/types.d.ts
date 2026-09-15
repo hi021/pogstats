@@ -44,6 +44,7 @@ type ActionSource =
 	| "scores_fetch"
 	| "beatmapsets_fetch"
 	| "osu_auth"
+	| "populate_valkey"
 	| "unknown";
 
 // ------------------------------------------
