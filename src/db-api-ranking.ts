@@ -39,54 +39,48 @@ export async function getLiveRankingForPlayer(
 		rankingTypes.push(parsed.rankingType);
 	}
 
-	const aggSelects = buildMultiBucketAggregations(rankingTypes, positionThresholds);
-	const outerSelects = buildMultiBucketOuterSelects(rankingTypes, positionThresholds);
-
+	// TODO: join player ruleset stats only if weighted pp and count in rankingTypes
 	const query = `
     WITH agg AS (
-      SELECT r.user_id, ${aggSelects}
+      SELECT r.user_id, ${buildRankingTypeAggregations(rankingTypes, positionThresholds)}
       FROM ${DB_RANKING_ROLLUP_TABLE} r
       WHERE r.ruleset_id = $1
       GROUP BY r.user_id
     ),
     ranked AS (
       SELECT
-          p.id,
-          p.username,
-          p.country_code,
-          COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
-          COALESCE(prs.weighted_count, 0)::INT AS weighted_count,
-          ${outerSelects}
-      FROM ${DB_PLAYERS_TABLE} p
-        JOIN agg ON agg.user_id = p.id
-        LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1
+        p.id,
+        p.username,
+        p.country_code,
+        COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
+        COALESCE(prs.weighted_count, 0)::INT AS weighted_count,
+        ${buildRankingTypeSelects(rankingTypes, positionThresholds)}
+    FROM ${DB_PLAYERS_TABLE} p
+      JOIN agg ON agg.user_id = p.id
+      LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1
     )
     SELECT *
     FROM ranked
-    WHERE id = $2;
-  `;
+    WHERE id = $2`;
 
 	const res = await client.query(query, [rulesetId, playerId]);
 	const row = res?.rows[0];
 	if (!row) return row;
 
 	const positions = await getCachedRankingPositionsForPlayer(rulesetId, positionThresholds, playerId);
-	for (const [field, position] of positions)
-		(row as Record<string, unknown>)[field] = position;
+	for (const [field, position] of positions) (row as Record<string, unknown>)[field] = position;
 
 	return row;
 }
 
-// TODO
+// TODO: rankingTypes
 // TODO: parameterize positionThresholds ($N)
 // TODO!: avg_acc and avg_map_len are not weighted by the number of scores
-function buildMultiBucketAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
+function buildRankingTypeAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
 		.map(bucket => {
 			const filter = bucket === 100 ? "" : ` FILTER (WHERE r.position <= ${bucket})`;
-			let sql = `COALESCE(SUM(r.count)${filter}, 0)::INT AS top_${bucket}_count`;
-
-			sql += `,
+			return `COALESCE(SUM(r.count)${filter}, 0)::INT AS top_${bucket}_count,
         COALESCE(SUM(r.count_ss)${filter}, 0)::INT AS top_${bucket}_count_ss,
         COALESCE(SUM(r.count_lazer)${filter}, 0)::INT AS top_${bucket}_count_lazer,
         COALESCE(SUM(r.count_perma)${filter}, 0)::INT AS top_${bucket}_count_perma,
@@ -94,30 +88,24 @@ function buildMultiBucketAggregations(rankingTypes: string[], positionThresholds
         COALESCE(SUM(r.total_pp)${filter}, 0)::INT AS top_${bucket}_total_pp,
         COALESCE(AVG(r.avg_acc)${filter}, 0)::REAL AS top_${bucket}_avg_acc,
         COALESCE(AVG(r.avg_map_len)${filter}, 0)::REAL AS top_${bucket}_avg_map_len`;
-
-			return sql;
 		})
 		.join(",\n");
 }
 
 // TODO: rankingTypes
-function buildMultiBucketOuterSelects(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
+function buildRankingTypeSelects(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
-		.map(bucket => `
-			NULL::INT AS top_${bucket}_count_position,
-      agg.top_${bucket}_count
-			NULL::INT AS top_${bucket}_count_ss_position,
+		.map(
+			bucket =>
+				`agg.top_${bucket}_count,
 			agg.top_${bucket}_count_ss,
-			NULL::INT AS top_${bucket}_count_lazer_position,
 			agg.top_${bucket}_count_lazer,
-			NULL::INT AS top_${bucket}_count_perma_position,
 			agg.top_${bucket}_count_perma,
-			NULL::INT AS top_${bucket}_ranked_score_position,
 			agg.top_${bucket}_ranked_score,
-			NULL::INT AS top_${bucket}_total_pp_position,
 			agg.top_${bucket}_total_pp,
 			agg.top_${bucket}_avg_acc,
-			agg.top_${bucket}_avg_map_len`)
+			agg.top_${bucket}_avg_map_len`
+		)
 		.join(",\n");
 }
 
@@ -198,8 +186,7 @@ export async function getPaginatedRankingForBucket(
 		const playerPositions = positions.get(row.id);
 		if (!playerPositions) continue;
 
-		for (const [field, position] of playerPositions)
-			(row as Record<string, unknown>)[field] = position;
+		for (const [field, position] of playerPositions) (row as Record<string, unknown>)[field] = position;
 	}
 
 	return res.rows;
@@ -316,8 +303,7 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
 		const playerPositions = positions.get(row.id);
 		if (!playerPositions) continue;
 
-		for (const [field, position] of playerPositions)
-			(row as Record<string, unknown>)[field] = position;
+		for (const [field, position] of playerPositions) (row as Record<string, unknown>)[field] = position;
 	}
 
 	return rows;

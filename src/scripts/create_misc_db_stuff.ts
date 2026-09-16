@@ -2,7 +2,6 @@ import { ClientBase } from "pg";
 import { withDbClient } from "../db-generic.js";
 import { DB_RANKING_ROLLUP_TABLE } from "../env.js";
 
-// TODO: get_position_spread() can be replaced to simply read counts from the ranking rollup table
 async function createMiscellaneousDBFunctions(client: ClientBase) {
 	console.log("Attempting to create miscellaneous DB functions");
 

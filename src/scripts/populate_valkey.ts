@@ -11,18 +11,23 @@ import { queryWithTiming } from "../metrics.js";
 import { RANKING_POS_THRESHOLDS, parseArgs } from "../shared.js";
 
 const FLAG_DEFINITIONS = Object.freeze({
-	reset: {
-		cli: "--reset",
-		description: "Truncates the player hashes before repopulating them",
+	resetUsernames: {
+		cli: "--resetUsernames",
+		description: "Truncates the player id/username hashes before repopulating them",
 		takesValue: false
 	},
 	resetRankings: {
-		cli: "--reset-rankings",
-		description: "Deletes the ranking sorted sets before repopulating them (full rebuild, removes stale members)",
+		cli: "--resetRankings",
+		description: "Deletes the ranking sorted sets before repopulating them",
 		takesValue: false
 	},
-	skipRankings: {
-		cli: "--skip-rankings",
+	noUsernames: {
+		cli: "--noUsernames",
+		description: "Skip populating the player id/username hashes",
+		takesValue: false
+	},
+	noRankings: {
+		cli: "--noRankings",
 		description: "Skip populating the ranking sorted sets",
 		takesValue: false
 	}
@@ -43,12 +48,19 @@ interface RankingRollupRow {
 	total_pp: number;
 }
 
-// Only osu! standard for now.
+// TODO: Only populating osu! standard rankings for now
 const RANKING_RULESET_ID: RulesetId = 0;
 
 // TODO?: don't need to fetch all players to save memory, maybe figure out a way to fetch top players
 // TODO!: add (long) TTL so they can be evicted if low on memory (volatile-lru)
-async function populateValkey(reset = false, skipRankings = false, resetRankings = false) {
+async function populateValkey(noUsernames = false, resetUsernames = false, noRankings = false, resetRankings = false) {
+	if (!noUsernames) await populateUsernames(resetUsernames);
+	if (!noRankings) await populateRankings(resetRankings);
+}
+
+async function populateUsernames(reset = false) {
+	console.log(`Populating ${PLAYER_ID_TO_USERNAME_HASH} and ${PLAYER_USERNAME_TO_ID_HASH} hashes`);
+
 	const players = await withDbClient(
 		async client => (await client.query<PlayerCacheRow>(`SELECT id, LOWER(username) AS username FROM ${DB_PLAYERS_TABLE}`)).rows
 	);
@@ -66,21 +78,18 @@ async function populateValkey(reset = false, skipRankings = false, resetRankings
 	const error = results?.find(([pipelineError]: [Error | null, unknown]) => pipelineError)?.[0];
 	if (error) throw error;
 
-	console.log(`Populated Valkey with ${players.length} player(s)`);
-
-	if (!skipRankings) await populateRankings(resetRankings);
+	console.log(`Populated ${PLAYER_ID_TO_USERNAME_HASH} and ${PLAYER_USERNAME_TO_ID_HASH} with ${players.length} player(s)`);
 }
 
-// Populates ranking:<type>:<rulesetId>:<positionBucket> sorted sets from RANKING_ROLLUP.
-// For each position bucket B (WHERE position <= B), aggregates the metric per user_id and ZADDs the result.
-// Only osu! standard (ruleset_id = 0) is populated for now.
 async function populateRankings(reset = false) {
+	console.log("Populating Valkey rankings");
+
 	const rulesetId = RANKING_RULESET_ID;
 	let totalPopulated = 0;
 
 	for (const bucket of RANKING_POS_THRESHOLDS) {
 		const positionCondition = bucket === 100 ? "" : `AND r.position <= ${bucket}`;
-		const rows = await withDbClient(
+		const rollupAggregates = await withDbClient(
 			async client =>
 				(
 					await queryWithTiming<RankingRollupRow>(
@@ -105,23 +114,26 @@ async function populateRankings(reset = false) {
 		);
 
 		for (const type of RANKING_METRIC_TYPES) {
-			const entries = rows.map(row => ({ playerId: Number(row.user_id), value: Number(row[type as keyof RankingRollupRow]) }));
+			const entries = rollupAggregates.map(row => ({
+				playerId: Number(row.user_id),
+				value: Number(row[type as keyof RankingRollupRow])
+			}));
 			const count = await populateRankingSortedSet(type, rulesetId, bucket, entries, reset);
 			totalPopulated += count;
 		}
 
-		console.log(`Populated ranking bucket top_${bucket} (${rows.length} users, ${RANKING_METRIC_TYPES.length} metrics)`);
+		console.log(`Populated top ${bucket} ranking (${rollupAggregates.length} user(s), ${RANKING_METRIC_TYPES.length} metrics)`);
 	}
 
 	console.log(
-		`Populated Valkey rankings: ${totalPopulated} total member(s) across ${RANKING_POS_THRESHOLDS.length * RANKING_METRIC_TYPES.length} sorted set(s)`
+		`Populated Valkey rankings with ${totalPopulated} total member(s) across ${RANKING_POS_THRESHOLDS.length * RANKING_METRIC_TYPES.length} sorted sets`
 	);
 }
 
 const parsedFlags = parseArgs<typeof FLAG_DEFINITIONS>(process.argv, import.meta.main, FLAG_DEFINITIONS);
 
 try {
-	await populateValkey(parsedFlags.reset, parsedFlags.skipRankings, parsedFlags.resetRankings);
+	await populateValkey(parsedFlags.noUsernames, parsedFlags.resetUsernames, parsedFlags.noRankings, parsedFlags.resetRankings);
 } catch (e) {
 	console.error("Error populating Valkey:\n", e);
 	process.exitCode = 1;
