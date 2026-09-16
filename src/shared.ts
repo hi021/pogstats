@@ -1,5 +1,6 @@
 import { BEATMAP_TABLE_COLUMNS_ALL, HISTORICAL_PLAYER_SNIPES_TABLE_COLUMNS, SCORE_TABLE_COLUMNS } from "./db-generic.js";
 
+export const PERMITTED_BEATMAP_STATUSES: Readonly<BeatmapStatusId[]> = Object.freeze([1, 2, 4]); // ranked, approved, loved
 export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko", "fruits", "mania"]);
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
@@ -121,7 +122,7 @@ export function parseBeatmapStatusIds(statuses: string) {
 	const statusIds: BeatmapStatusId[] = [];
 
 	for (const name of statusNames) {
-		if (name == "all" || name == "any") return [1, 2, 4] as BeatmapStatusId[];
+		if (name == "all" || name == "any") return PERMITTED_BEATMAP_STATUSES;
 
 		const id = parseBeatmapStatusId(name);
 		if (id != null) statusIds.push(id);

@@ -11,12 +11,15 @@ import {
 	getPositionSpreadForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
-import { getRulesetId, parseBeatmapStatusIds, parseInteger } from "../shared.js";
+import { getRulesetId, parseBeatmapStatusIds, parseInteger, PERMITTED_BEATMAP_STATUSES } from "../shared.js";
+import koaBody from "koa-body";
 
 export const API_BASE_URL = "/api/v2/";
 const API_PLAYER_BASE_URL = "player/:idOrName";
 const API_BEATMAP_BASE_URL = "map/:id";
+const API_RANKING_BASE_URL = "ranking";
 const API_BEATMAPS_BASE_URL = "maps";
+const API_SEARCH_BASE_URL = "search";
 
 export const router = new Router({ prefix: API_BASE_URL });
 
@@ -29,6 +32,93 @@ export const errorHandlerMiddleware: Middleware = async (ctx, next) => {
 		ctx.app.emit("error", e, ctx);
 	}
 };
+
+export function validateBeatmapFilterQuery(body: unknown): Partial<BeatmapFilterQuery> {
+	const badRequest = (message: string) => {
+		const error = Object.assign(new Error(message), { status: 400 });
+		throw error;
+	};
+
+	if (body == null || typeof body != "object" || Array.isArray(body)) badRequest("Request body must be an object");
+
+	const query = body as Record<string, unknown>;
+	const allowedParameters = new Set<keyof BeatmapFilterQuery>([
+		"status",
+		"artist",
+		"title",
+		"version",
+		"creator",
+		"ruleset",
+		"approvedDate",
+		"starRating",
+		"totalLength",
+		"bpm",
+		"cs",
+		"od",
+		"ar",
+		"hp"
+	]);
+	const parameters = Object.keys(query);
+	if (!parameters.length) badRequest("At least one filter is required");
+
+	for (const parameter of parameters) {
+		if (!allowedParameters.has(parameter as keyof BeatmapFilterQuery))
+			badRequest(`Unknown map filter parameter: '${parameter}'`);
+	}
+
+	const result: Partial<BeatmapFilterQuery> = {};
+	const similarityParameters = ["artist", "title", "creator", "version"] as const;
+	for (const parameter of similarityParameters) {
+		if (!(parameter in query)) continue;
+
+		const value = query[parameter];
+		if (typeof value != "string") badRequest(`'${parameter}' must be a string`);
+		const stringValue = value as string;
+		if (parameter == "version" || stringValue.length >= 3) result[parameter] = stringValue;
+	}
+
+	if ("status" in query) {
+		const value = query.status;
+		if (!Array.isArray(value) || !value.every(status => Number.isInteger(status) && PERMITTED_BEATMAP_STATUSES.includes(status)))
+			badRequest("Status can only be 'ranked', 'approved', or 'loved' (1, 2, 4)");
+		result.status = value as BeatmapFilterQuery["status"];
+	}
+
+	if ("ruleset" in query) {
+		const value = query.ruleset;
+		if (typeof value != "number" || !Number.isInteger(value) || value < 0 || value > 3)
+			badRequest("Ruleset must be an integer from 0 to 3");
+		result.ruleset = value as RulesetId;
+	}
+
+	const rangeParameters = ["approvedDate", "starRating", "totalLength", "bpm", "cs", "od", "ar", "hp"] as const;
+	for (const parameter of rangeParameters) {
+		if (!(parameter in query)) continue;
+
+		const value = query[parameter];
+		if (!Array.isArray(value) || value.length != 2) badRequest(`'${parameter}' must be a two-item range array`);
+		const bounds = value as unknown[];
+
+		const normalized = bounds.map((bound, index) => {
+			if (bound == null) return null;
+
+			if (parameter == "approvedDate") {
+				const date = new Date(bound as string | number | Date);
+				if (isNaN(date.getTime())) badRequest(`'${parameter}' bound ${index + 1} must be a valid date`);
+				return date;
+			}
+			if (typeof bound != "number" || !Number.isFinite(bound))
+				badRequest(`'${parameter}' bound ${index + 1} must be a finite number`);
+
+			return bound;
+		});
+
+		(result as Record<string, unknown>)[parameter] = normalized;
+	}
+
+	if (!Object.keys(result).length) badRequest("At least one filter is required");
+	return result;
+}
 
 const playerIdByIdOrNameMiddleware: Middleware = async (ctx, next) => {
 	const playerId = await withDbClient(async client => await getPlayerIdByIdOrName(client, ctx.params.idOrName));
@@ -47,9 +137,9 @@ const rulesetIdByNameMiddleware: Middleware = async (ctx, next) => {
 };
 
 //// RANKING ROUTES
-// ...
-
-// TODO: call getFullRankingFromRollup
+// full getFullRankingFromRollup per ruleset
+// live per ruleset and ranking type
+// historical
 
 //// PLAYER ROUTES
 router.use(API_PLAYER_BASE_URL, playerIdByIdOrNameMiddleware);
@@ -137,13 +227,22 @@ router.get(API_BEATMAPS_BASE_URL + "/:ruleset/no-perma{/:position}", async ctx =
 router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async ctx => {
 	const statusIds = parseBeatmapStatusIds(ctx.params.statuses);
 	const count = await withDbClient(
-		async client => await getBeatmapCount(client, ctx.state.rulesetId, statusIds.length ? statusIds : [1, 2, 4])
+		async client => await getBeatmapCount(client, ctx.state.rulesetId, statusIds.length ? statusIds : PERMITTED_BEATMAP_STATUSES)
 	);
 
-	ctx.headers["Content-Type"] = "text/plain";
+	ctx.type = "text/plain";
 	ctx.body = count;
 });
 
-//// AUTOCOMPLETE ROUTES
-// beatmap title SIMILARITY() lookup
-// player username SIMILARITY() lookup
+//// LOOKUP ROUTES
+router.post<BeatmapFilterQuery>(API_SEARCH_BASE_URL + "/maps", koaBody(), async ctx => {
+	console.log(ctx.request.body);
+
+	const request = ctx.request as typeof ctx.request & { body?: unknown };
+	const filters = validateBeatmapFilterQuery(request.body);
+	ctx.type = "application/json";
+	ctx.body = filters;
+});
+
+// TODO player username SIMILARITY() lookup
+router.get(API_SEARCH_BASE_URL + "/players/:username", async ctx => {});

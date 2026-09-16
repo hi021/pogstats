@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import readline from "readline";
 import { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, OSU_API_VERSION, VERBOSE } from "../env.js";
+import { PERMITTED_BEATMAP_STATUSES } from "../shared.js";
 
 export const AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/token";
 export const USER_AUTH_ENDPOINT = "https://osu.ppy.sh/oauth/authorize";
@@ -97,7 +98,7 @@ export function convertApiBeatmap(map: ApiBeatmapDbBeatmap, retrievedAt: Date): 
 }
 
 export function doesBeatmapHaveLeaderboards(map: ApiBeatmapDbBeatmap) {
-	return [1, 2, 4].includes(map.approved);
+	return PERMITTED_BEATMAP_STATUSES.includes(map.approved);
 }
 
 export type TimestampAccessor = {

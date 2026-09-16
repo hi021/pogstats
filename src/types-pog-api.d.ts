@@ -76,3 +76,26 @@ type AllBucketsStats = MetricBucketStats<RankingPositionThreshold>;
 
 type PlayerRankingData = Pick<Player, "id" | "username" | "countryCode"> & AllBucketsStats;
 type FullPlayerRankingData = PlayerRankingData & Pick<Player, "weightedPp" | "weightedCount">;
+
+type FilterableType = number | Date | string | BeatmapStatusId | RulesetId;
+type BetweenFilterArguments<T extends number | Date> = [T, T] | [T, null] | [null, T];
+type ExactFilterArgument<T extends FilterableType> = T;
+type SimilarityFilterArgument = ExactFilterArgument<string>;
+type MultipleSelectionFilterArgument<T extends FilterableType> = T[];
+
+interface BeatmapFilterQuery {
+	status: MultipleSelectionFilterArgument<BeatmapStatusId>;
+	artist: SimilarityFilterArgument;
+	title: SimilarityFilterArgument;
+	version: SimilarityFilterArgument;
+	creator: SimilarityFilterArgument;
+	ruleset: ExactFilterArgument<RulesetId>;
+	approvedDate: BetweenFilterArguments<Date>;
+	starRating: BetweenFilterArguments<number>;
+	totalLength: BetweenFilterArguments<number>;
+	bpm: BetweenFilterArguments<number>;
+	cs: BetweenFilterArguments<number>;
+	od: BetweenFilterArguments<number>;
+	ar: BetweenFilterArguments<number>;
+	hp: BetweenFilterArguments<number>;
+}

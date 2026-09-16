@@ -222,7 +222,7 @@ export async function getEasiestBeatmapsWithoutPermaScore(
 	return result.rows;
 }
 
-export async function getBeatmapCount(client: ClientBase, rulesetId: RulesetId, statuses: BeatmapStatusId[]) {
+export async function getBeatmapCount(client: ClientBase, rulesetId: RulesetId, statuses: readonly BeatmapStatusId[]) {
 	const result = await queryWithTiming<{ beatmaps: number }>(
 		client,
 		"getBeatmapCount",
