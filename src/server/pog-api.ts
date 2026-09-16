@@ -25,7 +25,7 @@ export const errorHandlerMiddleware: Middleware = async (ctx, next) => {
 		await next();
 	} catch (e: any) {
 		ctx.status = e.status || e.statusCode || 500;
-		ctx.message = e.message || ctx.message;
+		ctx.message = ctx.status >= 500 ? "Internal Server Error" : e.message || ctx.message;
 		ctx.app.emit("error", e, ctx);
 	}
 };
