@@ -3,6 +3,7 @@ import { Middleware } from "koa";
 import { getFullRankingFromRollup, getRankingForPlayer } from "../db-api-ranking.js";
 import {
 	getBeatmapCount,
+	getBeatmapsByFilters,
 	getEasiestBeatmapsWithoutPermaScore,
 	getGradeSpreadForPlayer,
 	getModSpreadForPlayer,
@@ -33,13 +34,13 @@ export const errorHandlerMiddleware: Middleware = async (ctx, next) => {
 	}
 };
 
-export function validateBeatmapFilterQuery(body: unknown): Partial<BeatmapFilterQuery> {
-	const badRequest = (message: string) => {
-		const error = Object.assign(new Error(message), { status: 400 });
-		throw error;
-	};
+function badRequest(message: string) {
+	const error = Object.assign(new Error(message), { status: 400 });
+	throw error;
+}
 
-	if (body == null || typeof body != "object" || Array.isArray(body)) badRequest("Request body must be an object");
+function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilterQuery> {
+	if (body == null || typeof body != "object" || Array.isArray(body)) badRequest("Request body must be a JSON object");
 
 	const query = body as Record<string, unknown>;
 	const allowedParameters = new Set<keyof BeatmapFilterQuery>([
@@ -49,18 +50,17 @@ export function validateBeatmapFilterQuery(body: unknown): Partial<BeatmapFilter
 		"version",
 		"creator",
 		"ruleset",
-		"approvedDate",
-		"starRating",
-		"totalLength",
+		"approved_date",
+		"star_rating",
+		"total_length",
 		"bpm",
 		"cs",
 		"od",
 		"ar",
 		"hp"
 	]);
-	const parameters = Object.keys(query);
-	if (!parameters.length) badRequest("At least one filter is required");
 
+	const parameters = Object.keys(query);
 	for (const parameter of parameters) {
 		if (!allowedParameters.has(parameter as keyof BeatmapFilterQuery))
 			badRequest(`Unknown map filter parameter: '${parameter}'`);
@@ -73,13 +73,16 @@ export function validateBeatmapFilterQuery(body: unknown): Partial<BeatmapFilter
 
 		const value = query[parameter];
 		if (typeof value != "string") badRequest(`'${parameter}' must be a string`);
-		const stringValue = value as string;
-		if (parameter == "version" || stringValue.length >= 3) result[parameter] = stringValue;
+		const stringValue = (value as string).trim();
+		if ((parameter == "version" && stringValue.length) || stringValue.length >= 3) result[parameter] = stringValue;
 	}
 
 	if ("status" in query) {
 		const value = query.status;
-		if (!Array.isArray(value) || !value.every(status => Number.isInteger(status) && PERMITTED_BEATMAP_STATUSES.includes(status)))
+		if (
+			!Array.isArray(value) ||
+			!value.every(status => Number.isInteger(status) && PERMITTED_BEATMAP_STATUSES.includes(status))
+		)
 			badRequest("Status can only be 'ranked', 'approved', or 'loved' (1, 2, 4)");
 		result.status = value as BeatmapFilterQuery["status"];
 	}
@@ -217,7 +220,12 @@ router.get(API_BEATMAPS_BASE_URL + "/:ruleset/no-perma{/:position}", async ctx =
 	const posThreshold = parseInteger(ctx.params.position, 1) || 1;
 	const beatmaps = await withDbClient(
 		async client =>
-			await getEasiestBeatmapsWithoutPermaScore(client, ctx.state.rulesetId, posThreshold > 100 ? 100 : posThreshold)
+			await getEasiestBeatmapsWithoutPermaScore(
+				client,
+				ctx.state.rulesetId,
+				posThreshold > 100 ? 100 : posThreshold,
+				parseInteger(ctx.query.page, 1) || 1
+			)
 	);
 
 	ctx.type = "application/json";
@@ -227,7 +235,8 @@ router.get(API_BEATMAPS_BASE_URL + "/:ruleset/no-perma{/:position}", async ctx =
 router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async ctx => {
 	const statusIds = parseBeatmapStatusIds(ctx.params.statuses);
 	const count = await withDbClient(
-		async client => await getBeatmapCount(client, ctx.state.rulesetId, statusIds.length ? statusIds : PERMITTED_BEATMAP_STATUSES)
+		async client =>
+			await getBeatmapCount(client, ctx.state.rulesetId, statusIds.length ? statusIds : PERMITTED_BEATMAP_STATUSES)
 	);
 
 	ctx.type = "text/plain";
@@ -236,13 +245,18 @@ router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async ctx => {
 
 //// LOOKUP ROUTES
 router.post<BeatmapFilterQuery>(API_SEARCH_BASE_URL + "/maps", koaBody(), async ctx => {
-	console.log(ctx.request.body);
-
 	const request = ctx.request as typeof ctx.request & { body?: unknown };
-	const filters = validateBeatmapFilterQuery(request.body);
+	const filters = validateAndParseBeatmapFilterQuery(request.body);
+
+	console.log("filters", filters); // TODO: debug only
+
 	ctx.type = "application/json";
-	ctx.body = filters;
+	ctx.body = await withDbClient(
+		async client => await getBeatmapsByFilters(client, filters, parseInteger(ctx.query.page, 1) || 1)
+	);
 });
 
 // TODO player username SIMILARITY() lookup
-router.get(API_SEARCH_BASE_URL + "/players/:username", async ctx => {});
+router.get(API_SEARCH_BASE_URL + "/players/:username", async ctx => {
+	if (ctx.params.username.length < 3) ctx.throw(400, "Username query must be at least 3 characters long");
+});

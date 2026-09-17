@@ -236,3 +236,53 @@ export async function getBeatmapCount(client: ClientBase, rulesetId: RulesetId, 
 
 	return result.rows[0]?.beatmaps ?? -1;
 }
+
+export async function getBeatmapsByFilters(client: ClientBase, filters: Partial<BeatmapFilterQuery>, page = 1) {
+	const PAGE_SIZE = 48;
+	const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+	const offset = (safePage - 1) * PAGE_SIZE;
+
+	const whereClauses: string[] = [];
+	const values: unknown[] = [];
+
+	let paramIndex = 1;
+	for (const [key, value] of Object.entries(filters)) {
+		if (key == "status") {
+			whereClauses.push(`status = ANY($${paramIndex++}::SMALLINT[])`);
+			values.push(value as BeatmapStatusId[]);
+		} else if (key == "ruleset") {
+			whereClauses.push(`ruleset_id = $${paramIndex++}`);
+			values.push(value as RulesetId);
+		} else if (["artist", "title", "creator", "version"].includes(key)) {
+			// TODO: Rank by pg_trgm similarity()
+			whereClauses.push(`${key} ILIKE $${paramIndex++}`);
+			values.push(`%${value}%`);
+		} else if (["approved_date", "star_rating", "total_length", "bpm", "cs", "od", "ar", "hp"].includes(key)) {
+			const [min, max] = value as [number | Date | null, number | Date | null];
+
+			if (min != null) {
+				whereClauses.push(`${key} >= $${paramIndex++}`);
+				values.push(min);
+			}
+			if (max != null) {
+				whereClauses.push(`${key} <= $${paramIndex++}`);
+				values.push(max);
+			}
+		}
+	}
+
+	const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+	const result = await queryWithTiming<Beatmap>(
+		client,
+		"getBeatmapsByFilters",
+		"pog_api_v2",
+		`SELECT *
+		FROM ${DB_BEATMAPS_TABLE}
+		${whereClause}
+		LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+		[...values, PAGE_SIZE, offset]
+	);
+
+	return result.rows;
+}

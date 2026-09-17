@@ -90,9 +90,9 @@ interface BeatmapFilterQuery {
 	version: SimilarityFilterArgument;
 	creator: SimilarityFilterArgument;
 	ruleset: ExactFilterArgument<RulesetId>;
-	approvedDate: BetweenFilterArguments<Date>;
-	starRating: BetweenFilterArguments<number>;
-	totalLength: BetweenFilterArguments<number>;
+	approved_date: BetweenFilterArguments<Date>;
+	star_rating: BetweenFilterArguments<number>;
+	total_length: BetweenFilterArguments<number>;
 	bpm: BetweenFilterArguments<number>;
 	cs: BetweenFilterArguments<number>;
 	od: BetweenFilterArguments<number>;
