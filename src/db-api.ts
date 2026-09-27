@@ -81,8 +81,8 @@ export async function getPlayersByUsernameQuery(client: ClientBase, usernameQuer
 function buildPlayerTableSelectColumns(full = true, tableAlias = "p") {
 	return `${tableAlias}.id,
 			${tableAlias}.username,
-			${tableAlias}.country_code AS countryCode
-			${full ? `, ${tableAlias}.is_active AS isActive, ${tableAlias}.team_id AS teamId, ${tableAlias}.cover_url AS coverUrl` : ""}`
+			${tableAlias}.country_code AS "countryCode"
+			${full ? `, ${tableAlias}.is_active AS "isActive", ${tableAlias}.team_id AS "teamId", ${tableAlias}.cover_url AS "coverUrl"` : ""}`
 }
 
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
