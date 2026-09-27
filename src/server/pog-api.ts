@@ -1,6 +1,7 @@
 import Router from "@koa/router";
 import { Middleware } from "koa";
-import { getFullRankingFromRollup, getRankingForPlayer } from "../db-api-ranking.js";
+import koaBody from "koa-body";
+import { getRankingForPlayer } from "../db-api-ranking.js";
 import {
 	getBeatmapCount,
 	getBeatmapsByFilters,
@@ -9,11 +10,11 @@ import {
 	getModSpreadForPlayer,
 	getPlayerIdByIdOrName,
 	getPlayerInfo,
+	getPlayersByUsernameQuery,
 	getPositionSpreadForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
 import { getRulesetId, parseBeatmapStatusIds, parseInteger, PERMITTED_BEATMAP_STATUSES } from "../shared.js";
-import koaBody from "koa-body";
 
 export const API_BASE_URL = "/api/v2/";
 const API_PLAYER_BASE_URL = "player/:idOrName";
@@ -256,7 +257,9 @@ router.post<BeatmapFilterQuery>(API_SEARCH_BASE_URL + "/maps", koaBody(), async 
 	);
 });
 
-// TODO player username SIMILARITY() lookup
 router.get(API_SEARCH_BASE_URL + "/players/:username", async ctx => {
 	if (ctx.params.username.length < 3) ctx.throw(400, "Username query must be at least 3 characters long");
+
+	ctx.type = "application/json";
+	ctx.body = await withDbClient(async client => await getPlayersByUsernameQuery(client, ctx.params.username))
 });

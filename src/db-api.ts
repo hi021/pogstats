@@ -52,17 +52,37 @@ export async function getPlayerInfo(client: ClientBase, playerId: number, full =
 		client,
 		"getPlayerInfo",
 		"pog_api_v2",
-		`SELECT
-			p.id,
-			p.username,
-			p.country_code
-			${full ? ", p.is_active, p.team_id, p.cover_url" : ""}
+		`SELECT ${buildPlayerTableSelectColumns(full)}
 		FROM ${DB_PLAYERS_TABLE} p
 		WHERE p.id = $1`,
 		[playerId]
 	);
-
+	
 	return result.rows?.[0];
+}
+
+// TODO: better typing (maybe based on the full parameter too)
+// TODO: return only similar enough (WHERE threshold)? - worse performance
+export async function getPlayersByUsernameQuery(client: ClientBase, usernameQuery: string, limit = 8, full = false) {
+		const result = await queryWithTiming<Player>(
+		client,
+		"getPlayersByUsernameQuery",
+		"pog_api_v2",
+		`SELECT ${buildPlayerTableSelectColumns(full)}
+		FROM ${DB_PLAYERS_TABLE} p
+		ORDER BY SIMILARITY(username, $1) DESC
+		LIMIT $2`,
+		[usernameQuery, limit]
+	);
+
+	return result.rows;
+}
+
+function buildPlayerTableSelectColumns(full = true, tableAlias = "p") {
+	return `${tableAlias}.id,
+			${tableAlias}.username,
+			${tableAlias}.country_code AS countryCode
+			${full ? `, ${tableAlias}.is_active AS isActive, ${tableAlias}.team_id AS teamId, ${tableAlias}.cover_url AS coverUrl` : ""}`
 }
 
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {
