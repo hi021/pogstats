@@ -2,6 +2,7 @@ import { ClientBase } from "pg";
 import { cachePlayer, getCachedPlayerId, getCachedPlayerUsername } from "./cache.js";
 import { DB_BEATMAPS_TABLE, DB_PLAYERS_TABLE, DB_SCORES_TABLE } from "./env.js";
 import { queryWithTiming } from "./metrics.js";
+import { parseInteger } from "./shared.js";
 
 export async function getPlayerIdByIdOrName(client: ClientBase, idOrName: string | number) {
 	if (!idOrName) return null;
@@ -268,14 +269,51 @@ export async function getBeatmapCount(client: ClientBase, rulesetId: RulesetId, 
 	return result.rows[0]?.beatmaps ?? -1;
 }
 
+// TODO?: what about manual sorting (e.g. by star rating, ASC/DESC)?
+// TODO?: what about grouping by mapset? - wait until migrated to nekoha?
 export async function getBeatmapsByFilters(client: ClientBase, filters: Partial<BeatmapFilterQuery>, page = 1) {
+	const SIMILARITY_THRESHOLD = 0.4;
 	const PAGE_SIZE = 48;
-	const safePage = Number.isInteger(page) && page > 0 ? page : 1;
+	const safePage = parseInteger(page, 1) || 1;
 	const offset = (safePage - 1) * PAGE_SIZE;
 
 	const whereClauses: string[] = [];
+	const orderByKeys: Array<keyof BeatmapFilterQuery> = [];
 	const values: unknown[] = [];
 
+	let orderByClause = "";
+	let paramIndex = parseBeatmapFilters(filters, values, whereClauses, orderByKeys);
+	[paramIndex, orderByClause] = buildBeatmapFilterOrderByClause(
+		filters,
+		paramIndex,
+		values,
+		whereClauses,
+		orderByKeys,
+		SIMILARITY_THRESHOLD
+	);
+	const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+	const result = await queryWithTiming<Beatmap>(
+		client,
+		"getBeatmapsByFilters",
+		"pog_api_v2",
+		`SELECT *
+		FROM ${DB_BEATMAPS_TABLE}
+		${whereClause}
+		${orderByClause}
+		LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+		[...values, PAGE_SIZE, offset]
+	);
+
+	return result.rows;
+}
+
+function parseBeatmapFilters(
+	filters: Partial<BeatmapFilterQuery>,
+	values: unknown[],
+	whereClauses: string[],
+	orderByKeys: Array<keyof BeatmapFilterQuery>
+) {
 	let paramIndex = 1;
 	for (const [key, value] of Object.entries(filters)) {
 		if (key == "status") {
@@ -285,9 +323,7 @@ export async function getBeatmapsByFilters(client: ClientBase, filters: Partial<
 			whereClauses.push(`ruleset_id = $${paramIndex++}`);
 			values.push(value as RulesetId);
 		} else if (["artist", "title", "creator", "version"].includes(key)) {
-			// TODO: Rank by pg_trgm similarity()
-			whereClauses.push(`${key} ILIKE $${paramIndex++}`);
-			values.push(`%${value}%`);
+			orderByKeys.push(key as keyof BeatmapFilterQuery);
 		} else if (["approved_date", "star_rating", "total_length", "bpm", "cs", "od", "ar", "hp"].includes(key)) {
 			const [min, max] = value as [number | Date | null, number | Date | null];
 
@@ -302,18 +338,35 @@ export async function getBeatmapsByFilters(client: ClientBase, filters: Partial<
 		}
 	}
 
-	const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+	return paramIndex;
+}
 
-	const result = await queryWithTiming<Beatmap>(
-		client,
-		"getBeatmapsByFilters",
-		"pog_api_v2",
-		`SELECT *
-		FROM ${DB_BEATMAPS_TABLE}
-		${whereClause}
-		LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-		[...values, PAGE_SIZE, offset]
-	);
+function buildBeatmapFilterOrderByClause(
+	filters: Partial<BeatmapFilterQuery>,
+	paramIndex: number,
+	values: unknown[],
+	whereClauses: string[],
+	orderByKeys: Array<keyof BeatmapFilterQuery>,
+	similarityThreshold: number
+): [number, string] {
+	let orderByClause = "";
+	if (orderByKeys.length) {
+		orderByClause = "ORDER BY (";
 
-	return result.rows;
+		let isFirstKey = true;
+		for (const key of orderByKeys) {
+			const s = `SIMILARITY(${key}, $${paramIndex++})`;
+
+			whereClauses.push(`${s} >= ${similarityThreshold}`);
+			values.push(filters[key]);
+			if (!isFirstKey) orderByClause += " + ";
+			orderByClause += s;
+
+			isFirstKey = false;
+		}
+
+		orderByClause += ") DESC, id DESC";
+	}
+
+	return [paramIndex, orderByClause];
 }

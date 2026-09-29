@@ -95,7 +95,7 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 		result.ruleset = value as RulesetId;
 	}
 
-	const rangeParameters = ["approvedDate", "starRating", "totalLength", "bpm", "cs", "od", "ar", "hp"] as const;
+	const rangeParameters = ["approved_date", "star_rating", "total_length", "bpm", "cs", "od", "ar", "hp"] as const;
 	for (const parameter of rangeParameters) {
 		if (!(parameter in query)) continue;
 
@@ -106,7 +106,7 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 		const normalized = bounds.map((bound, index) => {
 			if (bound == null) return null;
 
-			if (parameter == "approvedDate") {
+			if (parameter == "approved_date") {
 				const date = new Date(bound as string | number | Date);
 				if (isNaN(date.getTime())) badRequest(`'${parameter}' bound ${index + 1} must be a valid date`);
 				return date;
@@ -248,8 +248,6 @@ router.get(API_BEATMAPS_BASE_URL + "/:ruleset/count{/:statuses}", async ctx => {
 router.post<BeatmapFilterQuery>(API_SEARCH_BASE_URL + "/maps", koaBody(), async ctx => {
 	const request = ctx.request as typeof ctx.request & { body?: unknown };
 	const filters = validateAndParseBeatmapFilterQuery(request.body);
-
-	console.log("filters", filters); // TODO: debug only
 
 	ctx.type = "application/json";
 	ctx.body = await withDbClient(
