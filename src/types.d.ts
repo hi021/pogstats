@@ -175,6 +175,9 @@ interface PlayerMiaHistoryEntry {
 	endDate?: Date;
 }
 
+type PlayerQueryResult<Full extends boolean = boolean> = Pick<Player, "id" | "username" | "countryCode"> &
+	(Full extends true ? Pick<Player, "isActive" | "teamId" | "coverUrl"> : {});
+
 // ------------------------------------------
 
 interface PogBadge {

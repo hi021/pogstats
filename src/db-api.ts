@@ -46,9 +46,12 @@ export async function getPlayerIdById(client: ClientBase, id: string | number) {
 // TODO: move to redis (but later, skip for now)
 export async function getRankingId(client: ClientBase, rulesetId: RulesetId, code: string) {}
 
-// TODO: better typing (maybe based on the full parameter too)
-export async function getPlayerInfo(client: ClientBase, playerId: number, full = true) {
-	const result = await queryWithTiming<Player>(
+export async function getPlayerInfo<Full extends boolean = true>(
+	client: ClientBase,
+	playerId: number,
+	full: Full = true as Full
+): Promise<PlayerQueryResult<Full> | undefined> {
+	const result = await queryWithTiming<PlayerQueryResult<Full>>(
 		client,
 		"getPlayerInfo",
 		"pog_api_v2",
@@ -57,14 +60,18 @@ export async function getPlayerInfo(client: ClientBase, playerId: number, full =
 		WHERE p.id = $1`,
 		[playerId]
 	);
-	
+
 	return result.rows?.[0];
 }
 
-// TODO: better typing (maybe based on the full parameter too)
 // TODO: return only similar enough (WHERE threshold)? - worse performance
-export async function getPlayersByUsernameQuery(client: ClientBase, usernameQuery: string, limit = 8, full = false) {
-		const result = await queryWithTiming<Player>(
+export async function getPlayersByUsernameQuery<Full extends boolean = false>(
+	client: ClientBase,
+	usernameQuery: string,
+	limit = 8,
+	full: Full = false as Full
+): Promise<PlayerQueryResult<Full>[]> {
+	const result = await queryWithTiming<PlayerQueryResult<Full>>(
 		client,
 		"getPlayersByUsernameQuery",
 		"pog_api_v2",
@@ -78,11 +85,15 @@ export async function getPlayersByUsernameQuery(client: ClientBase, usernameQuer
 	return result.rows;
 }
 
+export function isFullPlayerQueryResult(player: PlayerQueryResult, full: boolean): player is PlayerQueryResult<true> {
+	return full && "isActive" in player && "teamId" in player && "coverUrl" in player;
+}
+
 function buildPlayerTableSelectColumns(full = true, tableAlias = "p") {
 	return `${tableAlias}.id,
 			${tableAlias}.username,
 			${tableAlias}.country_code AS "countryCode"
-			${full ? `, ${tableAlias}.is_active AS "isActive", ${tableAlias}.team_id AS "teamId", ${tableAlias}.cover_url AS "coverUrl"` : ""}`
+			${full ? `, ${tableAlias}.is_active AS "isActive", ${tableAlias}.team_id AS "teamId", ${tableAlias}.cover_url AS "coverUrl"` : ""}`;
 }
 
 export async function getPositionSpreadForPlayer(client: ClientBase, playerId: number, rulesetId: RulesetId) {

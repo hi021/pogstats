@@ -261,5 +261,5 @@ router.get(API_SEARCH_BASE_URL + "/players/:username", async ctx => {
 	if (ctx.params.username.length < 3) ctx.throw(400, "Username query must be at least 3 characters long");
 
 	ctx.type = "application/json";
-	ctx.body = await withDbClient(async client => await getPlayersByUsernameQuery(client, ctx.params.username))
+	ctx.body = await withDbClient(async client => await getPlayersByUsernameQuery(client, ctx.params.username));
 });

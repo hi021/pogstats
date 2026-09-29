@@ -45,7 +45,11 @@ pogApiApp.use(requestTimingMiddleware);
 pogApiApp.use(router.routes()).use(router.allowedMethods());
 pogApiApp.use(socketDebugMessageEndpoint); // TODO debug only
 // TODO?: probably remove logging for < 500 HTTP errors
-pogApiApp.on("error", (e, ctx) => ctx.status >= 500 ? console.error("pog API server error:\n", ctx.url, "\n", e) : console.log("pog API error:\n", ctx.url, "\n", e));
+pogApiApp.on("error", (e, ctx) =>
+	ctx.status >= 500
+		? console.error("pog API server error:\n", ctx.url, "\n", e)
+		: console.log("pog API error:\n", ctx.url, "\n", e)
+);
 
 pogApiServer.on("upgrade", onUpgrade);
 pogWss.on("connection", onConnect);
