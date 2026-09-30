@@ -2,8 +2,8 @@ import { LabelValues } from "@prometheus-io/client";
 import { ClientBase } from "pg";
 import { SCORE_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../db-generic.js";
 import {
-	fetchNewBeatmaps,
-	fetchNewPlayers,
+	getAndSaveNewBeatmaps,
+	getAndSaveNewPlayers,
 	getScoresCursor,
 	insertHistoricalPlayerSnipes,
 	recalculateScorePositionsForMaps,
@@ -139,7 +139,7 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 
 	await withDbClient(
 		async client =>
-			await fetchNewBeatmaps(
+			await getAndSaveNewBeatmaps(
 				client,
 				scores.map(s => s.beatmap_id),
 				undefined,
@@ -157,7 +157,7 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 
 	await withDbClient(
 		async client =>
-			await fetchNewPlayers(
+			await getAndSaveNewPlayers(
 				client,
 				beatenScoresByMaps.flatMap(p => p.proven_user_ids),
 				undefined,
@@ -435,7 +435,7 @@ async function upsertBeatmapScores(
 // Does not save scores for qualified maps - fetching those is skipped in scrape_beatmaps
 // TODO?: do not use two LATERAL JOINs and optimize the query?
 async function getBeatenScoresByMap(client: ClientBase, scores: ApiScore[]) {
-	const arrays = unnestObjectsIntoArrays(scores); // TODO: scores[0] was null here and it caused an error literally once? has not happened since....
+	const arrays = unnestObjectsIntoArrays(scores);
 
 	await client.query("SET LOCAL statement_timeout = 30000");
 	const scoreList = await queryWithTiming<ProvenScoresPerRulesetBeatmap>(

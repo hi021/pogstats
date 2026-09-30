@@ -6,7 +6,7 @@ import {
 	getCachedRankingPositionsForPlayers
 } from "./cache.js";
 import { DB_PLAYER_RULESET_STATS_TABLE, DB_PLAYERS_TABLE, DB_RANKING_ROLLUP_TABLE } from "./env.js";
-import { queryWithTiming } from "./metrics.js";
+import { queryWithTiming, timeDbQuery } from "./metrics.js";
 import { RANKING_POS_THRESHOLDS, isAfterDate, isDateInvalid, isToday, parsePositionThresholdAndRankingType } from "./shared.js";
 
 export async function getRankingForPlayer(
@@ -21,7 +21,6 @@ export async function getRankingForPlayer(
 	// TODO: otherwise historical ranking
 }
 
-// TODO: use timedQuery
 export async function getLiveRankingForPlayer(
 	client: ClientBase,
 	rankingCodes: string[],
@@ -39,7 +38,11 @@ export async function getLiveRankingForPlayer(
 		rankingTypes.push(parsed.rankingType);
 	}
 
-	// TODO: join player ruleset stats only if weighted pp and count in rankingTypes
+  const includeWeightedPp = rankingTypes.includes("weighted-pp");
+  const includeWeightedCount = rankingTypes.includes("weighted");
+  const includePlayerRulesetStats = includeWeightedPp || includeWeightedCount;
+  const weightedPpSelect = includeWeightedPp ? "COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp," : "";
+  const weightedCountSelect = includeWeightedCount ? "COALESCE(prs.weighted_count, 0)::INT AS weighted_count," : "";
 	const query = `
     WITH agg AS (
       SELECT r.user_id, ${buildRankingTypeAggregations(rankingTypes, positionThresholds)}
@@ -52,18 +55,18 @@ export async function getLiveRankingForPlayer(
         p.id,
         p.username,
         p.country_code,
-        COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
-        COALESCE(prs.weighted_count, 0)::INT AS weighted_count,
+        ${weightedPpSelect},
+        ${weightedCountSelect},
         ${buildRankingTypeSelects(rankingTypes, positionThresholds)}
     FROM ${DB_PLAYERS_TABLE} p
       JOIN agg ON agg.user_id = p.id
-      LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1
+      ${includePlayerRulesetStats ? `LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1` : ""}
     )
     SELECT *
     FROM ranked
     WHERE id = $2`;
 
-	const res = await client.query(query, [rulesetId, playerId]);
+	const res = await queryWithTiming(client, "getLiveRankingForPlayer", "pog_api_v2", query, [rulesetId, playerId]);
 	const row = res?.rows[0];
 	if (!row) return row;
 

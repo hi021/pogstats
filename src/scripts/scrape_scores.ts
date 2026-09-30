@@ -6,7 +6,7 @@
 import fs from "fs";
 import { ClientBase } from "pg";
 import { SCORE_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../db-generic.js";
-import { fetchNewPlayers, updateBeatmapScoresRetrievalDate } from "../db.js";
+import { getAndSaveNewPlayers, updateBeatmapScoresRetrievalDate } from "../db.js";
 import {
 	DB_BEATMAP_RULESET_UPDATE_DATES_TABLE,
 	DB_BEATMAPS_TABLE,
@@ -168,7 +168,7 @@ async function handleBeatmap(beatmapId: number, beatmapNo: number, headers: Reco
 		const convertedScores = data.scores.map((score, index) => convertApiScore(score, index + 1));
 		const playerIds = convertedScores.map(s => s.userId);
 		await withDbClientTransaction(async client => {
-			await fetchNewPlayers(client, playerIds, undefined, "scrape_scores");
+			await getAndSaveNewPlayers(client, playerIds, undefined, "scrape_scores");
 			await mergeSingleBeatmapScoresIntoExisting(client, convertedScores);
 		});
 

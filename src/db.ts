@@ -141,7 +141,7 @@ export async function getInexistentBeatmapIds(client: ClientBase, beatmapIds: nu
 	).rows.map(r => r.id) as number[];
 }
 
-export async function fetchNewBeatmaps(
+export async function getAndSaveNewBeatmaps(
 	client: ClientBase,
 	beatmapIds: number[],
 	callback?: () => void,
@@ -161,7 +161,7 @@ export async function fetchNewBeatmaps(
 	}
 }
 
-export async function fetchNewPlayers(
+export async function getAndSaveNewPlayers(
 	client: ClientBase,
 	playerIds: number[],
 	callback?: () => void,

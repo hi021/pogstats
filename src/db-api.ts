@@ -65,7 +65,7 @@ export async function getPlayerInfo<Full extends boolean = true>(
 	return result.rows?.[0];
 }
 
-// TODO: return only similar enough (WHERE threshold)? - worse performance
+// TODO?: return only similar enough (WHERE threshold)? - worse performance
 export async function getPlayersByUsernameQuery<Full extends boolean = false>(
 	client: ClientBase,
 	usernameQuery: string,
