@@ -91,10 +91,10 @@ export function parsePositionThresholdFromCode(code: RankingPositionThresholdCod
 	if (!code?.startsWith("top")) return;
 
 	const posString = code.slice(3);
-	const pos = parseInt(posString, 10);
-	if (isNaN(pos) || !isFinite(pos) || pos > 100 || pos < 1) return;
+	const pos = parseInteger(posString, 1, 100);
+	if (!pos || !RANKING_POS_THRESHOLDS.includes(pos as RankingPositionThreshold)) return; // ranking rollup table technically supports arbitrary thresholds between 1 and 100, but valkey leaderboards don't
 
-	return pos as RankingPositionThreshold; // TODO: could maybe validate whether it's a valid threshold
+	return pos as RankingPositionThreshold;
 }
 
 export function parsePositionThresholdAndRankingType(rankingCode?: string) {

@@ -14,6 +14,7 @@ import {
 	getPositionSpreadForPlayer
 } from "../db-api.js";
 import { withDbClient } from "../db-generic.js";
+import { throwBadRequest } from "../scripts/shared.js";
 import { getRulesetId, parseBeatmapStatusIds, parseInteger, PERMITTED_BEATMAP_STATUSES } from "../shared.js";
 
 export const API_BASE_URL = "/api/v2/";
@@ -35,13 +36,8 @@ export const errorHandlerMiddleware: Middleware = async (ctx, next) => {
 	}
 };
 
-function badRequest(message: string) {
-	const error = Object.assign(new Error(message), { status: 400 });
-	throw error;
-}
-
 function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilterQuery> {
-	if (body == null || typeof body != "object" || Array.isArray(body)) badRequest("Request body must be a JSON object");
+	if (body == null || typeof body != "object" || Array.isArray(body)) throwBadRequest("Request body must be a JSON object");
 
 	const query = body as Record<string, unknown>;
 	const allowedParameters = new Set<keyof BeatmapFilterQuery>([
@@ -64,7 +60,7 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 	const parameters = Object.keys(query);
 	for (const parameter of parameters) {
 		if (!allowedParameters.has(parameter as keyof BeatmapFilterQuery))
-			badRequest(`Unknown map filter parameter: '${parameter}'`);
+			throwBadRequest(`Unknown map filter parameter: '${parameter}'`);
 	}
 
 	const result: Partial<BeatmapFilterQuery> = {};
@@ -73,7 +69,7 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 		if (!(parameter in query)) continue;
 
 		const value = query[parameter];
-		if (typeof value != "string") badRequest(`'${parameter}' must be a string`);
+		if (typeof value != "string") throwBadRequest(`'${parameter}' must be a string`);
 		const stringValue = (value as string).trim();
 		if ((parameter == "version" && stringValue.length) || stringValue.length >= 3) result[parameter] = stringValue;
 	}
@@ -84,14 +80,14 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 			!Array.isArray(value) ||
 			!value.every(status => Number.isInteger(status) && PERMITTED_BEATMAP_STATUSES.includes(status))
 		)
-			badRequest("Status can only be 'ranked', 'approved', or 'loved' (1, 2, 4)");
+			throwBadRequest("Status can only be 'ranked', 'approved', or 'loved' (1, 2, 4)");
 		result.status = value as BeatmapFilterQuery["status"];
 	}
 
 	if ("ruleset" in query) {
 		const value = query.ruleset;
 		if (typeof value != "number" || !Number.isInteger(value) || value < 0 || value > 3)
-			badRequest("Ruleset must be an integer from 0 to 3");
+			throwBadRequest("Ruleset must be an integer from 0 to 3");
 		result.ruleset = value as RulesetId;
 	}
 
@@ -100,7 +96,7 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 		if (!(parameter in query)) continue;
 
 		const value = query[parameter];
-		if (!Array.isArray(value) || value.length != 2) badRequest(`'${parameter}' must be a two-item range array`);
+		if (!Array.isArray(value) || value.length != 2) throwBadRequest(`'${parameter}' must be a two-item range array`);
 		const bounds = value as unknown[];
 
 		const normalized = bounds.map((bound, index) => {
@@ -108,11 +104,11 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 
 			if (parameter == "approved_date") {
 				const date = new Date(bound as string | number | Date);
-				if (isNaN(date.getTime())) badRequest(`'${parameter}' bound ${index + 1} must be a valid date`);
+				if (isNaN(date.getTime())) throwBadRequest(`'${parameter}' bound ${index + 1} must be a valid date`);
 				return date;
 			}
 			if (typeof bound != "number" || !Number.isFinite(bound))
-				badRequest(`'${parameter}' bound ${index + 1} must be a finite number`);
+				throwBadRequest(`'${parameter}' bound ${index + 1} must be a finite number`);
 
 			return bound;
 		});
@@ -120,7 +116,7 @@ function validateAndParseBeatmapFilterQuery(body: unknown): Partial<BeatmapFilte
 		(result as Record<string, unknown>)[parameter] = normalized;
 	}
 
-	if (!Object.keys(result).length) badRequest("At least one filter is required");
+	if (!Object.keys(result).length) throwBadRequest("At least one filter is required");
 	return result;
 }
 
@@ -189,7 +185,6 @@ router.get(API_PLAYER_BASE_URL + "/:ruleset/mod-spread{/:position}", async ctx =
 });
 
 router.get(API_PLAYER_BASE_URL + "/:ruleset/:rankings{/:date}", async ctx => {
-	// TODO: error handlin
 	const ranking = await withDbClient(
 		async client =>
 			await getRankingForPlayer(

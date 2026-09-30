@@ -148,6 +148,10 @@ export const buildBeatmapDbUrl = (beatmapIds: Array<number | string>) => {
 	return new URL(`${BEATMAP_DB_BEATMAP_FETCH_URL}/${beatmapIds.join(",")}`);
 };
 
+export function throwBadRequest(message: string): never {
+	throw Object.assign(new Error(message), { status: 400 });
+}
+
 export async function readFileByLine(filePath: string, lineCallback: (line: string, rowNo: number) => Promise<any>) {
 	const fileStream = fs.createReadStream(filePath);
 	const rl = readline.createInterface({

@@ -6,8 +6,9 @@ import {
 	getCachedRankingPositionsForPlayers
 } from "./cache.js";
 import { DB_PLAYER_RULESET_STATS_TABLE, DB_PLAYERS_TABLE, DB_RANKING_ROLLUP_TABLE } from "./env.js";
-import { queryWithTiming, timeDbQuery } from "./metrics.js";
-import { RANKING_POS_THRESHOLDS, isAfterDate, isDateInvalid, isToday, parsePositionThresholdAndRankingType } from "./shared.js";
+import { queryWithTiming } from "./metrics.js";
+import { throwBadRequest } from "./scripts/shared.js";
+import { isAfterDate, isDateInvalid, isToday, parsePositionThresholdAndRankingType, RANKING_POS_THRESHOLDS } from "./shared.js";
 
 export async function getRankingForPlayer(
 	client: ClientBase,
@@ -16,9 +17,15 @@ export async function getRankingForPlayer(
 	playerId: number,
 	date?: string
 ) {
-	if (!date || isToday(new Date(date))) return getLiveRankingForPlayer(client, rankingCodes, rulesetId, playerId);
-	if (isDateInvalid(date) || isAfterDate(new Date(date), new Date())) return; // TODO: idk error message somehow
-	// TODO: otherwise historical ranking
+	if (!date) return getLiveRankingForPlayer(client, rankingCodes, rulesetId, playerId);
+	if (isDateInvalid(date)) throwBadRequest("Invalid date");
+
+	const requestedDate = new Date(date);
+	if (isAfterDate(requestedDate, new Date())) throwBadRequest("Cannot predict the future");
+	if (isToday(requestedDate)) return getLiveRankingForPlayer(client, rankingCodes, rulesetId, playerId);
+
+	// TODO!
+	throwBadRequest("Historical rankings are not available yet.");
 }
 
 export async function getLiveRankingForPlayer(
@@ -27,25 +34,29 @@ export async function getLiveRankingForPlayer(
 	rulesetId: RulesetId,
 	playerId: number
 ) {
-	if (!rankingCodes?.length || rankingCodes.length > 25) return;
+	if (!rankingCodes?.length) throwBadRequest("No rankings provided");
+	if (rankingCodes.length > 25) throwBadRequest("The number of provided rankings overwhelms even the poggest of stats");
 
 	const parsedRankings = rankingCodes.map(parsePositionThresholdAndRankingType);
-	const positionThresholds: RankingPositionThreshold[] = [];
-	const rankingTypes: string[] = [];
-	for (const parsed of parsedRankings) {
-		if (!parsed) return; // TODO: error message
-		positionThresholds.push(parsed.positionThreshold);
-		rankingTypes.push(parsed.rankingType);
+	const positionThresholds = new Set<RankingPositionThreshold>();
+	const rankingTypes = new Set<string>();
+	for (const [index, parsed] of parsedRankings.entries()) {
+		if (!parsed) throwBadRequest(`Invalid ranking code: ${rankingCodes[index]}`);
+		positionThresholds.add(parsed.positionThreshold);
+		rankingTypes.add(parsed.rankingType);
 	}
 
-  const includeWeightedPp = rankingTypes.includes("weighted-pp");
-  const includeWeightedCount = rankingTypes.includes("weighted");
-  const includePlayerRulesetStats = includeWeightedPp || includeWeightedCount;
-  const weightedPpSelect = includeWeightedPp ? "COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp," : "";
-  const weightedCountSelect = includeWeightedCount ? "COALESCE(prs.weighted_count, 0)::INT AS weighted_count," : "";
+	const includeWeightedPp = rankingTypes.has("weighted-pp");
+	const includeWeightedCount = rankingTypes.has("weighted");
+	const includePlayerRulesetStats = includeWeightedPp || includeWeightedCount;
+	const weightedSelects = [
+		includeWeightedPp ? "COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp" : undefined,
+		includeWeightedCount ? "COALESCE(prs.weighted_count, 0)::INT AS weighted_count" : undefined
+	].filter(Boolean);
+
 	const query = `
     WITH agg AS (
-      SELECT r.user_id, ${buildRankingTypeAggregations(rankingTypes, positionThresholds)}
+      SELECT r.user_id, ${buildRankingTypeAggregations([...rankingTypes], [...positionThresholds])}
       FROM ${DB_RANKING_ROLLUP_TABLE} r
       WHERE r.ruleset_id = $1
       GROUP BY r.user_id
@@ -55,9 +66,8 @@ export async function getLiveRankingForPlayer(
         p.id,
         p.username,
         p.country_code,
-        ${weightedPpSelect},
-        ${weightedCountSelect},
-        ${buildRankingTypeSelects(rankingTypes, positionThresholds)}
+        ${weightedSelects.length ? `${weightedSelects.join(",\n        ")},` : ""}
+        ${buildRankingTypeSelects([...rankingTypes], [...positionThresholds])}
     FROM ${DB_PLAYERS_TABLE} p
       JOIN agg ON agg.user_id = p.id
       ${includePlayerRulesetStats ? `LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1` : ""}
@@ -70,7 +80,7 @@ export async function getLiveRankingForPlayer(
 	const row = res?.rows[0];
 	if (!row) return row;
 
-	const positions = await getCachedRankingPositionsForPlayer(rulesetId, positionThresholds, playerId);
+	const positions = await getCachedRankingPositionsForPlayer(rulesetId, [...positionThresholds], playerId);
 	for (const [field, position] of positions) (row as Record<string, unknown>)[field] = position;
 
 	return row;
