@@ -132,31 +132,38 @@ async function saveScoresBatch(scores: ApiScore[], cursorString: string, previou
 	logInfo(`${scores.length} scores`);
 	if (!scores.length) return;
 
-	if (previousHighestScoreId && VERBOSE)
+	if (VERBOSE && previousHighestScoreId)
 		logInfo(
 			`${scores[0].id - previousHighestScoreId} gap in score ids between batches (${previousHighestScoreId} -> ${scores[0].id})`
 		);
 
-	const beatenScoresByMaps = await withDbClientTransaction(async client => {
-		await lockRankingRollupTable(client);
-		try {
-			// TODO!! API calls should be made outside DB transactions
+	await withDbClient(
+		async client =>
 			await fetchNewBeatmaps(
 				client,
 				scores.map(s => s.beatmap_id),
 				undefined,
 				"scores_fetch"
-			);
-
-			const beatenScoresByMaps = await getBeatenScoresByMap(client, scores);
-			const provenUserIds = beatenScoresByMaps.flatMap(p => p.proven_user_ids);
-			await fetchNewPlayers(client, provenUserIds, undefined, "scores_fetch");
-
-			return beatenScoresByMaps;
+			)
+	);
+	const beatenScoresByMaps = await withDbClientTransaction(async client => {
+		await lockRankingRollupTable(client);
+		try {
+			return await getBeatenScoresByMap(client, scores);
 		} finally {
 			await unlockRankingRollupTable(client);
 		}
 	});
+
+	await withDbClient(
+		async client =>
+			await fetchNewPlayers(
+				client,
+				beatenScoresByMaps.flatMap(p => p.proven_user_ids),
+				undefined,
+				"scores_fetch"
+			)
+	);
 
 	let totalProvenScoreCount = 0;
 	const provenScoresByMaps = new Map<string, { beatmapId: number; rulesetId: RulesetId; scores: ApiScore[] }>();
