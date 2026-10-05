@@ -14,6 +14,7 @@ import {
 	DB_HISTORICAL_PLAYER_SNIPES_TABLE,
 	DB_PLAYER_MIA_HISTORY_TABLE,
 	DB_PLAYERS_TABLE,
+	DB_RECALC_QUEUE_TABLE,
 	DB_SCORES_TABLE,
 	VERBOSE
 } from "./env.js";
@@ -343,6 +344,21 @@ export async function insertNoLongerMiaPlayers(client: ClientBase, miaPlayerIds:
       AND h.end_date IS NULL`,
 		[miaPlayerIds]
 	);
+}
+
+export async function getRecalcQueueCounts(client: ClientBase, operationTypes?: string[], source: ActionSource = "unknown") {
+	const result = await queryWithTiming<DbQueueAggregateResult>(
+		client,
+		"getRecalcQueueCounts",
+		source,
+		`SELECT operation_type, COUNT(*) AS count, MIN(queued_at) AS oldest_queued_at
+		FROM ${DB_RECALC_QUEUE_TABLE}
+		${operationTypes?.length ? "WHERE operation_type = ANY($1::TEXT[])" : ""}
+		GROUP BY operation_type`,
+		operationTypes?.length ? [operationTypes] : []
+	);
+
+	return result.rows;
 }
 
 export async function upsertBeatmapBatch(

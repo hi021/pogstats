@@ -268,6 +268,14 @@ interface HistoricalPlayerSnipes {
 
 // ------------------------------------------
 
+interface DbQueueAggregateResult {
+	operation_type: string;
+	count: number;
+	oldest_queued_at: Date;
+}
+
+// ------------------------------------------
+
 interface ConfigEntry {
 	key: string;
 	value_int?: number;

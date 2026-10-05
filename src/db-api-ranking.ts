@@ -1,9 +1,9 @@
 import { ClientBase } from "pg";
 import {
-	buildRankingKey,
-	cacheServer,
-	getCachedRankingPositionsForPlayer,
-	getCachedRankingPositionsForPlayers
+  buildRankingKey,
+  cacheServer,
+  getCachedRankingPositionsForPlayer,
+  getCachedRankingPositionsForPlayers
 } from "./cache.js";
 import { DB_PLAYER_RULESET_STATS_TABLE, DB_PLAYERS_TABLE, DB_RANKING_ROLLUP_TABLE } from "./env.js";
 import { queryWithTiming } from "./metrics.js";

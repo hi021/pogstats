@@ -4,6 +4,7 @@ import { SCORE_TABLE_COLUMNS, withDbClient, withDbClientTransaction } from "../d
 import {
 	getAndSaveNewBeatmaps,
 	getAndSaveNewPlayers,
+	getRecalcQueueCounts,
 	getScoresCursor,
 	insertHistoricalPlayerSnipes,
 	recalculateScorePositionsForMaps,
@@ -96,6 +97,8 @@ async function fetchScoresBatch(cursors: ScoreCursors) {
 				? SCORES_ENDPOINT_CATCH_UP_INTERVAL
 				: SCORES_ENDPOINT_FETCH_INTERVAL
 		);
+
+		await withDbClient(async client => await logDbQueueCounts(client));
 	} catch (e) {
 		logError("failed to fetch/parse JSON:\n", e);
 
@@ -214,6 +217,17 @@ async function getScoresCursors(cursorStringCli?: string) {
 	const res = await getScoresCursor("scores_fetch");
 	if (cursorStringCli) res.cursorString = cursorStringCli;
 	return res;
+}
+
+async function logDbQueueCounts(client: ClientBase) {
+	const queueCounts = await getRecalcQueueCounts(client, undefined, "scores_fetch");
+	if (!queueCounts?.length) return;
+
+	let s = "recalc queue counts:";
+	for (const { operation_type, count, oldest_queued_at } of queueCounts)
+		s += `\n  ${operation_type}: ${count} | oldest: ${oldest_queued_at.toISOString()}`;
+
+	logInfo(s);
 }
 
 function logInfo(msg: string, ...data: any[]) {

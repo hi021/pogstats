@@ -11,7 +11,6 @@ import {
 	DB_SCORES_TABLE
 } from "../env.js";
 
-// TODO!!: log the number of users waiting per operation_type in scores-fetch or somewhere
 async function createRankingTables(client: ClientBase) {
 	console.log(`Attempting to create ${DB_POSITION_WEIGHTS_TABLE}, ${DB_RANKING_ROLLUP_TABLE}, ${DB_RECALC_QUEUE_TABLE} tables`);
 
