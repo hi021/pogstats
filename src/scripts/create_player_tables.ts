@@ -21,7 +21,7 @@ async function createTables(client: ClientBase) {
     )`);
 	// TODO?: team_id FK constraint if adding teams
 
-	// TODO?: figure out if username should be indexed for pg_trgm fuzzy search - gin(username gin_trgm_ops)? gist could be better for ordering the results though?
+	// TODO: figure out if username should be indexed for pg_trgm fuzzy search - gin(username gin_trgm_ops)? gist could be better for ordering the results though?
 	await client.query(`
 		CREATE INDEX IF NOT EXISTS ${DB_PLAYERS_TABLE}_country_code_idx 				ON ${DB_PLAYERS_TABLE} (country_code);
 		CREATE INDEX IF NOT EXISTS ${DB_PLAYERS_TABLE}_not_mia_id_idx						ON ${DB_PLAYERS_TABLE} (id) WHERE is_mia = false;`);
@@ -43,7 +43,6 @@ async function createTables(client: ClientBase) {
 	`);
 
 	// it would be cool to store stuff from PlayerRulesetStats here, but the main /user endpoint has a high cost, using simple /lookup without these stats for now
-	// could also have a position column here
 	await client.query(`
 	  CREATE TABLE IF NOT EXISTS ${DB_PLAYER_RULESET_STATS_TABLE} (
 			user_id 				INTEGER NOT NULL,

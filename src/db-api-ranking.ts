@@ -88,19 +88,21 @@ export async function getLiveRankingForPlayer(
 
 // TODO: rankingTypes
 // TODO: parameterize positionThresholds ($N)
-// TODO!: avg_acc and avg_map_len are not weighted by the number of scores
 function buildRankingTypeAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
 		.map(bucket => {
 			const filter = bucket === 100 ? "" : ` FILTER (WHERE r.position <= ${bucket})`;
+      const weightedAverage = (column: "avg_acc" | "avg_map_len") =>
+        `COALESCE(SUM(r.${column} * r.count)${filter} / NULLIF(SUM(r.count)${filter}, 0), 0)::REAL`;
+
 			return `COALESCE(SUM(r.count)${filter}, 0)::INT AS top_${bucket}_count,
         COALESCE(SUM(r.count_ss)${filter}, 0)::INT AS top_${bucket}_count_ss,
         COALESCE(SUM(r.count_lazer)${filter}, 0)::INT AS top_${bucket}_count_lazer,
         COALESCE(SUM(r.count_perma)${filter}, 0)::INT AS top_${bucket}_count_perma,
         COALESCE(SUM(r.ranked_score)${filter}, 0)::BIGINT AS top_${bucket}_ranked_score,
         COALESCE(SUM(r.total_pp)${filter}, 0)::INT AS top_${bucket}_total_pp,
-        COALESCE(AVG(r.avg_acc)${filter}, 0)::REAL AS top_${bucket}_avg_acc,
-        COALESCE(AVG(r.avg_map_len)${filter}, 0)::REAL AS top_${bucket}_avg_map_len`;
+        ${weightedAverage("avg_acc")} AS top_${bucket}_avg_acc,
+        ${weightedAverage("avg_map_len")} AS top_${bucket}_avg_map_len`;
 		})
 		.join(",\n");
 }
@@ -152,25 +154,25 @@ export async function getPaginatedRankingForBucket(
       COALESCE(SUM(r.count_perma), 0)::INT AS count_perma,
       COALESCE(SUM(r.ranked_score), 0)::BIGINT AS ranked_score,
       COALESCE(SUM(r.total_pp), 0)::INT AS total_pp,
-      COALESCE(AVG(r.avg_acc), 0)::REAL AS avg_acc,
-      COALESCE(AVG(r.avg_map_len), 0)::REAL AS avg_map_len`;
+		COALESCE(SUM(r.avg_acc * r.count) / NULLIF(SUM(r.count), 0), 0)::REAL AS avg_acc,
+		COALESCE(SUM(r.avg_map_len * r.count) / NULLIF(SUM(r.count), 0), 0)::REAL AS avg_map_len`;
 
 	const outerSelects = `NULL::INT AS count_position,
-        agg.count,
-        NULL::INT AS count_ss_position,
-        agg.count_ss,
-        NULL::INT AS count_lazer_position,
-        agg.count_lazer,
-        NULL::INT AS count_perma_position,
-        agg.count_perma,
-        NULL::INT AS ranked_score_position,
-        agg.ranked_score,
-        NULL::INT AS total_pp_position,
-        agg.total_pp,
-        agg.avg_acc,
-        agg.avg_map_len,
-        COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
-        COALESCE(prs.weighted_count, 0)::INT AS weighted_count`;
+      agg.count,
+      NULL::INT AS count_ss_position,
+      agg.count_ss,
+      NULL::INT AS count_lazer_position,
+      agg.count_lazer,
+      NULL::INT AS count_perma_position,
+      agg.count_perma,
+      NULL::INT AS ranked_score_position,
+      agg.ranked_score,
+      NULL::INT AS total_pp_position,
+      agg.total_pp,
+      agg.avg_acc,
+      agg.avg_map_len,
+      COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp,
+      COALESCE(prs.weighted_count, 0)::INT AS weighted_count`;
 
 	const query = `
     WITH agg AS (
@@ -222,8 +224,8 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
         SUM(r.count_perma) FILTER (WHERE r.position <= 1) AS top_1_count_perma,
         SUM(r.ranked_score) FILTER (WHERE r.position <= 1) AS top_1_ranked_score,
         SUM(r.total_pp) FILTER (WHERE r.position <= 1) AS top_1_total_pp,
-        AVG(r.avg_acc) FILTER (WHERE r.position <= 1) AS top_1_avg_acc,
-        AVG(r.avg_map_len) FILTER (WHERE r.position <= 1) AS top_1_avg_map_len,
+        SUM(r.avg_acc * r.count) FILTER (WHERE r.position <= 1) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 1), 0) AS top_1_avg_acc,
+        SUM(r.avg_map_len * r.count) FILTER (WHERE r.position <= 1) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 1), 0) AS top_1_avg_map_len,
 
         SUM(r.count) FILTER (WHERE r.position <= 8) AS top_8_count,
         SUM(r.count_ss) FILTER (WHERE r.position <= 8) AS top_8_count_ss,
@@ -231,8 +233,8 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
         SUM(r.count_perma) FILTER (WHERE r.position <= 8) AS top_8_count_perma,
         SUM(r.ranked_score) FILTER (WHERE r.position <= 8) AS top_8_ranked_score,
         SUM(r.total_pp) FILTER (WHERE r.position <= 8) AS top_8_total_pp,
-        AVG(r.avg_acc) FILTER (WHERE r.position <= 8) AS top_8_avg_acc,
-        AVG(r.avg_map_len) FILTER (WHERE r.position <= 8) AS top_8_avg_map_len,
+        SUM(r.avg_acc * r.count) FILTER (WHERE r.position <= 8) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 8), 0) AS top_8_avg_acc,
+        SUM(r.avg_map_len * r.count) FILTER (WHERE r.position <= 8) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 8), 0) AS top_8_avg_map_len,
 
         SUM(r.count) FILTER (WHERE r.position <= 15) AS top_15_count,
         SUM(r.count_ss) FILTER (WHERE r.position <= 15) AS top_15_count_ss,
@@ -240,8 +242,8 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
         SUM(r.count_perma) FILTER (WHERE r.position <= 15) AS top_15_count_perma,
         SUM(r.ranked_score) FILTER (WHERE r.position <= 15) AS top_15_ranked_score,
         SUM(r.total_pp) FILTER (WHERE r.position <= 15) AS top_15_total_pp,
-        AVG(r.avg_acc) FILTER (WHERE r.position <= 15) AS top_15_avg_acc,
-        AVG(r.avg_map_len) FILTER (WHERE r.position <= 15) AS top_15_avg_map_len,
+        SUM(r.avg_acc * r.count) FILTER (WHERE r.position <= 15) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 15), 0) AS top_15_avg_acc,
+        SUM(r.avg_map_len * r.count) FILTER (WHERE r.position <= 15) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 15), 0) AS top_15_avg_map_len,
 
         SUM(r.count) FILTER (WHERE r.position <= 25) AS top_25_count,
         SUM(r.count_ss) FILTER (WHERE r.position <= 25) AS top_25_count_ss,
@@ -249,8 +251,8 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
         SUM(r.count_perma) FILTER (WHERE r.position <= 25) AS top_25_count_perma,
         SUM(r.ranked_score) FILTER (WHERE r.position <= 25) AS top_25_ranked_score,
         SUM(r.total_pp) FILTER (WHERE r.position <= 25) AS top_25_total_pp,
-        AVG(r.avg_acc) FILTER (WHERE r.position <= 25) AS top_25_avg_acc,
-        AVG(r.avg_map_len) FILTER (WHERE r.position <= 25) AS top_25_avg_map_len,
+        SUM(r.avg_acc * r.count) FILTER (WHERE r.position <= 25) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 25), 0) AS top_25_avg_acc,
+        SUM(r.avg_map_len * r.count) FILTER (WHERE r.position <= 25) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 25), 0) AS top_25_avg_map_len,
 
         SUM(r.count) FILTER (WHERE r.position <= 50) AS top_50_count,
         SUM(r.count_ss) FILTER (WHERE r.position <= 50) AS top_50_count_ss,
@@ -258,8 +260,8 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
         SUM(r.count_perma) FILTER (WHERE r.position <= 50) AS top_50_count_perma,
         SUM(r.ranked_score) FILTER (WHERE r.position <= 50) AS top_50_ranked_score,
         SUM(r.total_pp) FILTER (WHERE r.position <= 50) AS top_50_total_pp,
-        AVG(r.avg_acc) FILTER (WHERE r.position <= 50) AS top_50_avg_acc,
-        AVG(r.avg_map_len) FILTER (WHERE r.position <= 50) AS top_50_avg_map_len,
+        SUM(r.avg_acc * r.count) FILTER (WHERE r.position <= 50) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 50), 0) AS top_50_avg_acc,
+        SUM(r.avg_map_len * r.count) FILTER (WHERE r.position <= 50) / NULLIF(SUM(r.count) FILTER (WHERE r.position <= 50), 0) AS top_50_avg_map_len,
 
         SUM(r.count) AS top_100_count,
         SUM(r.count_ss) AS top_100_count_ss,
@@ -267,8 +269,8 @@ export async function getFullRankingFromRollup(client: ClientBase, rulesetId: Ru
         SUM(r.count_perma) AS top_100_count_perma,
         SUM(r.ranked_score) AS top_100_ranked_score,
         SUM(r.total_pp) AS top_100_total_pp,
-        AVG(r.avg_acc) AS top_100_avg_acc,
-        AVG(r.avg_map_len) AS top_100_avg_map_len
+        SUM(r.avg_acc * r.count) / NULLIF(SUM(r.count), 0) AS top_100_avg_acc,
+        SUM(r.avg_map_len * r.count) / NULLIF(SUM(r.count), 0) AS top_100_avg_map_len
       FROM ${DB_RANKING_ROLLUP_TABLE} r
       WHERE r.ruleset_id = $1
       GROUP BY r.user_id

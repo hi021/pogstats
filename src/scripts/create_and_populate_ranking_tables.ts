@@ -94,6 +94,7 @@ async function createRankingRollupRecalcFunction(client: ClientBase) {
 		$$`);
 }
 
+// TODO!: this but for weighted count and ratio!
 async function scheduleDbQueue(client: ClientBase) {
 	await client.query(`
 		CREATE OR REPLACE FUNCTION process_weighted_pp_recalc_queue()
