@@ -1,14 +1,21 @@
 import { ClientBase } from "pg";
 import {
-  buildRankingKey,
-  cacheServer,
-  getCachedRankingPositionsForPlayer,
-  getCachedRankingPositionsForPlayers
+	buildRankingKey,
+	cacheServer,
+	getCachedRankingPositionsForPlayer,
+	getCachedRankingPositionsForPlayers
 } from "./cache.js";
 import { DB_PLAYER_RULESET_STATS_TABLE, DB_PLAYERS_TABLE, DB_RANKING_ROLLUP_TABLE } from "./env.js";
 import { queryWithTiming } from "./metrics.js";
 import { throwBadRequest } from "./scripts/shared.js";
-import { isAfterDate, isDateInvalid, isToday, parsePositionThresholdAndRankingType, RANKING_POS_THRESHOLDS } from "./shared.js";
+import {
+	isAfterDate,
+	isDateInvalid,
+	isToday,
+	parsePositionThresholdAndRankingType,
+	RANKING_POS_THRESHOLDS,
+	RANKING_TYPE_COLUMNS
+} from "./shared.js";
 
 export async function getRankingForPlayer(
 	client: ClientBase,
@@ -42,6 +49,8 @@ export async function getLiveRankingForPlayer(
 	const rankingTypes = new Set<string>();
 	for (const [index, parsed] of parsedRankings.entries()) {
 		if (!parsed) throwBadRequest(`Invalid ranking code: ${rankingCodes[index]}`);
+		if (!Object.hasOwn(RANKING_TYPE_COLUMNS, parsed.rankingType))
+			throwBadRequest(`Invalid ranking code: ${rankingCodes[index]}`); // TODO: move this validation to parsePositionThresholdAndRankingType()
 		positionThresholds.add(parsed.positionThreshold);
 		rankingTypes.add(parsed.rankingType);
 	}
@@ -53,10 +62,14 @@ export async function getLiveRankingForPlayer(
 		includeWeightedPp ? "COALESCE(prs.weighted_pp, 0)::REAL AS weighted_pp" : undefined,
 		includeWeightedCount ? "COALESCE(prs.weighted_count, 0)::INT AS weighted_count" : undefined
 	].filter(Boolean);
+	const aggregationSelects = buildRankingTypeAggregations([...rankingTypes], [...positionThresholds]);
+	const rankingSelects = [...weightedSelects, buildRankingTypeSelects([...rankingTypes], [...positionThresholds])]
+		.filter(Boolean)
+		.join(",\n        ");
 
 	const query = `
     WITH agg AS (
-      SELECT r.user_id, ${buildRankingTypeAggregations([...rankingTypes], [...positionThresholds])}
+      SELECT r.user_id${aggregationSelects ? `,\n${aggregationSelects}` : ""}
       FROM ${DB_RANKING_ROLLUP_TABLE} r
       WHERE r.ruleset_id = $1
       GROUP BY r.user_id
@@ -66,8 +79,7 @@ export async function getLiveRankingForPlayer(
         p.id,
         p.username,
         p.country_code,
-        ${weightedSelects.length ? `${weightedSelects.join(",\n        ")},` : ""}
-        ${buildRankingTypeSelects([...rankingTypes], [...positionThresholds])}
+        ${rankingSelects}
     FROM ${DB_PLAYERS_TABLE} p
       JOIN agg ON agg.user_id = p.id
       ${includePlayerRulesetStats ? `LEFT JOIN ${DB_PLAYER_RULESET_STATS_TABLE} prs ON prs.user_id = p.id AND prs.ruleset_id = $1` : ""}
@@ -86,40 +98,38 @@ export async function getLiveRankingForPlayer(
 	return row;
 }
 
-// TODO: rankingTypes
 // TODO: parameterize positionThresholds ($N)
 function buildRankingTypeAggregations(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
 		.map(bucket => {
 			const filter = bucket === 100 ? "" : ` FILTER (WHERE r.position <= ${bucket})`;
-      const weightedAverage = (column: "avg_acc" | "avg_map_len") =>
-        `COALESCE(SUM(r.${column} * r.count)${filter} / NULLIF(SUM(r.count)${filter}, 0), 0)::REAL`;
+			return rankingTypes
+				.map(rankingType => {
+					const column = Object.hasOwn(RANKING_TYPE_COLUMNS, rankingType) ? RANKING_TYPE_COLUMNS[rankingType] : undefined;
+					if (!column) return undefined;
 
-			return `COALESCE(SUM(r.count)${filter}, 0)::INT AS top_${bucket}_count,
-        COALESCE(SUM(r.count_ss)${filter}, 0)::INT AS top_${bucket}_count_ss,
-        COALESCE(SUM(r.count_lazer)${filter}, 0)::INT AS top_${bucket}_count_lazer,
-        COALESCE(SUM(r.count_perma)${filter}, 0)::INT AS top_${bucket}_count_perma,
-        COALESCE(SUM(r.ranked_score)${filter}, 0)::BIGINT AS top_${bucket}_ranked_score,
-        COALESCE(SUM(r.total_pp)${filter}, 0)::INT AS top_${bucket}_total_pp,
-        ${weightedAverage("avg_acc")} AS top_${bucket}_avg_acc,
-        ${weightedAverage("avg_map_len")} AS top_${bucket}_avg_map_len`;
+					const aggregate =
+						column === "avg_acc" || column === "avg_map_len"
+							? `COALESCE(SUM(r.${column} * r.count)${filter} / NULLIF(SUM(r.count)${filter}, 0), 0)::REAL`
+							: `COALESCE(SUM(r.${column})${filter}, 0)${column === "ranked_score" ? "::BIGINT" : "::INT"}`;
+					return `${aggregate} AS top_${bucket}_${column}`;
+				})
+				.filter(Boolean)
+				.join(",\n");
 		})
+		.filter(Boolean)
 		.join(",\n");
 }
 
-// TODO: rankingTypes
 function buildRankingTypeSelects(rankingTypes: string[], positionThresholds: RankingPositionThreshold[]) {
 	return positionThresholds
-		.map(
-			bucket =>
-				`agg.top_${bucket}_count,
-			agg.top_${bucket}_count_ss,
-			agg.top_${bucket}_count_lazer,
-			agg.top_${bucket}_count_perma,
-			agg.top_${bucket}_ranked_score,
-			agg.top_${bucket}_total_pp,
-			agg.top_${bucket}_avg_acc,
-			agg.top_${bucket}_avg_map_len`
+		.flatMap(bucket =>
+			rankingTypes
+				.map(rankingType => {
+					const column = Object.hasOwn(RANKING_TYPE_COLUMNS, rankingType) ? RANKING_TYPE_COLUMNS[rankingType] : undefined;
+					return column ? `agg.top_${bucket}_${column}` : undefined;
+				})
+				.filter(Boolean)
 		)
 		.join(",\n");
 }

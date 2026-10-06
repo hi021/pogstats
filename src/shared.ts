@@ -5,6 +5,23 @@ export const RULESET_IDS: Readonly<RulesetId[]> = Object.freeze([0, 1, 2, 3]);
 export const RULESET_NAMES: Readonly<Ruleset[]> = Object.freeze(["osu", "taiko", "fruits", "mania"]);
 export const RANKING_POS_THRESHOLDS: Readonly<RankingPositionThreshold[]> = Object.freeze([100, 50, 25, 15, 8, 1]);
 
+export const RANKING_TYPES = Object.freeze([
+	{ suffix: "", column: "count", nameTemplate: "%t% count" },
+	{ suffix: "weighted", column: undefined, nameTemplate: "Weighted %t% count" },
+	{ suffix: "total-pp", column: "total_pp", nameTemplate: "Total %t% pp" },
+	{ suffix: "weighted-pp", column: undefined, nameTemplate: "Weighted %t% pp" },
+	{ suffix: "ranked-score", column: "ranked_score", nameTemplate: "%t% ranked score" },
+	{ suffix: "ss", column: "count_ss", nameTemplate: "%t% SS count" },
+	{ suffix: "lazer", column: "count_lazer", nameTemplate: "%t% lazer count" },
+	{ suffix: "perma", column: "count_perma", nameTemplate: "%t% perma count" },
+	{ suffix: "avg-acc", column: "avg_acc", nameTemplate: undefined },
+	{ suffix: "avg-map-len", column: "avg_map_len", nameTemplate: undefined }
+] as const);
+
+export const RANKING_TYPE_COLUMNS: Readonly<Record<string, string | undefined>> = Object.freeze(
+	Object.fromEntries(RANKING_TYPES.map(({ suffix, column }) => [suffix, column]))
+);
+
 export function convertApiScore(
 	apiScore: ApiBeatmapScore | ApiScore,
 	position: number,

@@ -5,31 +5,19 @@ import {
 	buildPositionThresholdCode,
 	buildPositionThresholdName,
 	RANKING_POS_THRESHOLDS,
+	RANKING_TYPES,
 	RULESET_IDS,
 	toCapitalFirstLetter
 } from "../shared.js";
 
-interface ProtoRankingType {
-	nameTemplate: string;
-	codeTemplate: string;
-}
-
-const PROTO_RANKING_TYPES: Readonly<ProtoRankingType[]> = Object.freeze([
-	{ nameTemplate: "%t% count", codeTemplate: "%t%" },
-	{ nameTemplate: "Weighted %t% count", codeTemplate: "%t%-weighted" },
-	{ nameTemplate: "Total %t% pp", codeTemplate: "%t%-total-pp" },
-	{ nameTemplate: "Weighted %t% pp", codeTemplate: "%t%-weighted-pp" },
-	{ nameTemplate: "%t% ranked score", codeTemplate: "%t%-ranked-score" },
-	{ nameTemplate: "%t% SS count", codeTemplate: "%t%-ss" }
-]);
-
-function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
+function buildRankingTypes() {
 	const baseIdMultiplier = 100;
 	const rankingTypes: RankingType[] = [];
 
-	for (const i in protos) {
-		const proto = protos[i];
-		const protoIndex = Number(i) * baseIdMultiplier;
+	for (const [typeIndex, proto] of RANKING_TYPES.entries()) {
+		if (proto.nameTemplate === undefined) continue;
+
+		const protoIndex = typeIndex * baseIdMultiplier;
 
 		for (const j in RANKING_POS_THRESHOLDS) {
 			const positionThreshold = RANKING_POS_THRESHOLDS[j];
@@ -45,7 +33,7 @@ function buildRankingTypes(protos: Readonly<ProtoRankingType[]>) {
 					ruleset_id: rulesetId,
 					position_threshold: positionThreshold,
 					name: toCapitalFirstLetter(proto.nameTemplate.replaceAll("%t%", buildPositionThresholdName(positionThreshold))),
-					code: proto.codeTemplate.replaceAll("%t%", buildPositionThresholdCode(positionThreshold))
+					code: `${buildPositionThresholdCode(positionThreshold)}${proto.suffix ? `-${proto.suffix}` : ""}`
 				};
 				rankingTypes.push(type);
 			}
@@ -75,7 +63,15 @@ async function createRankingTypesTable(client: ClientBase) {
 
 async function populateRankingTypesTable(client: ClientBase) {
 	console.log(`Populating ${DB_RANKING_TYPES_TABLE} table with values`);
-	const rankingTypes = buildRankingTypes(PROTO_RANKING_TYPES);
+	const rankingTypes = buildRankingTypes();
+	const disabledCodes = RANKING_TYPES.filter(proto => proto.nameTemplate === undefined).flatMap(proto =>
+		RANKING_POS_THRESHOLDS.map(
+			positionThreshold => `${buildPositionThresholdCode(positionThreshold)}${proto.suffix ? `-${proto.suffix}` : ""}`
+		)
+	);
+
+	if (disabledCodes.length)
+		await client.query(`DELETE FROM ${DB_RANKING_TYPES_TABLE} WHERE code = ANY($1::TEXT[])`, [disabledCodes]);
 
 	for (const rankingType of rankingTypes)
 		await client.query(

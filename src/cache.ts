@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import { DEV_ENV, VALKEY_HOST, VALKEY_PASSWORD, VALKEY_PORT } from "./env.js";
+import { RANKING_TYPES } from "./shared.js";
 
 export const cacheServer = new Redis({
 	port: VALKEY_PORT,
@@ -11,7 +12,12 @@ export const cacheServer = new Redis({
 export const PLAYER_ID_TO_USERNAME_HASH = "players:id-to-username";
 export const PLAYER_USERNAME_TO_ID_HASH = "players:username-to-id";
 
-export const RANKING_METRIC_TYPES = ["count", "count_perma", "count_ss", "count_lazer", "ranked_score", "total_pp"] as const;
+type RankableRankingType = Extract<(typeof RANKING_TYPES)[number], { column: string; nameTemplate: string }>;
+const RANKABLE_RANKING_TYPES = RANKING_TYPES.filter(
+	(type): type is RankableRankingType => type.column !== undefined && type.nameTemplate !== undefined
+);
+
+export const RANKING_METRIC_TYPES = Object.freeze(RANKABLE_RANKING_TYPES.map(({ column }) => column));
 export type RankingMetricType = (typeof RANKING_METRIC_TYPES)[number];
 
 export function buildRankingKey(type: RankingMetricType, rulesetId: RulesetId, positionBucket: RankingPositionThreshold) {
